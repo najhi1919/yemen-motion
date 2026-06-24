@@ -25,3 +25,41 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Frontend / Nuxt generated and local files
+frontend/node_modules/
+frontend/.nuxt/
+frontend/.output/
+frontend/dist/
+frontend/.cache/
+frontend/.vite/
+frontend/*.log
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# Frontend generated reports
+frontend/lighthouse-*.report.*
+frontend/lighthouse*.html
+frontend/lighthouse*.json
+
+# Yemen Motion local safety ignores
+
+# Local sensitive/browser artifacts
+cookies.txt
+*cookies*.txt
+
+# Local PROJECT_MAP backups
+PROJECT_MAP.md.backup-*
+PROJECT_MAP.md.before-*
+PROJECT_MAP.md.bak
+
+# Temporary local backup files
+*.bak
+*.tmp
+*.old
+
+# Local audit artifacts
+login_page_audit_*.txt
+login_page_fast_audit_*.txt
+login_page_fast_files_*.tar.gz
