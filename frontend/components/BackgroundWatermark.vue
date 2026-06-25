@@ -69,11 +69,6 @@
   background: rgba(99, 102, 241, 0.24);
 }
 
-:global(.ym-dashboard-light) .ym-watermark-logo,
-:global(.ym-dashboard-light) .ym-watermark-name {
-  filter: saturate(1.14) contrast(1.08) drop-shadow(0 0 30px rgba(76, 29, 149, 0.16));
-}
-
 @media (max-width: 900px) {
   .ym-watermark-identity {
     width: min(76vw, 560px);

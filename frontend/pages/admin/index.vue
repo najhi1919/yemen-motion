@@ -32,10 +32,6 @@
     </aside>
 
     <section class="ym-control-panel">
-      <div class="ym-control-card-name-watermark" aria-hidden="true">
-        <span class="ym-control-card-name-watermark__aura" />
-        <span class="ym-control-card-name-watermark__main" />
-      </div>
       <div class="ym-control-panel-content">
         <h3>{{ copy.controlsTitle }}</h3>
         <p>{{ copy.controlsSubtitle }}</p>
@@ -515,9 +511,6 @@ function toggleSection(key: string) {
 }
 
 .ym-control-panel {
-  --ym-control-name-main-opacity: 0.145;
-  --ym-control-name-glow-opacity: 0.105;
-  --ym-control-name-gradient: linear-gradient(100deg, #8b5cf6 4%, #c084fc 46%, #f472b6 76%, #67e8f9 112%);
   display: grid;
   min-width: 0;
   gap: 1.25rem;
@@ -525,85 +518,10 @@ function toggleSection(key: string) {
   padding: 1.45rem;
 }
 
-:global(.ym-dashboard-light) .ym-control-panel {
-  --ym-control-name-main-opacity: 0.115;
-  --ym-control-name-glow-opacity: 0.075;
-  --ym-control-name-gradient: linear-gradient(100deg, #6d28d9 2%, #9333ea 44%, #db2777 78%, #0891b2 116%);
-}
-
 .ym-control-panel-content {
   position: relative;
   z-index: 2;
   min-width: 0;
-}
-
-.ym-control-card-name-watermark {
-  position: absolute;
-  left: 50%;
-  top: 51%;
-  z-index: 0;
-  width: clamp(280px, 52%, 620px);
-  max-width: calc(100% - 2rem);
-  aspect-ratio: 2002 / 349;
-  pointer-events: none;
-  user-select: none;
-  transform: translate(-50%, -50%);
-  isolation: isolate;
-}
-
-.ym-control-card-name-watermark::before {
-  position: absolute;
-  inset: -75% -16%;
-  z-index: -2;
-  border-radius: 50%;
-  background:
-    radial-gradient(ellipse at center, rgba(139, 92, 246, 0.16), transparent 58%),
-    radial-gradient(ellipse at 72% 48%, rgba(34, 211, 238, 0.09), transparent 42%);
-  content: '';
-  filter: blur(20px);
-  opacity: 0.62;
-}
-
-.ym-control-card-name-watermark__aura,
-.ym-control-card-name-watermark__main {
-  position: absolute;
-  inset: 0;
-  background: var(--ym-control-name-gradient);
-  -webkit-mask-image: url('/name.svg');
-  mask-image: url('/name.svg');
-  -webkit-mask-position: center;
-  mask-position: center;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-size: contain;
-  mask-size: contain;
-  pointer-events: none;
-  user-select: none;
-}
-
-.ym-control-card-name-watermark__aura {
-  opacity: var(--ym-control-name-glow-opacity);
-  filter: blur(13px);
-  transform: scale(1.018);
-}
-
-.ym-control-card-name-watermark__main {
-  opacity: var(--ym-control-name-main-opacity);
-  filter:
-    drop-shadow(0 -1px 0 rgba(255, 255, 255, 0.28))
-    drop-shadow(0 1px 0 rgba(49, 46, 129, 0.16))
-    drop-shadow(0 8px 16px rgba(124, 58, 237, 0.13));
-}
-
-:global(.ym-dashboard-light) .ym-control-card-name-watermark::before {
-  opacity: 0.55;
-}
-
-:global(.ym-dashboard-light) .ym-control-card-name-watermark__main {
-  filter:
-    drop-shadow(0 -1px 0 rgba(255, 255, 255, 0.58))
-    drop-shadow(0 1px 0 rgba(76, 29, 149, 0.1))
-    drop-shadow(0 7px 14px rgba(109, 40, 217, 0.1));
 }
 
 .ym-controls-row {
