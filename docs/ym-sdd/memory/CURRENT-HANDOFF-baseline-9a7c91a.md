@@ -2,6 +2,8 @@
 
 ## 1. Current Baseline
 
+UI/code baseline before YM-Lite SDD documentation:
+
 `9a7c91a fix: polish topbar and dashboard hero visuals`
 
 ## 2. Project State
@@ -45,14 +47,16 @@
 
 ## 6. Current Stop Point
 
-- نحن في مرحلة تأسيس YM-Lite SDD.
-- الملفات staged بانتظار commit.
-- بعد commit سنستأنف العمل عبر Spec/Task وليس prompt عام.
+- تم تأسيس YM-Lite SDD واعتماده كمرجع تشغيل للوكلاء.
+- commit `06f77ca docs: add YM-Lite SDD workflow` تم تنفيذه ورفعه إلى GitHub.
+- commit `930f17d docs: add current YM-Lite SDD handoff` تم تنفيذه ورفعه إلى GitHub.
+- working tree نظيف عند نقطة الاستئناف الحالية.
+- أي عمل قادم يجب أن يبدأ عبر Spec/Task وليس prompt عام.
 
 ## 7. Next Recommended Step
 
-- commit: `docs: add YM-Lite SDD workflow`
-- ثم إنشاء Task جديد لأي تحسين قادم.
+- إنشاء Spec/Task جديد للعمل القادم.
+- لا تعيد commit تأسيس YM-Lite SDD؛ التأسيس تم ورفعه.
 
 ## 8. How a new agent should start
 
