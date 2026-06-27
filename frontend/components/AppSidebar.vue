@@ -14,7 +14,6 @@
         :class="props.collapsed ? 'is-collapsed' : ''"
         :aria-label="copy.toggle"
         :data-tooltip="copy.toggle"
-        :title="copy.toggle"
         @click="$emit('toggle')"
       >
         <span class="ym-sidebar-logo" :class="props.collapsed ? 'is-collapsed' : ''">
@@ -46,13 +45,12 @@
             v-else
             :to="item.path"
             :class="[
-              'ym-sidebar-link group',
+              'ym-sidebar-link group has-tooltip',
               props.collapsed ? 'justify-center px-2' : 'px-4',
               isActive(item.path) ? 'is-active' : ''
             ]"
             :aria-label="item.label"
             :data-tooltip="item.label"
-            :title="item.label"
           >
             <span class="ym-sidebar-link__glow" />
             <span class="ym-sidebar-icon" v-html="item.icon" />
@@ -272,20 +270,46 @@ function isActive(path?: string): boolean {
 }
 
 .ym-sidebar-brand.is-collapsed {
-  justify-content: center;
-  min-height: 76px;
-  border-radius: 24px;
-  padding: 0.35rem;
-  box-shadow: 0 18px 40px rgba(2, 6, 23, 0.32), 0 0 26px rgba(190, 0, 1, 0.13), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  width: 64px !important;
+  height: 64px !important;
+  min-height: 64px !important;
+  margin: 1.5rem auto !important;
+
+  /* مربع منحن الزوايا (Squircle) مطابق للصورة تماماً */
+  border-radius: 22px !important;
+  position: relative !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+
+  /* تدرج خطي زجاجي بلوري من الرمادي (يمين) إلى الأبيض (يسار) مطابق للوحة المفتوحة */
+  background: linear-gradient(to left, rgba(148, 163, 184, 0.22), rgba(255, 255, 255, 0.14)) !important;
+  border: 1px solid rgba(255, 255, 255, 0.28) !important;
+  backdrop-filter: blur(24px) !important;
+
+  /* ظلال ناعمة جداً وخفيفة لإبراز الحواف الزجاجية فقط وبدون أي نيون داكن */
+  box-shadow:
+    0 10px 25px -5px rgba(0, 0, 0, 0.05),
+    inset 0 1px 1px rgba(255, 255, 255, 0.3) !important;
+
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.ym-sidebar--light .ym-sidebar-brand {
+/* إلغاء وإزالة تأثير الـ Specular Sheen المضاف سابقاً بالكامل */
+.ym-sidebar-brand.is-collapsed::before {
+  display: none !important;
+  content: none !important;
+}
+
+.ym-sidebar--light .ym-sidebar-brand:not(.is-collapsed) {
   border-color: rgba(99, 102, 241, 0.2);
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(237, 233, 254, 0.68));
   box-shadow: 0 18px 38px rgba(99, 102, 241, 0.13), inset 0 1px 0 rgba(255, 255, 255, 0.84);
 }
 
-.ym-sidebar-brand:hover {
+.ym-sidebar-brand:not(.is-collapsed):hover {
   transform: translateY(-1px);
   border-color: rgba(129, 140, 248, 0.55);
   box-shadow: 0 22px 45px rgba(79, 70, 229, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.2);
@@ -306,13 +330,30 @@ function isActive(path?: string): boolean {
 }
 
 .ym-sidebar-logo.is-collapsed {
-  height: 64px;
-  width: 64px;
-  flex-basis: 64px;
-  padding: 0.32rem;
+  width: 44px !important;
+  height: 44px !important;
+  object-fit: contain !important;
+  background: transparent !important;
+  padding: 0 !important;
+  margin: 0 auto !important;
+  z-index: 1 !important;
+
+  filter: none !important;
+
+  /* معالجة التمركز: الرفع للأعلى 3px والتحريك لليمين 2px في بيئة RTL */
+  position: relative !important;
+  top: -3px !important;
+  right: -2px !important;
+
+  transition: transform 0.3s ease;
 }
 
-.ym-sidebar--light .ym-sidebar-logo {
+/* الحفاظ على الحركة التفاعلية الرشيقة مع دمج قيم الإزاحة المرجعية */
+.ym-sidebar-brand.is-collapsed:hover .ym-sidebar-logo.is-collapsed {
+  transform: scale(1.04) rotate(2deg);
+}
+
+.ym-sidebar--light .ym-sidebar-logo:not(.is-collapsed) {
   background: radial-gradient(circle at 35% 20%, rgba(255, 255, 255, 0.92), rgba(221, 214, 254, 0.76) 46%, rgba(129, 140, 248, 0.14));
   filter: drop-shadow(0 0 18px rgba(124, 58, 237, 0.22));
 }
@@ -516,14 +557,21 @@ function isActive(path?: string): boolean {
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.28); }
 .ym-sidebar--light .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(91, 33, 182, 0.22); }
 
-.ym-sidebar--collapsed .has-tooltip {
-  position: relative;
+.has-tooltip {
+  position: relative !important;
+}
+
+.ym-sidebar--collapsed .ym-sidebar-link.has-tooltip {
+  overflow: visible !important;
 }
 
 .ym-sidebar--collapsed .has-tooltip::after {
   position: absolute;
-  top: 50%;
-  inset-inline-start: calc(100% + 10px);
+  top: 50% !important;
+  right: calc(100% + 12px) !important;
+  left: auto !important;
+  inset-inline-start: auto;
+  inset-inline-end: auto;
   z-index: 90;
   width: max-content;
   max-width: 210px;
@@ -539,15 +587,22 @@ function isActive(path?: string): boolean {
   opacity: 0;
   padding: 0.48rem 0.68rem;
   pointer-events: none;
-  transform: translateY(-50%) translateX(-4px);
+  transform: translateY(-50%) !important;
   transition: opacity 140ms ease 240ms, transform 140ms ease 240ms;
   white-space: nowrap;
+}
+
+.ym-sidebar--right.ym-sidebar--collapsed .has-tooltip::after {
+  right: calc(100% + 12px) !important;
+  left: auto !important;
+  inset-inline-start: auto;
+  inset-inline-end: auto;
 }
 
 .ym-sidebar--collapsed .has-tooltip:hover::after,
 .ym-sidebar--collapsed .has-tooltip:focus-visible::after {
   opacity: 1;
-  transform: translateY(-50%) translateX(0);
+  transform: translateY(-50%) !important;
 }
 
 .ym-sidebar--light.ym-sidebar--collapsed .has-tooltip::after {
