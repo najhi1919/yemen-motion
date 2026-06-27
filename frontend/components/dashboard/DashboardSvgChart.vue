@@ -8,25 +8,37 @@
       <slot name="actions" />
     </div>
 
-    <div class="ym-chart-stage" :style="{ height: height + 'px' }" @mouseleave="hideTooltip">
-      <svg :viewBox="`0 0 ${width} ${height}`" class="ym-chart-svg" preserveAspectRatio="none">
+    <div
+      class="ym-chart-stage"
+      :style="type === 'bar' ? { minHeight: '380px', height: 'auto' } : { height: height + 'px' }"
+      @mouseleave="hideTooltip"
+    >
+      <div v-if="type === 'bar'" class="ym-chart-bars">
+        <div
+          v-for="item in activeSections"
+          :key="item.key"
+          class="ym-chart-column-block"
+          :style="{ width: `calc(100% / ${activeSections.length})`, '--ym-bar-color': item.color }"
+        >
+          <span class="ym-chart-top-value">{{ formatValue(item.value) }}</span>
+
+          <div
+            class="ym-chart-bar-container"
+            @mouseenter="showBarTooltip($event, item, 0)"
+            @mousemove="showBarTooltip($event, item, 0)"
+          >
+            <div class="ym-bar-pill-svg" :style="{ height: item.percentage + '%' }" />
+          </div>
+
+          <span class="ym-chart-bottom-label">{{ item.label }}</span>
+        </div>
+      </div>
+
+      <svg v-else :viewBox="`0 0 ${width} ${height}`" class="ym-chart-svg" preserveAspectRatio="none">
         <defs>
           <linearGradient :id="gradientId" x1="0%" y1="0%" x2="0%" y2="100%">
             <stop offset="0%" :stop-color="lineColor" stop-opacity="0.34" />
             <stop offset="100%" :stop-color="lineColor" stop-opacity="0" />
-          </linearGradient>
-          <linearGradient
-            v-for="bar in bars"
-            :id="bar.gradientId"
-            :key="bar.gradientId"
-            x1="0%"
-            y1="0%"
-            x2="0%"
-            y2="100%"
-          >
-            <stop offset="0%" stop-color="#ffffff" stop-opacity="0.34" />
-            <stop offset="18%" :stop-color="bar.color" stop-opacity="1" />
-            <stop offset="100%" :stop-color="bar.color" stop-opacity="0.72" />
           </linearGradient>
         </defs>
 
@@ -43,50 +55,7 @@
           stroke-dasharray="5 8"
         />
 
-        <g v-if="type === 'bar'">
-          <g v-for="bar in bars" :key="bar.key" class="ym-chart-bar-group">
-            <text
-              :x="bar.x + bar.width / 2"
-              :y="Math.max(22, bar.y - 10)"
-              text-anchor="middle"
-              class="ym-chart-value"
-            >
-              {{ formatValue(bar.value) }}
-            </text>
-            <rect
-              :x="bar.x"
-              :y="bar.y"
-              :width="bar.width"
-              :height="bar.height"
-              :fill="`url(#${bar.gradientId})`"
-              rx="11"
-              class="ym-chart-bar"
-            />
-            <rect
-              :x="bar.x + 3"
-              :y="bar.y + 3"
-              :width="Math.max(0, bar.width - 6)"
-              :height="Math.min(7, bar.height)"
-              fill="rgba(255,255,255,0.34)"
-              rx="4"
-              class="ym-chart-bar-highlight"
-            />
-            <rect
-              v-for="zone in bar.zones"
-              :key="`${bar.key}-${zone.index}`"
-              :x="bar.x"
-              :y="zone.y"
-              :width="bar.width"
-              :height="zone.height"
-              fill="transparent"
-              class="ym-chart-zone"
-              @mouseenter="showBarTooltip($event, bar, zone.index)"
-              @mousemove="showBarTooltip($event, bar, zone.index)"
-            />
-          </g>
-        </g>
-
-        <g v-else>
+        <g>
           <path v-if="areaPath" :d="areaPath" :fill="`url(#${gradientId})`" />
           <path
             v-if="linePath"
@@ -113,7 +82,7 @@
         </g>
       </svg>
 
-      <div class="ym-chart-labels">
+      <div v-if="visibleLabels.length" class="ym-chart-labels">
         <span v-for="label in visibleLabels" :key="label">{{ label }}</span>
       </div>
 
@@ -157,13 +126,8 @@ interface BarItem {
   breakdown?: BreakdownItem[]
 }
 
-interface RenderedBar extends BarItem {
-  x: number
-  y: number
-  width: number
-  height: number
-  gradientId: string
-  zones: Array<{ index: number; y: number; height: number }>
+interface ActiveSection extends BarItem {
+  percentage: number
 }
 
 const props = withDefaults(defineProps<{
@@ -235,39 +199,18 @@ const areaPath = computed(() => {
 const lastPoint = computed(() => dataPoints.value[dataPoints.value.length - 1])
 const lastValue = computed(() => props.data[props.data.length - 1] || 0)
 
-const bars = computed<RenderedBar[]>(() => {
+const activeSections = computed<ActiveSection[]>(() => {
   if (!props.bars.length) return []
   const max = Math.max(...props.bars.map(item => item.value), 1)
-  const gap = props.bars.length > 8 ? 9 : 15
-  const available = props.width - chartPadding * 2
-  const barWidth = Math.max(18, Math.min(64, (available - gap * (props.bars.length - 1)) / props.bars.length))
-  const usedWidth = barWidth * props.bars.length + gap * (props.bars.length - 1)
-  const startX = chartPadding + Math.max(0, (available - usedWidth) / 2)
 
-  return props.bars.map((item, index) => {
-    const barHeight = Math.max(14, (item.value / max) * (props.height - 86))
-    const y = props.height - 38 - barHeight
-    const zoneCount = Math.max(item.breakdown?.length || 1, 1)
-    const zoneHeight = barHeight / zoneCount
-
-    return {
-      ...item,
-      x: startX + index * (barWidth + gap),
-      y,
-      width: barWidth,
-      height: barHeight,
-      gradientId: `bar-gradient-${safeId(props.title)}-${safeId(item.key)}`,
-      zones: Array.from({ length: zoneCount }, (_, zoneIndex) => ({
-        index: zoneIndex,
-        y: y + barHeight - (zoneIndex + 1) * zoneHeight,
-        height: zoneHeight
-      }))
-    }
-  })
+  return props.bars.map(item => ({
+    ...item,
+    percentage: Math.max(7, (item.value / max) * 100)
+  }))
 })
 
 const visibleLabels = computed(() => {
-  if (props.type === 'bar') return props.bars.map(item => item.label)
+  if (props.type === 'bar') return []
   if (!props.labels.length) return []
   const step = Math.ceil(props.labels.length / 6)
   return props.labels.filter((_, index) => index % step === 0)
@@ -283,9 +226,9 @@ function safeId(value: string): string {
 }
 
 function positionTooltip(event: MouseEvent): void {
-  const svg = (event.currentTarget as SVGElement).ownerSVGElement
-  if (!svg) return
-  const bounds = svg.getBoundingClientRect()
+  const target = event.currentTarget as Element
+  const stage = target.closest('.ym-chart-stage')
+  const bounds = (stage || target).getBoundingClientRect()
   const tooltipWidth = 224
   const tooltipHeight = 108
   const rawX = event.clientX - bounds.left + 14
@@ -294,7 +237,7 @@ function positionTooltip(event: MouseEvent): void {
   tooltip.y = Math.max(12, Math.min(rawY, bounds.height - tooltipHeight - 12))
 }
 
-function showBarTooltip(event: MouseEvent, bar: RenderedBar, zoneIndex: number): void {
+function showBarTooltip(event: MouseEvent, bar: ActiveSection, zoneIndex: number): void {
   const detail = bar.breakdown?.[zoneIndex] || { label: bar.label, value: bar.value }
   positionTooltip(event)
   tooltip.visible = true
@@ -359,7 +302,7 @@ function formatValue(value: number): string {
 
 .ym-chart-stage {
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid var(--ym-soft-border);
   border-radius: 22px;
   background:
@@ -375,6 +318,90 @@ function formatValue(value: number): string {
   overflow: visible;
 }
 
+.ym-chart-bars {
+  display: flex !important;
+  flex-direction: row-reverse !important;
+  justify-content: space-between !important;
+  align-items: flex-end !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 380px !important;
+  padding: 2.2rem 1rem 0.6rem 1rem !important; /* تقليص الحشوة السفلية لشد الفراغ السفلي المحيط بالأسماء */
+  overflow: visible !important;
+  box-sizing: border-box !important;
+}
+
+.ym-chart-column-block {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  min-width: 0;
+  overflow: visible !important;
+  text-align: center !important;
+}
+
+.ym-chart-top-value {
+  color: var(--ym-text) !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  line-height: 1.35 !important;
+  max-width: 100%;
+  overflow: visible !important;
+  white-space: nowrap !important;
+}
+
+.ym-chart-bar-container {
+  width: 100% !important;
+  height: clamp(170px, 44vh, 330px) !important;
+  display: flex !important;
+  align-items: flex-end !important;
+  justify-content: center !important;
+  margin: 0.65rem 0 0 !important;
+  overflow: visible !important;
+  cursor: crosshair;
+}
+
+.ym-bar-pill-svg {
+  width: min(46px, 80%) !important;
+  min-height: 12px;
+  border: 1px solid color-mix(in srgb, var(--ym-bar-color) 45%, transparent) !important;
+  border-bottom: none !important;
+  border-radius: 12px 12px 0 0 !important;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--ym-bar-color) 100%, white 0%) 0%,
+      color-mix(in srgb, var(--ym-bar-color) 82%, white 10%) 42%,
+      color-mix(in srgb, var(--ym-bar-color) 35%, transparent) 100%
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -10px 18px color-mix(in srgb, var(--ym-bar-color) 18%, transparent),
+    0 14px 24px color-mix(in srgb, var(--ym-bar-color) 16%, transparent);
+  opacity: 0.96;
+  transform-origin: center bottom;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ym-chart-bottom-label {
+  color: var(--ym-text) !important;
+  font-size: 14px !important;
+  font-weight: 800 !important;
+  line-height: 1.4 !important;
+  margin-top: 0.85rem !important;
+  max-width: 100%;
+  overflow: visible !important;
+  text-overflow: clip;
+  white-space: nowrap !important;
+}
+
+.ym-chart-column-block:hover .ym-bar-pill-svg,
+.ym-chart-column-block:hover .ym-chart-bar-container > div {
+  transform: scaleY(1.03) scaleX(1.02) !important;
+  filter: drop-shadow(0 0 20px color-mix(in srgb, var(--ym-text) 40%, transparent)) !important;
+}
+
 .ym-chart-grid {
   color: var(--ym-chart-grid);
 }
@@ -386,28 +413,6 @@ function formatValue(value: number): string {
   paint-order: stroke;
   stroke: var(--ym-chart-value-stroke);
   stroke-width: 5px;
-}
-
-.ym-chart-bar {
-  filter: drop-shadow(0 12px 14px rgba(15, 23, 42, 0.24));
-  opacity: 0.93;
-  transform-box: fill-box;
-  transform-origin: center bottom;
-  transition: opacity 160ms ease, filter 160ms ease, transform 160ms ease;
-}
-
-.ym-chart-bar-group:hover .ym-chart-bar {
-  filter: drop-shadow(0 14px 18px color-mix(in srgb, #818cf8 32%, transparent));
-  opacity: 1;
-  transform: scaleX(1.045);
-}
-
-.ym-chart-bar-highlight {
-  pointer-events: none;
-}
-
-.ym-chart-zone {
-  cursor: crosshair;
 }
 
 .ym-chart-line {
