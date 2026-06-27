@@ -49,7 +49,7 @@
       <div class="xl:col-span-2">
         <DashboardActivityFeed :title="copy.activityTitle" :items="activities" :empty-label="copy.emptyActivity">
           <template #actions>
-            <button class="ym-inline-action" :aria-label="copy.viewAll" :title="copy.viewAll">{{ copy.viewAll }}</button>
+            <button class="ym-inline-action" :aria-label="copy.viewAll">{{ copy.viewAll }}</button>
           </template>
         </DashboardActivityFeed>
       </div>
@@ -198,10 +198,38 @@ const tasks = [
 }
 
 .ym-staff-hero {
+  border-color: rgba(255, 255, 255, 0.19);
   background:
-    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.18), transparent 18rem),
-    linear-gradient(135deg, rgba(5, 150, 105, 0.95), rgba(13, 148, 136, 0.88) 50%, rgba(14, 165, 233, 0.68));
+    radial-gradient(circle at 20% 18%, rgba(255, 255, 255, 0.2), transparent 15rem),
+    radial-gradient(circle at 84% 8%, rgba(45, 212, 191, 0.26), transparent 18rem),
+    linear-gradient(135deg, rgba(4, 120, 87, 0.96), rgba(13, 148, 136, 0.9) 50%, rgba(14, 165, 233, 0.7));
+  box-shadow:
+    0 28px 68px rgba(6, 95, 70, 0.24),
+    0 12px 28px rgba(2, 6, 23, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.27),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.13);
   padding: clamp(1.35rem, 3vw, 2.25rem);
+}
+
+.ym-staff-hero::before {
+  position: absolute;
+  inset: 1px;
+  border-radius: 27px;
+  background:
+    linear-gradient(115deg, rgba(255, 255, 255, 0.13), transparent 34%),
+    linear-gradient(290deg, rgba(209, 250, 229, 0.1), transparent 43%);
+  content: "";
+  pointer-events: none;
+}
+
+.ym-staff-hero::after {
+  position: absolute;
+  inset-inline: 7%;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(209, 250, 229, 0.72), transparent);
+  content: "";
+  pointer-events: none;
 }
 
 .ym-staff-hero__glow {
@@ -213,6 +241,7 @@ const tasks = [
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.28);
   filter: blur(44px);
+  opacity: 0.32;
 }
 
 .ym-staff-avatar {
@@ -222,9 +251,15 @@ const tasks = [
   flex: 0 0 86px;
   place-items: center;
   overflow: hidden;
-  border: 2px solid rgba(255, 255, 255, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.35);
   border-radius: 26px;
-  background: rgba(255, 255, 255, 0.16);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.12)),
+    rgba(255, 255, 255, 0.15);
+  box-shadow:
+    0 24px 48px rgba(6, 78, 59, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.1);
   color: #fff;
   font-size: 2rem;
   font-weight: 950;
@@ -259,11 +294,16 @@ const tasks = [
 
 .ym-staff-focus {
   min-width: min(100%, 250px);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.24);
   border-radius: 22px;
-  background: rgba(255, 255, 255, 0.13);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.17), rgba(255, 255, 255, 0.1)),
+    rgba(255, 255, 255, 0.11);
+  box-shadow:
+    0 18px 42px rgba(6, 78, 59, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
   padding: 1rem;
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(12px);
 }
 
 .ym-staff-focus strong {

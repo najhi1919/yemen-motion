@@ -10,9 +10,12 @@
 
       <div class="ym-topbar-actions">
         <label
-          class="ym-search has-tooltip"
-          :data-tooltip="copy.searchTooltip"
+          class="ym-search"
           :aria-label="copy.searchTooltip"
+          @mouseenter="showTopbarTooltip($event, copy.searchTooltip, 'search')"
+          @mouseleave="hideTopbarTooltip"
+          @focusin="showTopbarTooltip($event, copy.searchTooltip, 'search')"
+          @focusout="hideTopbarTooltip"
         >
           <svg class="h-7 w-7 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.2-5.2M18 10.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" />
@@ -24,10 +27,13 @@
           <button
             ref="notificationsButton"
             type="button"
-            class="ym-action-button has-tooltip"
+            class="ym-action-button"
             :class="isNotificationsOpen ? 'is-active' : ''"
             :aria-label="copy.notifications"
-            :data-tooltip="copy.notifications"
+            @mouseenter="showTopbarTooltip($event, copy.notifications)"
+            @mouseleave="hideTopbarTooltip"
+            @focus="showTopbarTooltip($event, copy.notifications)"
+            @blur="hideTopbarTooltip"
             @click="toggleNotifications"
           >
             <svg class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24">
@@ -60,7 +66,6 @@
                   type="button"
                   :class="activeNotificationFilter === filter.key ? 'is-active' : ''"
                   :aria-label="filter.label"
-                  :title="filter.label"
                   @click="activeNotificationFilter = filter.key"
                 >
                   {{ filter.label }}
@@ -89,10 +94,13 @@
           <button
             ref="accountButton"
             type="button"
-            class="ym-action-button has-tooltip"
+            class="ym-action-button"
             :class="isAccountMenuOpen ? 'is-active' : ''"
             :aria-label="copy.accountMenu"
-            :data-tooltip="copy.accountMenu"
+            @mouseenter="showTopbarTooltip($event, copy.accountMenu)"
+            @mouseleave="hideTopbarTooltip"
+            @focus="showTopbarTooltip($event, copy.accountMenu)"
+            @blur="hideTopbarTooltip"
             @click="toggleAccountMenu"
           >
             <svg class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24">
@@ -117,7 +125,7 @@
                 </div>
               </div>
               <nav class="ym-account-list">
-                <NuxtLink v-for="item in accountItems" :key="item.key" :to="item.path" :title="item.label" @click="isAccountMenuOpen = false">
+                <NuxtLink v-for="item in accountItems" :key="item.key" :to="item.path" @click="isAccountMenuOpen = false">
                   <span v-html="item.icon" />
                   {{ item.label }}
                 </NuxtLink>
@@ -132,9 +140,12 @@
 
         <button
           type="button"
-          class="ym-action-button has-tooltip"
+          class="ym-action-button"
           :aria-label="copy.themeTooltip"
-          :data-tooltip="copy.themeTooltip"
+          @mouseenter="showTopbarTooltip($event, copy.themeTooltip)"
+          @mouseleave="hideTopbarTooltip"
+          @focus="showTopbarTooltip($event, copy.themeTooltip)"
+          @blur="hideTopbarTooltip"
           @click="toggleTheme"
         >
           <svg v-if="dashboardTheme === 'dark'" class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24">
@@ -147,9 +158,12 @@
 
         <button
           type="button"
-          class="ym-segment-button has-tooltip"
+          class="ym-segment-button"
           :aria-label="copy.languageTooltip"
-          :data-tooltip="copy.languageTooltip"
+          @mouseenter="showTopbarTooltip($event, copy.languageTooltip)"
+          @mouseleave="hideTopbarTooltip"
+          @focus="showTopbarTooltip($event, copy.languageTooltip)"
+          @blur="hideTopbarTooltip"
           @click="toggleLocale"
         >
           <span>{{ currentLocale === 'ar' ? 'AR' : 'EN' }}</span>
@@ -158,6 +172,20 @@
       </div>
     </div>
   </header>
+
+  <Teleport to="body">
+    <transition name="ym-topbar-tooltip">
+      <div
+        v-if="activeTooltip"
+        class="ym-floating-tooltip"
+        :class="{ 'is-light': dashboardTheme === 'light' }"
+        role="tooltip"
+        :style="{ top: `${activeTooltip.top}px`, left: `${activeTooltip.left}px` }"
+      >
+        {{ activeTooltip.label }}
+      </div>
+    </transition>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -167,6 +195,7 @@ defineProps<{ subtitle?: string }>()
 
 type Locale = 'ar' | 'en'
 type NotificationFilter = 'all' | 'important' | 'latest' | 'unread' | 'read'
+type TooltipAnchor = 'center' | 'search'
 
 const route = useRoute()
 const auth = useAuthStore()
@@ -176,6 +205,7 @@ const isNotificationsOpen = ref(false)
 const isAccountMenuOpen = ref(false)
 const activeNotificationFilter = ref<NotificationFilter>('all')
 const searchQuery = ref('')
+const activeTooltip = ref<{ label: string; top: number; left: number } | null>(null)
 
 const notificationsRoot = ref<HTMLElement | null>(null)
 const accountRoot = ref<HTMLElement | null>(null)
@@ -378,20 +408,24 @@ const accountItems = computed(() => {
 })
 
 function toggleNotifications() {
+  hideTopbarTooltip()
   isNotificationsOpen.value = !isNotificationsOpen.value
   if (isNotificationsOpen.value) isAccountMenuOpen.value = false
 }
 
 function toggleAccountMenu() {
+  hideTopbarTooltip()
   isAccountMenuOpen.value = !isAccountMenuOpen.value
   if (isAccountMenuOpen.value) isNotificationsOpen.value = false
 }
 
 function toggleLocale() {
+  hideTopbarTooltip()
   currentLocale.value = currentLocale.value === 'ar' ? 'en' : 'ar'
 }
 
 function toggleTheme() {
+  hideTopbarTooltip()
   dashboardTheme.value = dashboardTheme.value === 'dark' ? 'light' : 'dark'
 }
 
@@ -410,9 +444,26 @@ function closeMenusForTarget(target: EventTarget | null) {
 
 function closeMenusForEscape(event: KeyboardEvent) {
   if (event.key === 'Escape') {
+    hideTopbarTooltip()
     isNotificationsOpen.value = false
     isAccountMenuOpen.value = false
   }
+}
+
+function showTopbarTooltip(event: Event, label: string, anchor: TooltipAnchor = 'center') {
+  const target = event.currentTarget
+  if (!(target instanceof HTMLElement)) return
+  const rect = target.getBoundingClientRect()
+  const searchIconOffset = currentLocale.value === 'ar' ? rect.width - 31 : 31
+  activeTooltip.value = {
+    label,
+    top: rect.bottom + 10,
+    left: anchor === 'search' ? rect.left + searchIconOffset : rect.left + rect.width / 2
+  }
+}
+
+function hideTopbarTooltip() {
+  activeTooltip.value = null
 }
 
 const handlePointerDown = (event: PointerEvent) => closeMenusForTarget(event.target)
@@ -443,12 +494,19 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 1rem;
   overflow: visible;
-  border: 1px solid var(--ym-shell-border);
+  border: 1px solid color-mix(in srgb, var(--ym-shell-border) 78%, rgba(255, 255, 255, 0.28));
   border-radius: 30px;
-  background: var(--ym-shell-surface);
-  box-shadow: var(--ym-shell-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--ym-shell-surface) 92%, rgba(255, 255, 255, 0.08)), var(--ym-shell-surface)),
+    var(--ym-shell-surface);
+  box-shadow:
+    0 18px 46px rgba(2, 6, 23, 0.14),
+    0 1px 0 rgba(255, 255, 255, 0.08),
+    var(--ym-shell-shadow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.08);
   padding: 1rem 1.1rem;
-  backdrop-filter: blur(30px) saturate(155%);
+  backdrop-filter: blur(22px);
 }
 
 .ym-topbar-shell::before {
@@ -456,8 +514,8 @@ onBeforeUnmount(() => {
   inset: 0;
   border-radius: inherit;
   background:
-    linear-gradient(120deg, rgba(129, 140, 248, 0.24), transparent 34%, rgba(190, 0, 1, 0.12)),
-    radial-gradient(circle at 85% 0%, rgba(255, 255, 255, 0.14), transparent 18rem);
+    linear-gradient(120deg, rgba(129, 140, 248, 0.18), transparent 36%, rgba(190, 0, 1, 0.09)),
+    radial-gradient(circle at 85% 0%, rgba(255, 255, 255, 0.12), transparent 18rem);
   content: "";
   pointer-events: none;
 }
@@ -470,6 +528,16 @@ onBeforeUnmount(() => {
   background: linear-gradient(90deg, transparent, rgba(129, 140, 248, 0.78), rgba(190, 0, 1, 0.5), transparent);
   content: "";
   pointer-events: none;
+}
+
+.ym-topbar-shell:hover {
+  border-color: color-mix(in srgb, var(--ym-shell-border) 58%, rgba(129, 140, 248, 0.36));
+  box-shadow:
+    0 22px 54px rgba(2, 6, 23, 0.17),
+    0 1px 0 rgba(255, 255, 255, 0.1),
+    var(--ym-shell-shadow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.09);
 }
 
 .ym-topbar-heading,
@@ -514,13 +582,20 @@ onBeforeUnmount(() => {
   color: var(--ym-muted);
   padding: 0 1.05rem;
   min-height: 56px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 14px 32px rgba(2, 6, 23, 0.08);
-  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.13),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.06),
+    0 12px 28px rgba(2, 6, 23, 0.08);
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease, background 160ms ease;
 }
 
 .ym-search:focus-within {
   border-color: rgba(129, 140, 248, 0.78);
-  box-shadow: 0 0 0 4px rgba(129, 140, 248, 0.16), 0 18px 42px rgba(79, 70, 229, 0.18);
+  background: color-mix(in srgb, var(--ym-control-bg) 86%, rgba(129, 140, 248, 0.08));
+  box-shadow:
+    0 0 0 4px rgba(129, 140, 248, 0.14),
+    0 18px 40px rgba(79, 70, 229, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.17);
   transform: translateY(-1px);
 }
 
@@ -552,7 +627,10 @@ onBeforeUnmount(() => {
   border-radius: 18px;
   background: var(--ym-control-bg);
   color: var(--ym-text);
-  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 12px 28px rgba(15, 23, 42, 0.11),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.07);
   transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
 }
 
@@ -563,7 +641,26 @@ onBeforeUnmount(() => {
   place-items: center;
 }
 
+.ym-action-button::before,
+.ym-segment-button::before {
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), transparent 56%);
+  content: "";
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.ym-action-button > svg,
+.ym-segment-button > span,
+.ym-segment-button > strong {
+  position: relative;
+  z-index: 1;
+}
+
 .ym-segment-button {
+  position: relative;
   display: grid;
   align-content: center;
   min-width: 94px;
@@ -588,18 +685,17 @@ onBeforeUnmount(() => {
 .ym-action-button.is-active,
 .ym-segment-button:hover {
   transform: translateY(-2px);
-  border-color: rgba(129, 140, 248, 0.62);
-  box-shadow: 0 20px 42px rgba(79, 70, 229, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.17);
+  border-color: rgba(129, 140, 248, 0.58);
+  background: color-mix(in srgb, var(--ym-control-bg) 84%, rgba(129, 140, 248, 0.12));
+  box-shadow:
+    0 18px 38px rgba(79, 70, 229, 0.18),
+    0 5px 14px rgba(2, 6, 23, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.06);
 }
 
-.has-tooltip {
-  position: relative !important;
-}
-
-.has-tooltip::after {
-  position: absolute;
-  left: 50%;
-  top: calc(100% + 10px);
+.ym-floating-tooltip {
+  position: fixed;
   z-index: 110;
   width: max-content;
   max-width: 220px;
@@ -607,35 +703,30 @@ onBeforeUnmount(() => {
   border-radius: 10px;
   background: var(--ym-tooltip-bg);
   box-shadow: 0 12px 30px rgba(2, 6, 23, 0.26);
-  color: var(--ym-text);
-  content: attr(data-tooltip);
+  color: #f8fafc;
   font-size: 13px;
   font-weight: 850;
   line-height: 1.4;
-  opacity: 0;
   padding: 0.45rem 0.65rem;
   pointer-events: none;
   text-align: center;
-  transform: translateX(-50%) translateY(-5px);
-  transition: opacity 140ms ease 240ms, transform 140ms ease 240ms;
+  transform: translateX(-50%);
   white-space: nowrap;
 }
 
-.has-tooltip:hover::after,
-.has-tooltip:focus-visible::after,
-.has-tooltip:focus-within::after {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
+.ym-floating-tooltip.is-light {
+  color: #0f172a;
 }
 
-.ym-search.has-tooltip::after {
-  left: 1.92rem;
+.ym-topbar-tooltip-enter-active,
+.ym-topbar-tooltip-leave-active {
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.ym-topbar-tooltip-enter-from,
+.ym-topbar-tooltip-leave-to {
+  opacity: 0;
   transform: translateX(-50%) translateY(-5px);
-}
-
-.ym-search.has-tooltip:hover::after,
-.ym-search.has-tooltip:focus-within::after {
-  transform: translateX(-50%) translateY(0);
 }
 
 .ym-action-dot {

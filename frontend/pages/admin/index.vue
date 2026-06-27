@@ -475,16 +475,44 @@ function hideDelegatedControlTooltip(event: MouseEvent | FocusEvent): void {
 }
 
 .ym-admin-hero {
+  border-color: rgba(255, 255, 255, 0.2);
   background:
-    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.2), transparent 18rem),
-    linear-gradient(135deg, rgba(79, 70, 229, 0.95), rgba(124, 58, 237, 0.88) 50%, rgba(190, 0, 1, 0.7));
+    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.24), transparent 15rem),
+    radial-gradient(circle at 85% 8%, rgba(129, 140, 248, 0.34), transparent 18rem),
+    linear-gradient(135deg, rgba(67, 56, 202, 0.97), rgba(124, 58, 237, 0.9) 48%, rgba(190, 0, 1, 0.74));
+  box-shadow:
+    0 28px 70px rgba(49, 46, 129, 0.28),
+    0 12px 28px rgba(2, 6, 23, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(30, 41, 59, 0.14);
+}
+
+.ym-admin-hero::before {
+  position: absolute;
+  inset: 1px;
+  border-radius: 27px;
+  background:
+    linear-gradient(115deg, rgba(255, 255, 255, 0.14), transparent 34%),
+    linear-gradient(290deg, rgba(255, 255, 255, 0.1), transparent 42%);
+  content: "";
+  pointer-events: none;
+}
+
+.ym-admin-hero::after {
+  position: absolute;
+  inset-inline: 7%;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.72), transparent);
+  content: "";
+  pointer-events: none;
 }
 
 .ym-hero-orb {
   position: absolute;
   border-radius: 999px;
   filter: blur(44px);
-  opacity: 0.38;
+  opacity: 0.3;
 }
 
 .ym-hero-orb-one {
@@ -510,10 +538,15 @@ function hideDelegatedControlTooltip(event: MouseEvent | FocusEvent): void {
   flex: 0 0 86px;
   place-items: center;
   overflow: hidden;
-  border: 2px solid rgba(255, 255, 255, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.36);
   border-radius: 26px;
-  background: rgba(255, 255, 255, 0.16);
-  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.26);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.12)),
+    rgba(255, 255, 255, 0.16);
+  box-shadow:
+    0 24px 48px rgba(15, 23, 42, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.12);
   color: #fff;
   font-size: 2rem;
   font-weight: 950;
@@ -549,11 +582,16 @@ function hideDelegatedControlTooltip(event: MouseEvent | FocusEvent): void {
 
 .ym-hero-summary {
   min-width: min(100%, 260px);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.24);
   border-radius: 22px;
-  background: rgba(255, 255, 255, 0.13);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.1)),
+    rgba(255, 255, 255, 0.11);
+  box-shadow:
+    0 18px 42px rgba(30, 41, 59, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
   padding: 1rem;
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(12px);
 }
 
 .ym-hero-summary strong {
