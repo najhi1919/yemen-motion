@@ -2,9 +2,10 @@
   <header class="ym-topbar sticky top-0 z-[45] px-5 pt-5">
     <div class="ym-topbar-shell">
       <div class="ym-topbar-heading">
-        <p class="ym-topbar-kicker">{{ copy.kicker }}</p>
         <h1 class="ym-topbar-title">
-          <slot name="title">{{ pageTitle }}</slot>
+          <span class="ym-topbar-title-text">
+            <slot name="title">{{ pageTitle }}</slot>
+          </span>
         </h1>
       </div>
 
@@ -216,7 +217,6 @@ const accountPanel = ref<HTMLElement | null>(null)
 
 const dictionary = {
   ar: {
-    kicker: 'مركز قيادة يمن موشن',
     search: 'ابحث في الطلبات، المستخدمين، البلاغات، التذاكر...',
     searchTooltip: 'البحث في المنصة',
     notifications: 'الإشعارات',
@@ -261,7 +261,6 @@ const dictionary = {
     }
   },
   en: {
-    kicker: 'Yemen Motion Command Center',
     search: 'Search orders, users, reports, tickets...',
     searchTooltip: 'Search the platform',
     notifications: 'Notifications',
@@ -490,12 +489,12 @@ onBeforeUnmount(() => {
   position: relative;
   display: grid;
   grid-template-columns: minmax(12rem, 1fr) auto;
-  min-height: 92px;
+  min-height: 78px;
   align-items: center;
   gap: 1rem;
   overflow: visible;
   border: 1px solid color-mix(in srgb, var(--ym-shell-border) 78%, rgba(255, 255, 255, 0.28));
-  border-radius: 30px;
+  border-radius: 28px;
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--ym-shell-surface) 92%, rgba(255, 255, 255, 0.08)), var(--ym-shell-surface)),
     var(--ym-shell-surface);
@@ -505,7 +504,7 @@ onBeforeUnmount(() => {
     var(--ym-shell-shadow),
     inset 0 1px 0 rgba(255, 255, 255, 0.22),
     inset 0 -1px 0 rgba(15, 23, 42, 0.08);
-  padding: 1rem 1.1rem;
+  padding: 0.85rem 1.1rem;
   backdrop-filter: blur(22px);
 }
 
@@ -540,6 +539,37 @@ onBeforeUnmount(() => {
     inset 0 -1px 0 rgba(15, 23, 42, 0.09);
 }
 
+/* Light Mode: سطح أغنى وأوضح — حدود بنفسجية أعمق + لمعة علوية + ظل دافئ */
+.ym-dashboard-light .ym-topbar-shell {
+  border-color: color-mix(in srgb, var(--ym-shell-border) 92%, rgba(255, 255, 255, 0.6));
+  box-shadow:
+    0 20px 52px rgba(76, 29, 149, 0.16),
+    0 2px 0 rgba(255, 255, 255, 0.85),
+    var(--ym-shell-shadow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(109, 40, 217, 0.08);
+}
+
+.ym-dashboard-light .ym-topbar-shell::before {
+  background:
+    linear-gradient(120deg, rgba(109, 40, 217, 0.1), transparent 38%, rgba(190, 0, 1, 0.06)),
+    radial-gradient(circle at 85% 0%, rgba(255, 255, 255, 0.7), transparent 18rem);
+}
+
+.ym-dashboard-light .ym-topbar-shell::after {
+  background: linear-gradient(90deg, transparent, rgba(109, 40, 217, 0.65), rgba(190, 0, 1, 0.42), transparent);
+}
+
+.ym-dashboard-light .ym-topbar-shell:hover {
+  border-color: color-mix(in srgb, var(--ym-shell-border) 70%, rgba(147, 51, 234, 0.5));
+  box-shadow:
+    0 26px 60px rgba(76, 29, 149, 0.2),
+    0 2px 0 rgba(255, 255, 255, 0.9),
+    var(--ym-shell-shadow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 rgba(109, 40, 217, 0.1);
+}
+
 .ym-topbar-heading,
 .ym-topbar-actions {
   position: relative;
@@ -550,25 +580,61 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
-.ym-topbar-kicker {
-  color: var(--ym-muted);
-  font-size: 14px;
-  font-weight: 950;
-  margin: 0 0 0.18rem;
+.ym-topbar-title {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  padding: 0.18rem 0;
+  background: linear-gradient(110deg,
+    #c7d2fe 0%,
+    #e9d5ff 28%,
+    #fbcfe8 52%,
+    #ddd6fe 74%,
+    #c7d2fe 100%);
+  background-size: 220% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  font-size: clamp(1.7rem, 2.1vw, 2rem);
+  font-weight: 900;
+  line-height: 1.12;
+  letter-spacing: -0.01em;
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.18)) drop-shadow(0 2px 14px rgba(129, 140, 248, 0.28));
+  animation: ym-topbar-shine 9s ease-in-out infinite;
 }
 
-.ym-topbar-title {
-  color: var(--ym-text);
-  font-size: clamp(1.75rem, 2.2vw, 2.08rem);
-  font-weight: 950;
-  line-height: 1.08;
-  margin: 0;
+.ym-topbar-title-text {
+  display: inline-block;
+}
+
+/* اللون فقط: يعكس المتجه البنفسجي الوردي المتناغم مع هوية المشروع */
+@keyframes ym-topbar-shine {
+  0%, 100% { background-position: 0% center; }
+  50%      { background-position: 100% center; }
+}
+
+/* Light Mode: عنوان أغنى وأوضح، تدرّج بنفسجي/وردي أعمق + عمق خفيف */
+.ym-dashboard-light .ym-topbar-title {
+  background: linear-gradient(110deg,
+    #6d28d9 0%,
+    #9333ea 24%,
+    #c026d3 48%,
+    #db2777 70%,
+    #6d28d9 100%);
+  background-size: 220% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.65))
+          drop-shadow(0 2px 10px rgba(147, 51, 234, 0.22));
 }
 
 .ym-topbar-actions {
   display: flex;
   align-items: center;
-  gap: 0.72rem;
+  gap: 0.6rem;
 }
 
 .ym-search {
@@ -694,6 +760,36 @@ onBeforeUnmount(() => {
     inset 0 -1px 0 rgba(15, 23, 42, 0.06);
 }
 
+/* لمسة لونية خفيفة على أيقونات الأزرار عند التفاعل لتحسين الوضوح البصري */
+.ym-action-button:hover > svg,
+.ym-action-button.is-active > svg {
+  color: #a5b4fc;
+  filter: drop-shadow(0 0 10px rgba(129, 140, 248, 0.55));
+}
+
+.ym-dashboard-light .ym-action-button:hover > svg,
+.ym-dashboard-light .ym-action-button.is-active > svg {
+  color: #6d28d9;
+  filter: drop-shadow(0 0 8px rgba(109, 40, 217, 0.4));
+}
+
+/* حالة focus واضحة للوصولية دون كسر الـ tooltip القائم */
+.ym-action-button:focus-visible,
+.ym-segment-button:focus-visible {
+  outline: none;
+  border-color: rgba(129, 140, 248, 0.85);
+  box-shadow:
+    0 0 0 4px rgba(129, 140, 248, 0.22),
+    0 12px 28px rgba(15, 23, 42, 0.11),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* حالة active مضغوطة: رد فعل لمسي واضح */
+.ym-action-button:active,
+.ym-segment-button:active {
+  transform: translateY(0);
+}
+
 .ym-floating-tooltip {
   position: fixed;
   z-index: 110;
@@ -715,7 +811,9 @@ onBeforeUnmount(() => {
 }
 
 .ym-floating-tooltip.is-light {
-  color: #0f172a;
+  border-color: rgba(109, 40, 217, 0.32);
+  box-shadow: 0 12px 30px rgba(76, 29, 149, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.6) inset;
+  color: #1e1235;
 }
 
 .ym-topbar-tooltip-enter-active,
