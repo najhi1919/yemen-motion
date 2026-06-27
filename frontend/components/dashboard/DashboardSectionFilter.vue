@@ -2,11 +2,9 @@
   <div class="ym-section-filter">
     <button
       type="button"
-      class="ym-section-chip has-tooltip"
+      class="ym-section-chip"
       :class="isAllActive ? 'is-active' : ''"
-      :data-tooltip="allTooltip"
       :aria-label="allTooltip"
-      :title="allTooltip"
       @click="$emit('toggle-all')"
     >
       <span class="ym-section-all-icon">✓</span>
@@ -16,12 +14,10 @@
       v-for="section in sections"
       :key="section.key"
       type="button"
-      class="ym-section-chip has-tooltip"
+      class="ym-section-chip"
       :class="modelValue.includes(section.key) ? 'is-active' : ''"
       :style="{ '--section-color': section.color }"
-      :data-tooltip="sectionTooltip(section.label)"
       :aria-label="sectionTooltip(section.label)"
-      :title="sectionTooltip(section.label)"
       @click="$emit('toggle-section', section.key)"
     >
       <span v-if="section.icon" class="ym-section-symbol">{{ section.icon }}</span>
@@ -130,36 +126,4 @@ function sectionTooltip(label: string): string {
   --section-color: #6366f1;
 }
 
-.has-tooltip {
-  position: relative;
-}
-
-.has-tooltip::after {
-  position: absolute;
-  inset-inline-start: 50%;
-  bottom: calc(100% + 9px);
-  z-index: 90;
-  width: max-content;
-  max-width: 220px;
-  border: 1px solid var(--ym-shell-border);
-  border-radius: 9px;
-  background: var(--ym-tooltip-bg);
-  color: var(--ym-text);
-  content: attr(data-tooltip);
-  font-size: 13px;
-  font-weight: 850;
-  line-height: 1.4;
-  opacity: 0;
-  padding: 0.42rem 0.6rem;
-  pointer-events: none;
-  transform: translate(-50%, 5px);
-  transition: opacity 140ms ease 220ms, transform 140ms ease 220ms;
-  white-space: nowrap;
-}
-
-.has-tooltip:hover::after,
-.has-tooltip:focus-visible::after {
-  opacity: 1;
-  transform: translate(-50%, 0);
-}
 </style>

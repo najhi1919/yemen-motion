@@ -34,7 +34,7 @@
   width: min(33vw, 390px);
   aspect-ratio: 1;
   object-fit: contain;
-  opacity: var(--ym-watermark-opacity-logo, 0.09);
+  opacity: var(--ym-watermark-opacity-logo, 0.075);
   filter: drop-shadow(0 0 42px rgba(190, 0, 1, 0.28));
 }
 
@@ -42,7 +42,7 @@
   width: min(46vw, 610px);
   height: auto;
   object-fit: contain;
-  opacity: var(--ym-watermark-opacity-name, 0.075);
+  opacity: var(--ym-watermark-opacity-name, 0.06);
   filter: drop-shadow(0 0 34px rgba(99, 102, 241, 0.24));
 }
 
@@ -50,7 +50,7 @@
   position: absolute;
   border-radius: 999px;
   filter: blur(70px);
-  opacity: 0.2;
+  opacity: 0.16;
 }
 
 .ym-watermark-glow-one {

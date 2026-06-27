@@ -13,7 +13,6 @@
           class="ym-search has-tooltip"
           :data-tooltip="copy.searchTooltip"
           :aria-label="copy.searchTooltip"
-          :title="copy.searchTooltip"
         >
           <svg class="h-7 w-7 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.2-5.2M18 10.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" />
@@ -29,7 +28,6 @@
             :class="isNotificationsOpen ? 'is-active' : ''"
             :aria-label="copy.notifications"
             :data-tooltip="copy.notifications"
-            :title="copy.notifications"
             @click="toggleNotifications"
           >
             <svg class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24">
@@ -95,7 +93,6 @@
             :class="isAccountMenuOpen ? 'is-active' : ''"
             :aria-label="copy.accountMenu"
             :data-tooltip="copy.accountMenu"
-            :title="copy.accountMenu"
             @click="toggleAccountMenu"
           >
             <svg class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24">
@@ -138,7 +135,6 @@
           class="ym-action-button has-tooltip"
           :aria-label="copy.themeTooltip"
           :data-tooltip="copy.themeTooltip"
-          :title="copy.themeTooltip"
           @click="toggleTheme"
         >
           <svg v-if="dashboardTheme === 'dark'" class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24">
@@ -154,7 +150,6 @@
           class="ym-segment-button has-tooltip"
           :aria-label="copy.languageTooltip"
           :data-tooltip="copy.languageTooltip"
-          :title="copy.languageTooltip"
           @click="toggleLocale"
         >
           <span>{{ currentLocale === 'ar' ? 'AR' : 'EN' }}</span>
@@ -598,12 +593,12 @@ onBeforeUnmount(() => {
 }
 
 .has-tooltip {
-  position: relative;
+  position: relative !important;
 }
 
 .has-tooltip::after {
   position: absolute;
-  inset-inline-start: 50%;
+  left: 50%;
   top: calc(100% + 10px);
   z-index: 110;
   width: max-content;
@@ -621,7 +616,7 @@ onBeforeUnmount(() => {
   padding: 0.45rem 0.65rem;
   pointer-events: none;
   text-align: center;
-  transform: translate(-50%, -5px);
+  transform: translateX(-50%) translateY(-5px);
   transition: opacity 140ms ease 240ms, transform 140ms ease 240ms;
   white-space: nowrap;
 }
@@ -630,18 +625,17 @@ onBeforeUnmount(() => {
 .has-tooltip:focus-visible::after,
 .has-tooltip:focus-within::after {
   opacity: 1;
-  transform: translate(-50%, 0);
+  transform: translateX(-50%) translateY(0);
 }
 
 .ym-search.has-tooltip::after {
-  inset-inline-start: auto;
-  inset-inline-end: 1rem;
-  transform: translateY(-5px);
+  left: 1.92rem;
+  transform: translateX(-50%) translateY(-5px);
 }
 
 .ym-search.has-tooltip:hover::after,
 .ym-search.has-tooltip:focus-within::after {
-  transform: translateY(0);
+  transform: translateX(-50%) translateY(0);
 }
 
 .ym-action-dot {

@@ -4,11 +4,9 @@
       v-for="item in items"
       :key="item.key"
       type="button"
-      class="ym-control-pill has-tooltip"
+      class="ym-control-pill"
       :class="modelValue === item.key ? 'is-active' : ''"
-      :data-tooltip="item.tooltip"
       :aria-label="item.tooltip"
-      :title="item.tooltip"
       @click="$emit('update:modelValue', item.key)"
     >
       {{ item.label }}
@@ -78,34 +76,4 @@ const items = computed(() => {
   transform: translateY(-1px);
 }
 
-.has-tooltip {
-  position: relative;
-}
-
-.has-tooltip::after {
-  position: absolute;
-  inset-inline-start: 50%;
-  bottom: calc(100% + 9px);
-  z-index: 90;
-  width: max-content;
-  border: 1px solid var(--ym-shell-border);
-  border-radius: 9px;
-  background: var(--ym-tooltip-bg);
-  color: var(--ym-text);
-  content: attr(data-tooltip);
-  font-size: 13px;
-  font-weight: 850;
-  opacity: 0;
-  padding: 0.42rem 0.6rem;
-  pointer-events: none;
-  transform: translate(-50%, 5px);
-  transition: opacity 140ms ease 220ms, transform 140ms ease 220ms;
-  white-space: nowrap;
-}
-
-.has-tooltip:hover::after,
-.has-tooltip:focus-visible::after {
-  opacity: 1;
-  transform: translate(-50%, 0);
-}
 </style>

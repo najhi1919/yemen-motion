@@ -10,10 +10,9 @@
     <div class="relative p-4">
       <button
         type="button"
-        class="ym-sidebar-brand group has-tooltip"
+        class="ym-sidebar-brand group"
         :class="props.collapsed ? 'is-collapsed' : ''"
         :aria-label="copy.toggle"
-        :data-tooltip="copy.toggle"
         @click="$emit('toggle')"
       >
         <span class="ym-sidebar-logo" :class="props.collapsed ? 'is-collapsed' : ''">
@@ -45,12 +44,15 @@
             v-else
             :to="item.path"
             :class="[
-              'ym-sidebar-link group has-tooltip',
+              'ym-sidebar-link group',
               props.collapsed ? 'justify-center px-2' : 'px-4',
               isActive(item.path) ? 'is-active' : ''
             ]"
             :aria-label="item.label"
-            :data-tooltip="item.label"
+            @mouseenter="showSidebarTooltip($event, item.label)"
+            @focus="showSidebarTooltip($event, item.label)"
+            @mouseleave="hideSidebarTooltip"
+            @blur="hideSidebarTooltip"
           >
             <span class="ym-sidebar-link__glow" />
             <span class="ym-sidebar-icon" v-html="item.icon" />
@@ -66,6 +68,18 @@
       <div v-else class="ym-sidebar-footer-mark" aria-hidden="true">YM</div>
     </div>
   </aside>
+
+  <Teleport to="body">
+    <div
+      v-if="props.collapsed && sidebarTooltip.visible"
+      class="ym-floating-tooltip ym-sidebar-floating-tooltip"
+      :class="`is-${sidebarTooltip.placement}`"
+      :style="{ top: `${sidebarTooltip.top}px`, left: `${sidebarTooltip.left}px` }"
+      role="tooltip"
+    >
+      {{ sidebarTooltip.label }}
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -83,6 +97,16 @@ defineEmits<{ toggle: [] }>()
 const auth = useAuthStore()
 const route = useRoute()
 const currentLocale = useState<'ar' | 'en'>('ym-dashboard-locale', () => 'ar')
+
+type FloatingTooltipPlacement = 'left' | 'right'
+
+const sidebarTooltip = reactive({
+  visible: false,
+  label: '',
+  top: 0,
+  left: 0,
+  placement: 'left' as FloatingTooltipPlacement
+})
 
 const t = {
   ar: {
@@ -213,6 +237,32 @@ function isActive(path?: string): boolean {
   if (path === '/admin' || path === '/staff') return route.path === path
   return route.path.startsWith(path)
 }
+
+function showSidebarTooltip(event: MouseEvent | FocusEvent, label: string): void {
+  if (!props.collapsed) return
+
+  const target = event.currentTarget as HTMLElement | null
+  if (!target) return
+
+  const rect = target.getBoundingClientRect()
+  const isRtl = currentLocale.value === 'ar'
+
+  sidebarTooltip.visible = true
+  sidebarTooltip.label = label
+  sidebarTooltip.top = rect.top + rect.height / 2
+
+  if (isRtl) {
+    sidebarTooltip.left = rect.left - 12
+    sidebarTooltip.placement = 'left'
+  } else {
+    sidebarTooltip.left = rect.right + 12
+    sidebarTooltip.placement = 'right'
+  }
+}
+
+function hideSidebarTooltip(): void {
+  sidebarTooltip.visible = false
+}
 </script>
 
 <style scoped>
@@ -224,6 +274,10 @@ function isActive(path?: string): boolean {
   height: 100dvh;
   color: rgba(241, 245, 249, 0.92);
   will-change: width;
+}
+
+.ym-sidebar--collapsed {
+  z-index: 9999;
 }
 
 .ym-sidebar--right {
@@ -557,57 +611,28 @@ function isActive(path?: string): boolean {
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.28); }
 .ym-sidebar--light .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(91, 33, 182, 0.22); }
 
-.has-tooltip {
-  position: relative !important;
-}
-
-.ym-sidebar--collapsed .ym-sidebar-link.has-tooltip {
-  overflow: visible !important;
-}
-
-.ym-sidebar--collapsed .has-tooltip::after {
-  position: absolute;
-  top: 50% !important;
-  right: calc(100% + 12px) !important;
-  left: auto !important;
-  inset-inline-start: auto;
-  inset-inline-end: auto;
-  z-index: 90;
-  width: max-content;
-  max-width: 210px;
-  border: 1px solid rgba(129, 140, 248, 0.34);
-  border-radius: 10px;
-  background: rgba(8, 14, 30, 0.96);
-  box-shadow: 0 14px 32px rgba(2, 6, 23, 0.34);
-  color: #f8fafc;
-  content: attr(data-tooltip);
-  font-size: 13px;
-  font-weight: 900;
-  line-height: 1.4;
-  opacity: 0;
-  padding: 0.48rem 0.68rem;
+.ym-floating-tooltip {
+  position: fixed;
+  z-index: 2147483647;
+  max-width: min(260px, calc(100vw - 24px));
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.96);
+  box-shadow: 0 18px 42px rgba(2, 6, 23, 0.32);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.45;
+  padding: 0.5rem 0.7rem;
   pointer-events: none;
-  transform: translateY(-50%) !important;
-  transition: opacity 140ms ease 240ms, transform 140ms ease 240ms;
   white-space: nowrap;
 }
 
-.ym-sidebar--right.ym-sidebar--collapsed .has-tooltip::after {
-  right: calc(100% + 12px) !important;
-  left: auto !important;
-  inset-inline-start: auto;
-  inset-inline-end: auto;
+.ym-sidebar-floating-tooltip.is-left {
+  transform: translate(-100%, -50%);
 }
 
-.ym-sidebar--collapsed .has-tooltip:hover::after,
-.ym-sidebar--collapsed .has-tooltip:focus-visible::after {
-  opacity: 1;
-  transform: translateY(-50%) !important;
-}
-
-.ym-sidebar--light.ym-sidebar--collapsed .has-tooltip::after {
-  border-color: rgba(124, 58, 237, 0.28);
-  background: rgba(255, 255, 255, 0.98);
-  color: #28173a;
+.ym-sidebar-floating-tooltip.is-right {
+  transform: translate(0, -50%);
 }
 </style>

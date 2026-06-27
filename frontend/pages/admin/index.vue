@@ -31,7 +31,14 @@
       <p>{{ copy.prototypeNotice }}</p>
     </aside>
 
-    <section class="ym-control-panel">
+    <section
+      ref="controlPanelRef"
+      class="ym-control-panel"
+      @mouseover="showDelegatedControlTooltip"
+      @focusin="showDelegatedControlTooltip"
+      @mouseout="hideDelegatedControlTooltip"
+      @focusout="hideDelegatedControlTooltip"
+    >
       <div class="ym-control-panel-content">
         <h3>{{ copy.controlsTitle }}</h3>
         <p>{{ copy.controlsSubtitle }}</p>
@@ -50,9 +57,8 @@
           <div class="ym-control-group">
             <button
               type="button"
-              class="ym-control-pill has-tooltip"
+              class="ym-control-pill"
               :class="chartMode === 'individual' ? 'is-active' : ''"
-              :data-tooltip="copy.individualTooltip"
               :aria-label="copy.individualTooltip"
               @click="chartMode = 'individual'"
             >
@@ -60,9 +66,8 @@
             </button>
             <button
               type="button"
-              class="ym-control-pill has-tooltip"
+              class="ym-control-pill"
               :class="chartMode === 'combined' ? 'is-active' : ''"
-              :data-tooltip="copy.combinedTooltip"
               :aria-label="copy.combinedTooltip"
               @click="chartMode = 'combined'"
             >
@@ -148,6 +153,17 @@
       </aside>
     </section>
   </div>
+
+  <Teleport to="body">
+    <div
+      v-if="controlTooltip.visible"
+      class="ym-floating-tooltip ym-control-floating-tooltip"
+      :style="{ top: `${controlTooltip.top}px`, left: `${controlTooltip.left}px` }"
+      role="tooltip"
+    >
+      {{ controlTooltip.label }}
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -159,6 +175,7 @@ type Locale = 'ar' | 'en'
 type Period = 'day' | 'week' | 'month' | 'year'
 type ViewMode = 'all' | 'cards' | 'charts'
 type ChartMode = 'individual' | 'combined'
+type ControlTooltipPlacement = 'bottom'
 
 const auth = useAuthStore()
 const currentLocale = useState<Locale>('ym-dashboard-locale', () => 'ar')
@@ -166,6 +183,14 @@ const currentLocale = useState<Locale>('ym-dashboard-locale', () => 'ar')
 const period = ref<Period>('month')
 const viewMode = ref<ViewMode>('all')
 const chartMode = ref<ChartMode>('individual')
+const controlPanelRef = ref<HTMLElement | null>(null)
+const controlTooltip = reactive({
+  visible: false,
+  label: '',
+  top: 0,
+  left: 0,
+  placement: 'bottom' as ControlTooltipPlacement
+})
 
 const copyMap = {
   ar: {
@@ -360,6 +385,36 @@ function toggleSection(key: string) {
     selectedSections.value = [key]
   }
 }
+
+function showDelegatedControlTooltip(event: MouseEvent | FocusEvent): void {
+  const target = event.target as HTMLElement | null
+  const button = target?.closest('button[aria-label]') as HTMLElement | null
+  if (!button || !controlPanelRef.value?.contains(button)) return
+
+  const label = button.getAttribute('aria-label')
+  if (!label) return
+
+  const rect = button.getBoundingClientRect()
+
+  controlTooltip.visible = true
+  controlTooltip.label = label
+  controlTooltip.top = rect.bottom + 8
+  controlTooltip.left = rect.left + rect.width / 2
+}
+
+function hideDelegatedControlTooltip(event: MouseEvent | FocusEvent): void {
+  const target = event.target as HTMLElement | null
+  const button = target?.closest('button[aria-label]') as HTMLElement | null
+  if (!button || !controlPanelRef.value?.contains(button)) return
+
+  const relatedTarget = event instanceof MouseEvent
+    ? event.relatedTarget as Node | null
+    : (event as FocusEvent).relatedTarget as Node | null
+
+  if (relatedTarget && button.contains(relatedTarget)) return
+
+  controlTooltip.visible = false
+}
 </script>
 
 <style scoped>
@@ -514,7 +569,7 @@ function toggleSection(key: string) {
   display: grid;
   min-width: 0;
   gap: 1.25rem;
-  overflow: clip;
+  overflow: visible;
   padding: 1.45rem;
 }
 
@@ -535,18 +590,20 @@ function toggleSection(key: string) {
   display: grid;
   min-width: 0;
   gap: 0.6rem;
+  justify-items: start;
+  overflow: visible;
 }
 
 .ym-control-block :deep(.ym-control-group),
 .ym-control-block .ym-control-group,
 .ym-control-panel :deep(.ym-section-filter) {
-  width: 100%;
+  width: fit-content;
   min-width: 0;
   max-width: 100%;
 }
 
 .ym-control-panel :deep(.ym-section-filter) {
-  overflow-x: hidden;
+  overflow: visible;
 }
 
 .ym-control-block > span {
@@ -583,6 +640,9 @@ function toggleSection(key: string) {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
+  width: fit-content;
+  max-width: 100%;
+  overflow: visible;
   border: 1px solid var(--ym-card-border);
   border-radius: 20px;
   background: var(--ym-control-bg);
@@ -607,38 +667,25 @@ function toggleSection(key: string) {
   transform: translateY(-1px);
 }
 
-.has-tooltip {
-  position: relative;
-}
-
-.has-tooltip::after {
-  position: absolute;
-  inset-inline-start: 50%;
-  bottom: calc(100% + 10px);
-  z-index: 80;
-  width: max-content;
-  max-width: 220px;
-  border: 1px solid var(--ym-shell-border);
-  border-radius: 10px;
-  background: var(--ym-tooltip-bg);
-  box-shadow: 0 12px 30px rgba(2, 6, 23, 0.24);
-  color: var(--ym-text);
-  content: attr(data-tooltip);
-  font-size: 13px;
+.ym-floating-tooltip {
+  position: fixed;
+  z-index: 2147483647;
+  max-width: min(260px, calc(100vw - 24px));
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.96);
+  box-shadow: 0 18px 42px rgba(2, 6, 23, 0.32);
+  color: #fff;
+  font-size: 12px;
   font-weight: 850;
-  line-height: 1.4;
-  opacity: 0;
-  padding: 0.45rem 0.65rem;
+  line-height: 1.45;
+  padding: 0.5rem 0.7rem;
   pointer-events: none;
-  text-align: center;
-  transform: translate(-50%, 5px);
-  transition: opacity 140ms ease 220ms, transform 140ms ease 220ms;
+  white-space: nowrap;
 }
 
-.has-tooltip:hover::after,
-.has-tooltip:focus-visible::after {
-  opacity: 1;
-  transform: translate(-50%, 0);
+.ym-control-floating-tooltip {
+  transform: translateX(-50%);
 }
 
 .ym-section-title {
