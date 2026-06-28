@@ -3,7 +3,9 @@
     <section class="ym-hero-card ym-admin-hero">
       <div class="ym-hero-orb ym-hero-orb-one" />
       <div class="ym-hero-orb ym-hero-orb-two" />
-      <div class="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+      <div class="ym-hero-orb ym-hero-orb-three" />
+      <div class="ym-hero-grid" aria-hidden="true" />
+      <div class="ym-hero-content">
         <div class="flex min-w-0 items-center gap-5">
           <div class="ym-hero-avatar">
             <img
@@ -13,6 +15,16 @@
             />
           </div>
           <div class="min-w-0">
+            <div class="ym-hero-chips">
+              <span class="ym-hero-chip ym-hero-chip--brand">
+                <i class="ym-hero-chip-dot" aria-hidden="true" />
+                {{ copy.brandChip }}
+              </span>
+              <span class="ym-hero-chip ym-hero-chip--status">
+                <i class="ym-hero-chip-dot ym-hero-chip-dot--live" aria-hidden="true" />
+                {{ copy.statusChip }}
+              </span>
+            </div>
             <p class="ym-hero-kicker">{{ copy.greeting }}</p>
             <h2 class="ym-hero-title">{{ auth.user?.name || copy.fallbackName }}</h2>
             <p class="ym-hero-copy">{{ copy.heroCopy }}</p>
@@ -194,6 +206,8 @@ const controlTooltip = reactive({
 
 const copyMap = {
   ar: {
+    brandChip: 'Yemen Motion',
+    statusChip: 'نظام الإدارة',
     greeting: 'مرحباً بك في مركز التحكم',
     fallbackName: 'مدير المنصة',
     heroCopy: 'نظرة تشغيلية واضحة على الطلبات، المستخدمين، الإيرادات، البلاغات، وأداء الفريق.',
@@ -231,6 +245,8 @@ const copyMap = {
     ]
   },
   en: {
+    brandChip: 'Yemen Motion',
+    statusChip: 'Admin System',
     greeting: 'Welcome to the command center',
     fallbackName: 'Platform Admin',
     heroCopy: 'A clear operational view across orders, users, revenue, reports, and team performance.',
@@ -475,16 +491,18 @@ function hideDelegatedControlTooltip(event: MouseEvent | FocusEvent): void {
 }
 
 .ym-admin-hero {
-  border-color: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.22);
   background:
-    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.24), transparent 15rem),
-    radial-gradient(circle at 85% 8%, rgba(129, 140, 248, 0.34), transparent 18rem),
-    linear-gradient(135deg, rgba(67, 56, 202, 0.97), rgba(124, 58, 237, 0.9) 48%, rgba(190, 0, 1, 0.74));
+    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.22), transparent 15rem),
+    radial-gradient(circle at 85% 8%, rgba(129, 140, 248, 0.38), transparent 19rem),
+    radial-gradient(circle at 95% 92%, rgba(190, 0, 1, 0.32), transparent 22rem),
+    linear-gradient(135deg, rgba(67, 56, 202, 0.98), rgba(124, 58, 237, 0.92) 48%, rgba(190, 0, 1, 0.78));
   box-shadow:
-    0 28px 70px rgba(49, 46, 129, 0.28),
-    0 12px 28px rgba(2, 6, 23, 0.16),
-    inset 0 1px 0 rgba(255, 255, 255, 0.28),
-    inset 0 -1px 0 rgba(30, 41, 59, 0.14);
+    0 34px 80px rgba(49, 46, 129, 0.34),
+    0 14px 32px rgba(2, 6, 23, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    inset 0 -1px 0 rgba(30, 41, 59, 0.16),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
 .ym-admin-hero::before {
@@ -492,7 +510,7 @@ function hideDelegatedControlTooltip(event: MouseEvent | FocusEvent): void {
   inset: 1px;
   border-radius: 27px;
   background:
-    linear-gradient(115deg, rgba(255, 255, 255, 0.14), transparent 34%),
+    linear-gradient(115deg, rgba(255, 255, 255, 0.16), transparent 34%),
     linear-gradient(290deg, rgba(255, 255, 255, 0.1), transparent 42%);
   content: "";
   pointer-events: none;
@@ -503,9 +521,40 @@ function hideDelegatedControlTooltip(event: MouseEvent | FocusEvent): void {
   inset-inline: 7%;
   top: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.72), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.78), transparent);
   content: "";
   pointer-events: none;
+}
+
+/* شبكة خفيفة جدًا تعطي عمقًا تقنيًا دون ازدحام */
+.ym-hero-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 48px 48px;
+  background-position: center;
+  -webkit-mask-image: radial-gradient(circle at 30% 30%, #000 0%, transparent 72%);
+  mask-image: radial-gradient(circle at 30% 30%, #000 0%, transparent 72%);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.ym-hero-content {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+@media (min-width: 1024px) {
+  .ym-hero-content {
+    align-items: center;
+    flex-direction: row;
+    justify-content: space-between;
+  }
 }
 
 .ym-hero-orb {
@@ -531,21 +580,86 @@ function hideDelegatedControlTooltip(event: MouseEvent | FocusEvent): void {
   background: rgba(56, 189, 248, 0.22);
 }
 
+.ym-hero-orb-three {
+  top: 30%;
+  inset-inline-start: -5rem;
+  height: 14rem;
+  width: 14rem;
+  background: rgba(244, 114, 182, 0.26);
+  opacity: 0.24;
+}
+
+/* Status chips أنيقة — تسميات مستخرجة من الصفحة */
+.ym-hero-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0 0 0.6rem;
+}
+
+.ym-hero-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 6px 16px rgba(15, 23, 42, 0.14);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 850;
+  letter-spacing: 0.01em;
+  padding: 0.28rem 0.7rem;
+  backdrop-filter: blur(8px);
+}
+
+.ym-hero-chip--brand {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.ym-hero-chip--status {
+  background: rgba(34, 197, 94, 0.22);
+  border-color: rgba(134, 239, 172, 0.42);
+}
+
+.ym-hero-chip-dot {
+  height: 7px;
+  width: 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.7);
+}
+
+.ym-hero-chip-dot--live {
+  background: #4ade80;
+  box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.28), 0 0 12px rgba(74, 222, 128, 0.7);
+  animation: ym-hero-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes ym-hero-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.55; transform: scale(0.82); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ym-hero-chip-dot--live { animation: none; }
+}
+
 .ym-hero-avatar {
   display: grid;
-  height: 86px;
-  width: 86px;
-  flex: 0 0 86px;
+  height: 92px;
+  width: 92px;
+  flex: 0 0 92px;
   place-items: center;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.36);
+  border: 1px solid rgba(255, 255, 255, 0.38);
   border-radius: 26px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.12)),
-    rgba(255, 255, 255, 0.16);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.14)),
+    rgba(255, 255, 255, 0.18);
   box-shadow:
-    0 24px 48px rgba(15, 23, 42, 0.24),
-    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    0 28px 56px rgba(15, 23, 42, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.36),
     inset 0 -1px 0 rgba(15, 23, 42, 0.12);
   color: #fff;
   font-size: 2rem;
@@ -556,42 +670,45 @@ function hideDelegatedControlTooltip(event: MouseEvent | FocusEvent): void {
 .ym-hero-copy,
 .ym-hero-summary small,
 .ym-hero-summary span {
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(255, 255, 255, 0.92);
   font-weight: 850;
 }
 
 .ym-hero-kicker {
-  font-size: 15px;
-  margin: 0 0 0.25rem;
+  font-size: 14.5px;
+  margin: 0 0 0.3rem;
+  letter-spacing: 0.01em;
 }
 
 .ym-hero-title {
   color: #fff;
   font-size: clamp(2.1rem, 3.4vw, 2.75rem);
   font-weight: 950;
-  line-height: 1.05;
+  line-height: 1.06;
   margin: 0;
+  text-shadow: 0 2px 16px rgba(49, 46, 129, 0.35);
 }
 
 .ym-hero-copy {
-  font-size: 16px;
-  line-height: 1.7;
-  margin: 0.55rem 0 0;
+  font-size: 15.5px;
+  line-height: 1.75;
+  margin: 0.5rem 0 0;
   max-width: 56rem;
 }
 
 .ym-hero-summary {
   min-width: min(100%, 260px);
-  border: 1px solid rgba(255, 255, 255, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 22px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.1)),
-    rgba(255, 255, 255, 0.11);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.12)),
+    rgba(255, 255, 255, 0.14);
   box-shadow:
-    0 18px 42px rgba(30, 41, 59, 0.16),
-    inset 0 1px 0 rgba(255, 255, 255, 0.28);
-  padding: 1rem;
-  backdrop-filter: blur(12px);
+    0 20px 48px rgba(30, 41, 59, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    inset 0 -1px 0 rgba(30, 41, 59, 0.08);
+  padding: 1.05rem 1.1rem;
+  backdrop-filter: blur(14px);
 }
 
 .ym-hero-summary strong {
@@ -601,6 +718,139 @@ function hideDelegatedControlTooltip(event: MouseEvent | FocusEvent): void {
   font-weight: 950;
   line-height: 1.5;
   margin: 0.2rem 0;
+}
+
+/* Hover lift خفيف للبطاقة عند التمرير — لا توجد animation مستمرة هنا */
+.ym-admin-hero {
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+
+.ym-admin-hero:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 38px 88px rgba(49, 46, 129, 0.38),
+    0 16px 36px rgba(2, 6, 23, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    inset 0 -1px 0 rgba(30, 41, 59, 0.16),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ym-admin-hero:hover { transform: none; }
+}
+
+/* ===== Light Mode — بطاقة Hero أغنى وأوضح بدون haze أو ضبابية ===== */
+.ym-dashboard-light .ym-admin-hero {
+  border-color: rgba(109, 40, 217, 0.42);
+  background:
+    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.5), transparent 14rem),
+    radial-gradient(circle at 85% 8%, rgba(109, 40, 217, 0.28), transparent 18rem),
+    radial-gradient(circle at 95% 92%, rgba(190, 0, 1, 0.14), transparent 22rem),
+    linear-gradient(135deg, rgba(109, 40, 217, 0.96), rgba(147, 51, 234, 0.92) 48%, rgba(219, 39, 119, 0.82));
+  box-shadow:
+    0 34px 80px rgba(76, 29, 149, 0.22),
+    0 14px 32px rgba(15, 23, 42, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 -1px 0 rgba(109, 40, 217, 0.1),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.ym-dashboard-light .ym-admin-hero::before {
+  background:
+    linear-gradient(115deg, rgba(255, 255, 255, 0.32), transparent 34%),
+    linear-gradient(290deg, rgba(255, 255, 255, 0.18), transparent 42%);
+}
+
+.ym-dashboard-light .ym-admin-hero::after {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.92), transparent);
+}
+
+.ym-dashboard-light .ym-hero-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.12) 1px, transparent 1px);
+  opacity: 0.35;
+}
+
+.ym-dashboard-light .ym-hero-orb-one {
+  background: rgba(167, 139, 250, 0.28);
+  opacity: 0.22;
+}
+
+.ym-dashboard-light .ym-hero-orb-two {
+  background: rgba(56, 189, 248, 0.18);
+  opacity: 0.18;
+}
+
+.ym-dashboard-light .ym-hero-orb-three {
+  background: rgba(244, 114, 182, 0.18);
+  opacity: 0.16;
+}
+
+.ym-dashboard-light .ym-hero-avatar {
+  border-color: rgba(255, 255, 255, 0.48);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.22)),
+    rgba(255, 255, 255, 0.28);
+  box-shadow:
+    0 28px 56px rgba(76, 29, 149, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -1px 0 rgba(109, 40, 217, 0.08);
+}
+
+.ym-dashboard-light .ym-hero-kicker,
+.ym-dashboard-light .ym-hero-copy,
+.ym-dashboard-light .ym-hero-summary small,
+.ym-dashboard-light .ym-hero-summary span {
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.ym-dashboard-light .ym-hero-title {
+  text-shadow: 0 2px 20px rgba(76, 29, 149, 0.35);
+}
+
+.ym-dashboard-light .ym-hero-chip {
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.22);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 6px 16px rgba(76, 29, 149, 0.12);
+}
+
+.ym-dashboard-light .ym-hero-chip--brand {
+  background: rgba(255, 255, 255, 0.32);
+}
+
+.ym-dashboard-light .ym-hero-chip--status {
+  background: rgba(34, 197, 94, 0.28);
+  border-color: rgba(134, 239, 172, 0.52);
+}
+
+.ym-dashboard-light .ym-hero-chip-dot {
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.ym-dashboard-light .ym-hero-summary {
+  border-color: rgba(255, 255, 255, 0.36);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.18)),
+    rgba(255, 255, 255, 0.2);
+  box-shadow:
+    0 22px 52px rgba(76, 29, 149, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -1px 0 rgba(109, 40, 217, 0.06);
+  backdrop-filter: blur(16px);
+}
+
+.ym-dashboard-light .ym-hero-summary strong {
+  color: #fff;
+}
+
+.ym-dashboard-light .ym-admin-hero:hover {
+  box-shadow:
+    0 40px 96px rgba(76, 29, 149, 0.26),
+    0 16px 36px rgba(15, 23, 42, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    inset 0 -1px 0 rgba(109, 40, 217, 0.12),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 
 .ym-control-panel {
