@@ -44,34 +44,63 @@ const displayValue = computed(() => {
 </script>
 
 <style scoped>
+/* ===== سطح البطاقة: Premium glass depth ===== */
 .ym-metric-card {
   position: relative;
   overflow: hidden;
   border: 1px solid var(--ym-card-border);
   border-radius: 24px;
-  background: var(--ym-card-bg);
-  box-shadow: var(--ym-card-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--ym-card-bg) 88%, rgba(255, 255, 255, 0.06)), var(--ym-card-bg)),
+    var(--ym-card-bg);
+  box-shadow:
+    var(--ym-card-shadow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.06);
   padding: 1.55rem;
-  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+  transition: transform 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
 }
 
+/* شريط علوي ملون يحدد هوية القسم — gradient أنعم */
 .ym-metric-card::before {
   position: absolute;
   inset-inline-start: 0;
   top: 0;
-  height: 4px;
-  width: 44%;
+  height: 3px;
+  width: 52%;
   border-end-end-radius: 999px;
-  background: linear-gradient(90deg, var(--metric-color), transparent);
+  background: linear-gradient(90deg, var(--metric-color), color-mix(in srgb, var(--metric-color) 40%, transparent));
   content: "";
 }
 
-.ym-metric-card:hover {
-  border-color: color-mix(in srgb, var(--metric-color) 42%, transparent);
-  box-shadow: 0 24px 62px rgba(2, 6, 23, 0.22), 0 0 36px color-mix(in srgb, var(--metric-color) 18%, transparent);
-  transform: translateY(-4px);
+/* لمعة علوية داخلية — تعطي عمق زجاجي */
+.ym-metric-card::after {
+  position: absolute;
+  inset: 1px;
+  inset-block-end: auto;
+  height: 50%;
+  border-radius: 23px 23px 0 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent);
+  content: "";
+  pointer-events: none;
 }
 
+/* hover: lift + glow لوني + حد ملون */
+.ym-metric-card:hover {
+  border-color: color-mix(in srgb, var(--metric-color) 48%, transparent);
+  box-shadow:
+    0 28px 68px rgba(2, 6, 23, 0.24),
+    0 0 40px color-mix(in srgb, var(--metric-color) 16%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.06);
+  transform: translateY(-3px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ym-metric-card:hover { transform: none; }
+}
+
+/* توهّج لوني خلفي خفيف — عمق ديناميكي حسب لون القسم */
 .ym-metric-card__shine {
   position: absolute;
   inset: -30% -20% auto auto;
@@ -80,9 +109,14 @@ const displayValue = computed(() => {
   border-radius: 999px;
   background: var(--metric-color);
   filter: blur(54px);
-  opacity: 0.14;
+  opacity: 0.12;
 }
 
+.ym-metric-card:hover .ym-metric-card__shine {
+  opacity: 0.18;
+}
+
+/* ===== الرأس: label + value + icon ===== */
 .ym-metric-card__head {
   position: relative;
   display: flex;
@@ -93,19 +127,23 @@ const displayValue = computed(() => {
 
 .ym-metric-card__label {
   color: var(--ym-muted);
-  font-size: 16px;
-  font-weight: 900;
+  font-size: 15.5px;
+  font-weight: 850;
+  letter-spacing: 0.01em;
   line-height: 1.4;
   margin: 0 0 0.5rem;
 }
 
+/* الرقم الرئيسي: أكبر وأوضح مع accent لوني خفيف */
 .ym-metric-card__value {
   color: var(--ym-text);
-  font-size: clamp(2.35rem, 3vw, 2.75rem);
-  font-weight: 950;
+  font-size: clamp(2.4rem, 3.1vw, 2.85rem);
+  font-weight: 900;
   line-height: 1;
+  letter-spacing: -0.02em;
 }
 
+/* ===== أيقونة القسم: حاوية فخمة ===== */
 .ym-metric-card__icon {
   display: grid;
   height: 68px;
@@ -114,20 +152,33 @@ const displayValue = computed(() => {
   place-items: center;
   border: 1px solid color-mix(in srgb, var(--metric-color) 32%, transparent);
   border-radius: 20px;
-  background: color-mix(in srgb, var(--metric-color) 14%, transparent);
-  box-shadow: 0 14px 34px color-mix(in srgb, var(--metric-color) 16%, transparent);
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--metric-color) 18%, transparent), color-mix(in srgb, var(--metric-color) 8%, transparent));
+  box-shadow:
+    0 14px 34px color-mix(in srgb, var(--metric-color) 14%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
   font-size: 34px;
+  transition: transform 200ms ease, box-shadow 200ms ease;
 }
 
+.ym-metric-card:hover .ym-metric-card__icon {
+  transform: scale(1.04);
+  box-shadow:
+    0 18px 40px color-mix(in srgb, var(--metric-color) 22%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+/* ===== الوصف الثانوي ===== */
 .ym-metric-card__subtitle {
   position: relative;
   color: var(--ym-muted);
-  font-size: 15px;
-  font-weight: 800;
+  font-size: 14.5px;
+  font-weight: 820;
   line-height: 1.6;
   margin: 0.75rem 0 0;
 }
 
+/* ===== الترند / الاتجاه ===== */
 .ym-metric-card__trend {
   position: relative;
   display: flex;
@@ -140,12 +191,67 @@ const displayValue = computed(() => {
 
 .ym-metric-card__trend span {
   font-size: 14px;
-  font-weight: 950;
+  font-weight: 900;
 }
 
 .ym-metric-card__trend small {
   color: var(--ym-muted);
-  font-size: 14px;
-  font-weight: 800;
+  font-size: 13.5px;
+  font-weight: 820;
+}
+
+/* ===== Light Mode — بطاقات أغنى وأوضح بدون haze ===== */
+.ym-dashboard-light .ym-metric-card {
+  border-color: color-mix(in srgb, var(--ym-card-border) 88%, rgba(109, 40, 217, 0.2));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--ym-card-bg) 85%, rgba(255, 255, 255, 0.12)), var(--ym-card-bg)),
+    var(--ym-card-bg);
+  box-shadow:
+    var(--ym-card-shadow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -1px 0 rgba(109, 40, 217, 0.04);
+}
+
+.ym-dashboard-light .ym-metric-card::after {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent);
+}
+
+.ym-dashboard-light .ym-metric-card:hover {
+  border-color: color-mix(in srgb, var(--metric-color) 52%, transparent);
+  box-shadow:
+    0 28px 68px rgba(76, 29, 149, 0.16),
+    0 0 40px color-mix(in srgb, var(--metric-color) 12%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -1px 0 rgba(109, 40, 217, 0.06);
+}
+
+.ym-dashboard-light .ym-metric-card__shine {
+  opacity: 0.1;
+}
+
+.ym-dashboard-light .ym-metric-card:hover .ym-metric-card__shine {
+  opacity: 0.14;
+}
+
+.ym-dashboard-light .ym-metric-card__icon {
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--metric-color) 22%, transparent), color-mix(in srgb, var(--metric-color) 10%, transparent));
+  box-shadow:
+    0 14px 34px color-mix(in srgb, var(--metric-color) 12%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.ym-dashboard-light .ym-metric-card:hover .ym-metric-card__icon {
+  box-shadow:
+    0 18px 40px color-mix(in srgb, var(--metric-color) 18%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.38);
+}
+
+.ym-dashboard-light .ym-metric-card__value {
+  letter-spacing: -0.025em;
+}
+
+.ym-dashboard-light .ym-metric-card__trend {
+  border-top-color: color-mix(in srgb, var(--ym-soft-border) 80%, rgba(109, 40, 217, 0.12));
 }
 </style>
