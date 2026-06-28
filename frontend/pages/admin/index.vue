@@ -51,7 +51,7 @@
       @mouseout="hideDelegatedControlTooltip"
       @focusout="hideDelegatedControlTooltip"
     >
-      <div class="ym-control-panel-content">
+      <div class="ym-control-panel-content ym-control-panel-head">
         <h3>{{ copy.controlsTitle }}</h3>
         <p>{{ copy.controlsSubtitle }}</p>
       </div>
@@ -88,7 +88,7 @@
           </div>
         </div>
       </div>
-      <div class="ym-control-block ym-control-panel-content">
+      <div class="ym-control-block ym-control-block--sections ym-control-panel-content">
         <span>{{ copy.sectionControl }}</span>
         <DashboardSectionFilter
           :model-value="selectedSections"
@@ -476,7 +476,6 @@ function hideDelegatedControlTooltip(event: MouseEvent | FocusEvent): void {
 }
 
 .ym-hero-card,
-.ym-control-panel,
 .ym-side-panel {
   position: relative;
   overflow: hidden;
@@ -484,6 +483,62 @@ function hideDelegatedControlTooltip(event: MouseEvent | FocusEvent): void {
   border-radius: 28px;
   background: var(--ym-card-bg);
   box-shadow: var(--ym-card-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.ym-control-panel {
+  position: relative;
+  overflow: visible;
+  border: 1px solid color-mix(in srgb, var(--ym-card-border) 88%, rgba(129, 140, 248, 0.16));
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(236, 72, 153, 0.1), transparent 18rem),
+    radial-gradient(circle at 92% 12%, rgba(56, 189, 248, 0.1), transparent 20rem),
+    linear-gradient(180deg, color-mix(in srgb, var(--ym-card-bg) 90%, rgba(255, 255, 255, 0.06)), var(--ym-card-bg)),
+    var(--ym-card-bg);
+  box-shadow:
+    var(--ym-card-shadow),
+    0 18px 44px rgba(2, 6, 23, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.08);
+  isolation: isolate;
+  transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+}
+
+.ym-control-panel::before {
+  position: absolute;
+  inset-inline: 1.4rem;
+  top: 0;
+  height: 3px;
+  border-end-end-radius: 999px;
+  border-end-start-radius: 999px;
+  background: linear-gradient(90deg, #6366f1, #ec4899 46%, #38bdf8);
+  box-shadow: 0 0 24px rgba(129, 140, 248, 0.22);
+  content: "";
+  pointer-events: none;
+}
+
+.ym-control-panel::after {
+  position: absolute;
+  inset: 1px;
+  inset-block-end: auto;
+  height: 54%;
+  border-radius: 27px 27px 0 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 70%),
+    linear-gradient(120deg, rgba(255, 255, 255, 0.08), transparent 34%);
+  content: "";
+  pointer-events: none;
+  z-index: 0;
+}
+
+.ym-control-panel:hover {
+  border-color: color-mix(in srgb, var(--ym-card-border) 70%, rgba(129, 140, 248, 0.34));
+  box-shadow:
+    0 28px 68px rgba(2, 6, 23, 0.2),
+    0 0 36px rgba(129, 140, 248, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
 }
 
 .ym-hero-card {
@@ -856,30 +911,41 @@ function hideDelegatedControlTooltip(event: MouseEvent | FocusEvent): void {
 .ym-control-panel {
   display: grid;
   min-width: 0;
-  gap: 1.25rem;
+  gap: 1.15rem;
   overflow: visible;
-  padding: 1.45rem;
+  padding: clamp(1.2rem, 2vw, 1.55rem);
 }
 
 .ym-control-panel-content {
   position: relative;
-  z-index: 2;
+  z-index: 1;
   min-width: 0;
+}
+
+.ym-control-panel-head {
+  border-bottom: 1px solid color-mix(in srgb, var(--ym-soft-border) 82%, rgba(129, 140, 248, 0.16));
+  padding-bottom: 1rem;
 }
 
 .ym-controls-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: end;
-  gap: 1.1rem;
+  gap: 1rem;
 }
 
 .ym-control-block {
   display: grid;
   min-width: 0;
-  gap: 0.6rem;
+  gap: 0.65rem;
   justify-items: start;
   overflow: visible;
+}
+
+.ym-control-block--sections {
+  border-top: 1px solid color-mix(in srgb, var(--ym-soft-border) 74%, rgba(129, 140, 248, 0.12));
+  margin-top: 0.1rem;
+  padding-top: 1rem;
 }
 
 .ym-control-block :deep(.ym-control-group),
@@ -896,26 +962,29 @@ function hideDelegatedControlTooltip(event: MouseEvent | FocusEvent): void {
 
 .ym-control-block > span {
   color: var(--ym-muted);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 950;
+  letter-spacing: 0.01em;
 }
 
 .ym-control-panel h3,
 .ym-section-title h3,
 .ym-side-panel h3 {
   color: var(--ym-text);
-  font-size: 22px;
+  font-size: clamp(20px, 2vw, 23px);
   font-weight: 950;
+  line-height: 1.25;
   margin: 0;
 }
 
 .ym-control-panel p,
 .ym-section-title p {
   color: var(--ym-muted);
-  font-size: 15px;
-  font-weight: 800;
+  font-size: 14.5px;
+  font-weight: 820;
   line-height: 1.6;
-  margin: 0.2rem 0 0;
+  margin: 0.3rem 0 0;
+  max-width: 58rem;
 }
 
 @media (max-width: 1180px) {
@@ -927,32 +996,171 @@ function hideDelegatedControlTooltip(event: MouseEvent | FocusEvent): void {
 .ym-control-group {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.45rem;
+  gap: 0.42rem;
   width: fit-content;
   max-width: 100%;
   overflow: visible;
-  border: 1px solid var(--ym-card-border);
-  border-radius: 20px;
-  background: var(--ym-control-bg);
+  border: 1px solid color-mix(in srgb, var(--ym-card-border) 84%, rgba(129, 140, 248, 0.12));
+  border-radius: 19px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--ym-control-bg) 88%, rgba(255, 255, 255, 0.05)), var(--ym-control-bg));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 10px 24px rgba(2, 6, 23, 0.08);
   padding: 0.35rem;
 }
 
 .ym-control-pill {
   min-height: 44px;
-  border-radius: 15px;
+  border: 1px solid transparent;
+  border-radius: 14px;
   color: var(--ym-muted);
   font-size: 15px;
   font-weight: 900;
   padding: 0 1rem;
-  transition: transform 160ms ease, background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+  transition: transform 160ms ease, background 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
 }
 
-.ym-control-pill:hover,
 .ym-control-pill.is-active {
-  background: rgba(99, 102, 241, 0.18);
+  border-color: rgba(129, 140, 248, 0.38);
+  background:
+    linear-gradient(135deg, rgba(99, 102, 241, 0.28), rgba(236, 72, 153, 0.18));
   color: var(--ym-text);
-  box-shadow: 0 12px 24px rgba(99, 102, 241, 0.14);
+  box-shadow:
+    0 12px 24px rgba(99, 102, 241, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+.ym-control-pill:hover {
+  border-color: rgba(129, 140, 248, 0.28);
+  background: rgba(99, 102, 241, 0.14);
+  color: var(--ym-text);
+  box-shadow: 0 10px 20px rgba(99, 102, 241, 0.12);
   transform: translateY(-1px);
+}
+
+.ym-control-pill:focus-visible {
+  outline: 2px solid rgba(56, 189, 248, 0.68);
+  outline-offset: 3px;
+}
+
+.ym-control-panel :deep(.ym-control-group) {
+  border-color: color-mix(in srgb, var(--ym-card-border) 84%, rgba(129, 140, 248, 0.12));
+  border-radius: 19px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--ym-control-bg) 88%, rgba(255, 255, 255, 0.05)), var(--ym-control-bg));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 10px 24px rgba(2, 6, 23, 0.08);
+}
+
+.ym-control-panel :deep(.ym-control-pill) {
+  border: 1px solid transparent;
+  border-radius: 14px;
+}
+
+.ym-control-panel :deep(.ym-control-pill.is-active) {
+  border-color: rgba(129, 140, 248, 0.38);
+  background:
+    linear-gradient(135deg, rgba(99, 102, 241, 0.28), rgba(236, 72, 153, 0.18));
+  box-shadow:
+    0 12px 24px rgba(99, 102, 241, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+.ym-control-panel :deep(.ym-control-pill:hover) {
+  border-color: rgba(129, 140, 248, 0.28);
+  background: rgba(99, 102, 241, 0.14);
+}
+
+.ym-control-panel :deep(.ym-control-pill:focus-visible),
+.ym-control-panel :deep(.ym-section-chip:focus-visible) {
+  outline: 2px solid rgba(56, 189, 248, 0.68);
+  outline-offset: 3px;
+}
+
+.ym-control-panel :deep(.ym-section-chip) {
+  border-color: color-mix(in srgb, var(--ym-card-border) 80%, rgba(129, 140, 248, 0.1));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--ym-control-bg) 86%, rgba(255, 255, 255, 0.05)), var(--ym-control-bg));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.ym-control-panel :deep(.ym-section-chip.is-active) {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--section-color) 26%, transparent), color-mix(in srgb, #6366f1 14%, transparent));
+  box-shadow:
+    0 12px 26px color-mix(in srgb, var(--section-color) 15%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+:global(.ym-dashboard-light) .ym-control-panel {
+  border-color: color-mix(in srgb, var(--ym-card-border) 88%, rgba(109, 40, 217, 0.18));
+  background:
+    radial-gradient(circle at 10% 0%, rgba(236, 72, 153, 0.08), transparent 18rem),
+    radial-gradient(circle at 92% 12%, rgba(14, 165, 233, 0.09), transparent 20rem),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(248, 244, 255, 0.96)),
+    var(--ym-card-bg);
+  box-shadow:
+    var(--ym-card-shadow),
+    0 18px 42px rgba(76, 29, 149, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.62),
+    inset 0 -1px 0 rgba(109, 40, 217, 0.06);
+}
+
+:global(.ym-dashboard-light) .ym-control-panel::after {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent 68%),
+    linear-gradient(120deg, rgba(255, 255, 255, 0.15), transparent 34%);
+}
+
+:global(.ym-dashboard-light) .ym-control-panel:hover {
+  border-color: color-mix(in srgb, var(--ym-card-border) 72%, rgba(109, 40, 217, 0.3));
+  box-shadow:
+    0 28px 68px rgba(76, 29, 149, 0.15),
+    0 0 34px rgba(129, 140, 248, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.68),
+    inset 0 -1px 0 rgba(109, 40, 217, 0.07);
+}
+
+:global(.ym-dashboard-light) .ym-control-panel-head,
+:global(.ym-dashboard-light) .ym-control-block--sections {
+  border-color: color-mix(in srgb, var(--ym-soft-border) 84%, rgba(109, 40, 217, 0.12));
+}
+
+:global(.ym-dashboard-light) .ym-control-group,
+:global(.ym-dashboard-light) .ym-control-panel :deep(.ym-control-group) {
+  border-color: color-mix(in srgb, var(--ym-card-border) 86%, rgba(109, 40, 217, 0.12));
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(248, 244, 255, 0.92));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.46),
+    0 10px 22px rgba(76, 29, 149, 0.08);
+}
+
+:global(.ym-dashboard-light) .ym-control-pill.is-active,
+:global(.ym-dashboard-light) .ym-control-panel :deep(.ym-control-pill.is-active) {
+  border-color: rgba(109, 40, 217, 0.36);
+  background:
+    linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(236, 72, 153, 0.14));
+  box-shadow:
+    0 12px 24px rgba(109, 40, 217, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.44);
+}
+
+:global(.ym-dashboard-light) .ym-control-panel :deep(.ym-section-chip) {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(248, 244, 255, 0.92));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ym-control-panel:hover,
+  .ym-control-pill:hover,
+  .ym-control-panel :deep(.ym-control-pill:hover),
+  .ym-control-panel :deep(.ym-section-chip:hover) {
+    transform: none;
+  }
 }
 
 .ym-floating-tooltip {
