@@ -1,5 +1,5 @@
 <template>
-  <section class="ym-chart-card">
+  <section class="ym-chart-card" :style="{ '--ym-line-color': lineColor }">
     <div class="ym-chart-card__head">
       <div>
         <h3>{{ title }}</h3>
@@ -269,11 +269,66 @@ function formatValue(value: number): string {
 
 <style scoped>
 .ym-chart-card {
+  position: relative;
+  isolation: isolate;
   border: 1px solid var(--ym-card-border);
   border-radius: 26px;
-  background: var(--ym-card-bg);
-  box-shadow: var(--ym-card-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.14);
-  padding: 1.45rem;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(244, 114, 182, 0.13), transparent 18rem),
+    radial-gradient(circle at 88% 6%, rgba(56, 189, 248, 0.13), transparent 20rem),
+    linear-gradient(180deg, color-mix(in srgb, var(--ym-card-bg) 90%, rgba(255, 255, 255, 0.07)), var(--ym-card-bg)),
+    var(--ym-card-bg);
+  box-shadow:
+    var(--ym-card-shadow),
+    0 22px 54px color-mix(in srgb, var(--ym-line-color) 10%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.08);
+  padding: clamp(1.2rem, 2vw, 1.6rem);
+  transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+}
+
+.ym-chart-card::before {
+  position: absolute;
+  inset-inline-start: 1.45rem;
+  top: 0;
+  height: 3px;
+  width: min(18rem, calc(100% - 2.9rem));
+  border-end-end-radius: 999px;
+  border-end-start-radius: 999px;
+  background: linear-gradient(90deg, #6366f1, #ec4899 48%, #38bdf8);
+  box-shadow: 0 0 28px rgba(129, 140, 248, 0.28);
+  content: "";
+  pointer-events: none;
+  z-index: 0;
+}
+
+.ym-chart-card::after {
+  position: absolute;
+  inset: 1px;
+  inset-block-end: auto;
+  height: 52%;
+  border-radius: 25px 25px 0 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.09), transparent 72%),
+    linear-gradient(120deg, rgba(255, 255, 255, 0.09), transparent 36%);
+  content: "";
+  pointer-events: none;
+  z-index: 0;
+}
+
+.ym-chart-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.ym-chart-card:hover {
+  border-color: color-mix(in srgb, var(--ym-line-color) 36%, var(--ym-card-border));
+  box-shadow:
+    0 30px 72px rgba(2, 6, 23, 0.27),
+    0 0 42px color-mix(in srgb, var(--ym-line-color) 13%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.08);
+  transform: translateY(-2px);
 }
 
 .ym-chart-card__head {
@@ -281,23 +336,27 @@ function formatValue(value: number): string {
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--ym-soft-border) 82%, rgba(129, 140, 248, 0.18));
+  margin-bottom: 1.1rem;
+  padding-bottom: 1rem;
 }
 
 .ym-chart-card__head h3 {
   color: var(--ym-text);
-  font-size: 22px;
+  font-size: clamp(20px, 2vw, 23px);
   font-weight: 950;
-  line-height: 1.35;
+  line-height: 1.25;
   margin: 0;
+  text-wrap: balance;
 }
 
 .ym-chart-card__head p {
   color: var(--ym-muted);
-  font-size: 15px;
-  font-weight: 800;
+  font-size: 14.5px;
+  font-weight: 820;
   line-height: 1.6;
-  margin: 0.25rem 0 0;
+  margin: 0.35rem 0 0;
+  max-width: 44rem;
 }
 
 .ym-chart-stage {
@@ -306,9 +365,26 @@ function formatValue(value: number): string {
   border: 1px solid var(--ym-soft-border);
   border-radius: 22px;
   background:
-    radial-gradient(circle at 50% 0%, color-mix(in srgb, #818cf8 11%, transparent), transparent 55%),
-    color-mix(in srgb, var(--ym-control-bg) 86%, transparent);
+    linear-gradient(var(--ym-chart-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--ym-chart-grid) 1px, transparent 1px),
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, #818cf8 14%, transparent), transparent 58%),
+    linear-gradient(180deg, color-mix(in srgb, var(--ym-control-bg) 92%, rgba(255, 255, 255, 0.04)), color-mix(in srgb, var(--ym-control-bg) 78%, transparent));
+  background-position: center;
+  background-size: 100% 25%, 12.5% 100%, auto, auto;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.08),
+    0 14px 34px rgba(2, 6, 23, 0.1);
   padding-bottom: 1.8rem;
+}
+
+.ym-chart-stage::before {
+  position: absolute;
+  inset: 0.75rem 0.9rem auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  content: "";
+  pointer-events: none;
 }
 
 .ym-chart-svg {
@@ -326,7 +402,7 @@ function formatValue(value: number): string {
   width: 100% !important;
   height: auto !important;
   min-height: 380px !important;
-  padding: 2.2rem 1rem 0.6rem 1rem !important; /* تقليص الحشوة السفلية لشد الفراغ السفلي المحيط بالأسماء */
+  padding: 2.25rem 1rem 0.65rem 1rem !important;
   overflow: visible !important;
   box-sizing: border-box !important;
 }
@@ -339,12 +415,13 @@ function formatValue(value: number): string {
   min-width: 0;
   overflow: visible !important;
   text-align: center !important;
+  transition: transform 180ms ease;
 }
 
 .ym-chart-top-value {
   color: var(--ym-text) !important;
-  font-size: 13px !important;
-  font-weight: 800 !important;
+  font-size: 13.5px !important;
+  font-weight: 900 !important;
   line-height: 1.35 !important;
   max-width: 100%;
   overflow: visible !important;
@@ -363,25 +440,28 @@ function formatValue(value: number): string {
 }
 
 .ym-bar-pill-svg {
-  width: min(46px, 80%) !important;
+  position: relative;
+  width: min(48px, 80%) !important;
   min-height: 12px;
-  border: 1px solid color-mix(in srgb, var(--ym-bar-color) 45%, transparent) !important;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--ym-bar-color) 54%, transparent) !important;
   border-bottom: none !important;
-  border-radius: 12px 12px 0 0 !important;
+  border-radius: 14px 14px 2px 2px !important;
   background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.22), transparent 28%, rgba(255, 255, 255, 0.1) 50%, transparent 76%),
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--ym-bar-color) 100%, white 0%) 0%,
-      color-mix(in srgb, var(--ym-bar-color) 82%, white 10%) 42%,
-      color-mix(in srgb, var(--ym-bar-color) 35%, transparent) 100%
+      color-mix(in srgb, var(--ym-bar-color) 96%, white 8%) 0%,
+      color-mix(in srgb, var(--ym-bar-color) 86%, white 9%) 42%,
+      color-mix(in srgb, var(--ym-bar-color) 42%, transparent) 100%
     );
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.28),
-    inset 0 -10px 18px color-mix(in srgb, var(--ym-bar-color) 18%, transparent),
-    0 14px 24px color-mix(in srgb, var(--ym-bar-color) 16%, transparent);
-  opacity: 0.96;
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    inset 0 -12px 20px color-mix(in srgb, var(--ym-bar-color) 20%, transparent),
+    0 16px 26px color-mix(in srgb, var(--ym-bar-color) 18%, transparent);
+  opacity: 0.98;
   transform-origin: center bottom;
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), filter 220ms ease, box-shadow 220ms ease;
 }
 
 .ym-chart-bottom-label {
@@ -399,29 +479,32 @@ function formatValue(value: number): string {
 .ym-chart-column-block:hover .ym-bar-pill-svg,
 .ym-chart-column-block:hover .ym-chart-bar-container > div {
   transform: scaleY(1.03) scaleX(1.02) !important;
-  filter: drop-shadow(0 0 20px color-mix(in srgb, var(--ym-text) 40%, transparent)) !important;
+  filter: drop-shadow(0 0 18px color-mix(in srgb, var(--ym-bar-color) 34%, transparent)) !important;
 }
 
 .ym-chart-grid {
   color: var(--ym-chart-grid);
+  opacity: 0.82;
 }
 
 .ym-chart-value {
   fill: var(--ym-text);
-  font-size: 14px;
+  font-size: 14.5px;
   font-weight: 950;
   paint-order: stroke;
   stroke: var(--ym-chart-value-stroke);
-  stroke-width: 5px;
+  stroke-width: 5.5px;
 }
 
 .ym-chart-line {
-  filter: drop-shadow(0 7px 10px color-mix(in srgb, var(--ym-text) 12%, transparent));
+  filter: drop-shadow(0 8px 12px color-mix(in srgb, var(--ym-line-color) 24%, transparent));
 }
 
 .ym-chart-dot {
   pointer-events: none;
-  filter: drop-shadow(0 5px 8px rgba(15, 23, 42, 0.28));
+  filter:
+    drop-shadow(0 0 10px color-mix(in srgb, var(--ym-line-color) 30%, transparent))
+    drop-shadow(0 5px 8px rgba(15, 23, 42, 0.22));
 }
 
 .ym-chart-labels {
@@ -436,7 +519,7 @@ function formatValue(value: number): string {
 .ym-chart-labels span {
   min-width: 0;
   color: var(--ym-muted);
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 900;
   line-height: 1.2;
   overflow: hidden;
@@ -451,10 +534,15 @@ function formatValue(value: number): string {
   display: grid;
   width: 212px;
   gap: 0.28rem;
-  border: 1px solid color-mix(in srgb, var(--tooltip-color) 48%, var(--ym-shell-border));
+  border: 1px solid color-mix(in srgb, var(--tooltip-color) 52%, var(--ym-shell-border));
   border-radius: 17px;
-  background: var(--ym-tooltip-bg);
-  box-shadow: 0 22px 48px rgba(2, 6, 23, 0.34), 0 0 24px color-mix(in srgb, var(--tooltip-color) 16%, transparent);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--ym-tooltip-bg) 86%, rgba(255, 255, 255, 0.08)), var(--ym-tooltip-bg)),
+    var(--ym-tooltip-bg);
+  box-shadow:
+    0 22px 48px rgba(2, 6, 23, 0.34),
+    0 0 24px color-mix(in srgb, var(--tooltip-color) 16%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
   color: var(--ym-text);
   padding: 0.75rem 0.85rem;
   pointer-events: none;
@@ -510,7 +598,7 @@ function formatValue(value: number): string {
 .ym-chart-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.65rem;
+  gap: 0.6rem;
   margin-top: 1rem;
 }
 
@@ -518,13 +606,15 @@ function formatValue(value: number): string {
   display: inline-flex;
   align-items: center;
   gap: 0.42rem;
-  border: 1px solid var(--ym-soft-border);
+  border: 1px solid color-mix(in srgb, var(--ym-soft-border) 80%, rgba(129, 140, 248, 0.14));
   border-radius: 999px;
-  background: var(--ym-control-bg);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--ym-control-bg) 88%, rgba(255, 255, 255, 0.05)), var(--ym-control-bg));
   color: var(--ym-muted);
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 900;
   padding: 0.52rem 0.8rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .ym-chart-legend i {
@@ -532,5 +622,86 @@ function formatValue(value: number): string {
   width: 0.72rem;
   border-radius: 999px;
   box-shadow: 0 0 14px currentColor;
+}
+
+:global(.ym-dashboard-light) .ym-chart-card {
+  border-color: color-mix(in srgb, var(--ym-card-border) 88%, rgba(109, 40, 217, 0.18));
+  background:
+    radial-gradient(circle at 12% 0%, rgba(236, 72, 153, 0.09), transparent 18rem),
+    radial-gradient(circle at 88% 6%, rgba(14, 165, 233, 0.1), transparent 20rem),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 244, 255, 0.96)),
+    var(--ym-card-bg);
+  box-shadow:
+    var(--ym-card-shadow),
+    0 18px 44px color-mix(in srgb, var(--ym-line-color) 8%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.62),
+    inset 0 -1px 0 rgba(109, 40, 217, 0.06);
+}
+
+:global(.ym-dashboard-light) .ym-chart-card::after {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.24), transparent 68%),
+    linear-gradient(120deg, rgba(255, 255, 255, 0.16), transparent 36%);
+}
+
+:global(.ym-dashboard-light) .ym-chart-card:hover {
+  border-color: color-mix(in srgb, var(--ym-line-color) 42%, var(--ym-card-border));
+  box-shadow:
+    0 30px 72px rgba(76, 29, 149, 0.17),
+    0 0 36px color-mix(in srgb, var(--ym-line-color) 10%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.68),
+    inset 0 -1px 0 rgba(109, 40, 217, 0.07);
+}
+
+:global(.ym-dashboard-light) .ym-chart-card__head {
+  border-bottom-color: color-mix(in srgb, var(--ym-soft-border) 86%, rgba(109, 40, 217, 0.12));
+}
+
+:global(.ym-dashboard-light) .ym-chart-stage {
+  border-color: color-mix(in srgb, var(--ym-soft-border) 84%, rgba(109, 40, 217, 0.12));
+  background:
+    linear-gradient(var(--ym-chart-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--ym-chart-grid) 1px, transparent 1px),
+    radial-gradient(circle at 50% 0%, rgba(129, 140, 248, 0.12), transparent 58%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.76), rgba(246, 240, 255, 0.9));
+  background-position: center;
+  background-size: 100% 25%, 12.5% 100%, auto, auto;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.46),
+    inset 0 -1px 0 rgba(109, 40, 217, 0.06),
+    0 14px 34px rgba(76, 29, 149, 0.08);
+}
+
+:global(.ym-dashboard-light) .ym-chart-stage::before {
+  background: linear-gradient(90deg, transparent, rgba(109, 40, 217, 0.18), transparent);
+}
+
+:global(.ym-dashboard-light) .ym-bar-pill-svg {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.46),
+    inset 0 -12px 20px color-mix(in srgb, var(--ym-bar-color) 17%, transparent),
+    0 14px 24px color-mix(in srgb, var(--ym-bar-color) 14%, transparent);
+}
+
+:global(.ym-dashboard-light) .ym-chart-tooltip {
+  box-shadow:
+    0 22px 46px rgba(76, 29, 149, 0.18),
+    0 0 22px color-mix(in srgb, var(--tooltip-color) 12%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.52);
+  backdrop-filter: blur(10px) saturate(128%);
+}
+
+:global(.ym-dashboard-light) .ym-chart-legend span {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.76), rgba(248, 244, 255, 0.9));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.48);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ym-chart-card:hover,
+  .ym-chart-column-block:hover .ym-bar-pill-svg,
+  .ym-chart-column-block:hover .ym-chart-bar-container > div {
+    transform: none !important;
+  }
 }
 </style>
