@@ -9,6 +9,23 @@
     :dir="currentLocale === 'ar' ? 'rtl' : 'ltr'"
   >
     <BackgroundWatermark />
+    <button
+      type="button"
+      class="ym-mobile-sidebar-toggle"
+      :aria-label="mobileSidebarLabel"
+      @click="sidebarCollapsed = !sidebarCollapsed"
+    >
+      <svg class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M4 12h16M4 17h16" />
+      </svg>
+    </button>
+    <button
+      v-if="!sidebarCollapsed"
+      type="button"
+      class="ym-mobile-sidebar-backdrop"
+      :aria-label="mobileSidebarLabel"
+      @click="sidebarCollapsed = true"
+    />
     <AppSidebar
       :collapsed="sidebarCollapsed"
       :theme="dashboardTheme"
@@ -30,6 +47,24 @@
 const sidebarCollapsed = ref(false)
 const dashboardTheme = useState<'dark' | 'light'>('ym-dashboard-theme', () => 'dark')
 const currentLocale = useState<'ar' | 'en'>('ym-dashboard-locale', () => 'ar')
+let mobileSidebarQuery: MediaQueryList | null = null
+const mobileSidebarLabel = computed(() => currentLocale.value === 'ar' ? 'فتح أو إغلاق القائمة' : 'Open or close sidebar')
+
+const syncMobileSidebar = () => {
+  if (mobileSidebarQuery?.matches) {
+    sidebarCollapsed.value = true
+  }
+}
+
+onMounted(() => {
+  mobileSidebarQuery = window.matchMedia('(max-width: 768px)')
+  syncMobileSidebar()
+  mobileSidebarQuery.addEventListener('change', syncMobileSidebar)
+})
+
+onBeforeUnmount(() => {
+  mobileSidebarQuery?.removeEventListener('change', syncMobileSidebar)
+})
 </script>
 
 <style>
@@ -133,5 +168,62 @@ const currentLocale = useState<'ar' | 'en'>('ym-dashboard-locale', () => 'ar')
 
 .ym-dashboard-rtl {
   direction: rtl;
+}
+
+.ym-mobile-sidebar-toggle,
+.ym-mobile-sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .ym-dashboard-content {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    width: 100%;
+  }
+
+  .ym-dashboard-main {
+    min-width: 0;
+  }
+
+  .ym-dashboard-shell .ym-sidebar {
+    z-index: 70;
+  }
+
+  .ym-dashboard-shell .ym-sidebar--right.ym-sidebar--collapsed {
+    transform: translateX(100%);
+    pointer-events: none;
+  }
+
+  .ym-dashboard-shell .ym-sidebar--left.ym-sidebar--collapsed {
+    transform: translateX(-100%);
+    pointer-events: none;
+  }
+
+  .ym-mobile-sidebar-toggle {
+    position: fixed;
+    inset-block-start: 1rem;
+    inset-inline-end: 1rem;
+    z-index: 80;
+    display: grid;
+    height: 52px;
+    width: 52px;
+    place-items: center;
+    border: 1px solid var(--ym-shell-border);
+    border-radius: 18px;
+    background: var(--ym-shell-surface);
+    box-shadow: var(--ym-shell-shadow);
+    color: var(--ym-text);
+    backdrop-filter: blur(18px) saturate(140%);
+  }
+
+  .ym-mobile-sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: block;
+    background: rgba(2, 6, 23, 0.42);
+    backdrop-filter: blur(2px);
+  }
 }
 </style>
