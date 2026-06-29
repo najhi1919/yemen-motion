@@ -1,8 +1,11 @@
 <template>
-  <div class="ym-staff-page space-y-7">
+  <div class="ym-staff-page">
     <section class="ym-staff-hero">
       <div class="ym-staff-hero__glow" />
-      <div class="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+      <div class="ym-staff-hero__orb ym-staff-hero__orb-one" />
+      <div class="ym-staff-hero__orb ym-staff-hero__orb-two" />
+      <div class="ym-staff-hero__grid" aria-hidden="true" />
+      <div class="ym-staff-hero-content">
         <div class="flex min-w-0 items-center gap-5">
           <div class="ym-staff-avatar">
             <img
@@ -30,7 +33,7 @@
       <p>{{ copy.prototypeNotice }}</p>
     </aside>
 
-    <section class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
+    <section class="ym-staff-metrics grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
       <DashboardMetricCard
         v-for="card in kpis"
         :key="card.key"
@@ -45,7 +48,7 @@
       />
     </section>
 
-    <section class="grid grid-cols-1 gap-5 xl:grid-cols-3">
+    <section class="ym-staff-operations grid grid-cols-1 gap-5 xl:grid-cols-3">
       <div class="xl:col-span-2">
         <DashboardActivityFeed :title="copy.activityTitle" :items="activities" :empty-label="copy.emptyActivity">
           <template #actions>
@@ -150,16 +153,30 @@ const tasks = [
 </script>
 
 <style scoped>
+.ym-staff-page {
+  display: grid;
+  gap: clamp(1.25rem, 2.4vw, 1.75rem);
+  position: relative;
+  border-radius: 32px;
+  isolation: isolate;
+}
+
 .ym-prototype-notice {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.9rem;
-  border: 1px solid rgba(245, 158, 11, 0.32);
+  overflow: hidden;
+  border: 1px solid rgba(245, 158, 11, 0.34);
   border-radius: 20px;
-  background: rgba(245, 158, 11, 0.09);
+  background:
+    linear-gradient(180deg, rgba(245, 158, 11, 0.11), rgba(245, 158, 11, 0.07)),
+    color-mix(in srgb, var(--ym-control-bg) 62%, transparent);
   padding: 0.9rem 1rem;
   color: var(--ym-text);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 12px 28px rgba(245, 158, 11, 0.07);
 }
 
 .ym-prototype-notice__badge {
@@ -191,24 +208,33 @@ const tasks = [
 .ym-staff-panel {
   position: relative;
   overflow: hidden;
-  border: 1px solid var(--ym-card-border);
+  border: 1px solid color-mix(in srgb, var(--ym-card-border) 88%, rgba(45, 212, 191, 0.16));
   border-radius: 28px;
-  background: var(--ym-card-bg);
-  box-shadow: var(--ym-card-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--ym-card-bg) 90%, rgba(255, 255, 255, 0.06)), var(--ym-card-bg)),
+    var(--ym-card-bg);
+  box-shadow:
+    var(--ym-card-shadow),
+    0 16px 40px rgba(2, 6, 23, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.08);
 }
 
 .ym-staff-hero {
   border-color: rgba(255, 255, 255, 0.19);
   background:
-    radial-gradient(circle at 20% 18%, rgba(255, 255, 255, 0.2), transparent 15rem),
-    radial-gradient(circle at 84% 8%, rgba(45, 212, 191, 0.26), transparent 18rem),
-    linear-gradient(135deg, rgba(4, 120, 87, 0.96), rgba(13, 148, 136, 0.9) 50%, rgba(14, 165, 233, 0.7));
+    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.22), transparent 15rem),
+    radial-gradient(circle at 84% 8%, rgba(45, 212, 191, 0.28), transparent 18rem),
+    radial-gradient(circle at 96% 92%, rgba(99, 102, 241, 0.24), transparent 22rem),
+    linear-gradient(135deg, rgba(4, 120, 87, 0.98), rgba(13, 148, 136, 0.92) 48%, rgba(14, 165, 233, 0.76));
   box-shadow:
-    0 28px 68px rgba(6, 95, 70, 0.24),
-    0 12px 28px rgba(2, 6, 23, 0.15),
-    inset 0 1px 0 rgba(255, 255, 255, 0.27),
-    inset 0 -1px 0 rgba(15, 23, 42, 0.13);
+    0 34px 80px rgba(6, 95, 70, 0.28),
+    0 14px 32px rgba(2, 6, 23, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.14),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
   padding: clamp(1.35rem, 3vw, 2.25rem);
+  transition: transform 200ms ease, box-shadow 200ms ease;
 }
 
 .ym-staff-hero::before {
@@ -232,6 +258,46 @@ const tasks = [
   pointer-events: none;
 }
 
+.ym-staff-hero:hover {
+  box-shadow:
+    0 38px 88px rgba(6, 95, 70, 0.32),
+    0 16px 36px rgba(2, 6, 23, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.33),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.14),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  transform: translateY(-2px);
+}
+
+.ym-staff-hero-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+@media (min-width: 1024px) {
+  .ym-staff-hero-content {
+    align-items: center;
+    flex-direction: row;
+    justify-content: space-between;
+  }
+}
+
+.ym-staff-hero__grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-position: center;
+  background-size: 48px 48px;
+  -webkit-mask-image: radial-gradient(circle at 30% 30%, #000 0%, transparent 72%);
+  mask-image: radial-gradient(circle at 30% 30%, #000 0%, transparent 72%);
+  opacity: 0.42;
+  pointer-events: none;
+}
+
 .ym-staff-hero__glow {
   position: absolute;
   inset-inline-end: -5rem;
@@ -244,11 +310,35 @@ const tasks = [
   opacity: 0.32;
 }
 
+.ym-staff-hero__orb {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(36px);
+  opacity: 0.22;
+  pointer-events: none;
+}
+
+.ym-staff-hero__orb-one {
+  bottom: -5rem;
+  inset-inline-start: 18%;
+  height: 15rem;
+  width: 15rem;
+  background: rgba(56, 189, 248, 0.2);
+}
+
+.ym-staff-hero__orb-two {
+  top: 28%;
+  inset-inline-start: -4rem;
+  height: 12rem;
+  width: 12rem;
+  background: rgba(167, 139, 250, 0.18);
+}
+
 .ym-staff-avatar {
   display: grid;
-  height: 86px;
-  width: 86px;
-  flex: 0 0 86px;
+  height: 92px;
+  width: 92px;
+  flex: 0 0 92px;
   place-items: center;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.35);
@@ -274,8 +364,9 @@ const tasks = [
 }
 
 .ym-staff-kicker {
-  font-size: 15px;
-  margin: 0 0 0.25rem;
+  font-size: 14.5px;
+  letter-spacing: 0.01em;
+  margin: 0 0 0.3rem;
 }
 
 .ym-staff-title {
@@ -284,26 +375,29 @@ const tasks = [
   font-weight: 950;
   line-height: 1.05;
   margin: 0;
+  text-shadow: 0 2px 16px rgba(6, 95, 70, 0.35);
 }
 
 .ym-staff-copy {
-  font-size: 16px;
-  line-height: 1.7;
-  margin: 0.55rem 0 0;
+  font-size: 15.5px;
+  line-height: 1.75;
+  margin: 0.5rem 0 0;
+  max-width: 52rem;
 }
 
 .ym-staff-focus {
-  min-width: min(100%, 250px);
-  border: 1px solid rgba(255, 255, 255, 0.24);
+  min-width: min(100%, 260px);
+  border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 22px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.17), rgba(255, 255, 255, 0.1)),
     rgba(255, 255, 255, 0.11);
   box-shadow:
-    0 18px 42px rgba(6, 78, 59, 0.15),
-    inset 0 1px 0 rgba(255, 255, 255, 0.28);
-  padding: 1rem;
-  backdrop-filter: blur(12px);
+    0 20px 48px rgba(6, 78, 59, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.08);
+  padding: 1.05rem 1.1rem;
+  backdrop-filter: blur(10px);
 }
 
 .ym-staff-focus strong {
@@ -316,35 +410,97 @@ const tasks = [
 }
 
 .ym-inline-action {
+  border: 1px solid color-mix(in srgb, #38bdf8 32%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ym-control-bg) 74%, transparent);
   color: #38bdf8;
   font-size: 14px;
   font-weight: 950;
+  padding: 0.45rem 0.75rem;
+  transition: transform 160ms ease, background 160ms ease, border-color 160ms ease;
+}
+
+.ym-inline-action:hover {
+  border-color: color-mix(in srgb, #38bdf8 52%, transparent);
+  background: rgba(56, 189, 248, 0.12);
+  transform: translateY(-1px);
 }
 
 .ym-staff-panel {
-  padding: 1.25rem;
+  padding: clamp(1.15rem, 2vw, 1.35rem);
+  transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+}
+
+.ym-staff-panel::before {
+  position: absolute;
+  inset-inline-start: 1.25rem;
+  top: 0;
+  height: 3px;
+  width: min(12rem, calc(100% - 2.5rem));
+  border-end-end-radius: 999px;
+  border-end-start-radius: 999px;
+  background: linear-gradient(90deg, #10b981, #38bdf8);
+  box-shadow: 0 0 22px rgba(45, 212, 191, 0.18);
+  content: "";
+  pointer-events: none;
+}
+
+.ym-staff-panel::after {
+  position: absolute;
+  inset: 1px;
+  inset-block-end: auto;
+  height: 50%;
+  border-radius: 27px 27px 0 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 70%);
+  content: "";
+  pointer-events: none;
+}
+
+.ym-staff-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+.ym-staff-panel:hover {
+  border-color: color-mix(in srgb, var(--ym-card-border) 72%, rgba(45, 212, 191, 0.28));
+  box-shadow:
+    0 24px 60px rgba(2, 6, 23, 0.18),
+    0 0 32px rgba(45, 212, 191, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
 }
 
 .ym-staff-panel h3 {
   color: var(--ym-text);
-  font-size: 22px;
+  border-bottom: 1px solid color-mix(in srgb, var(--ym-soft-border) 82%, rgba(45, 212, 191, 0.12));
+  font-size: clamp(20px, 2vw, 23px);
   font-weight: 950;
+  line-height: 1.25;
   margin: 0 0 1rem;
+  padding-bottom: 0.9rem;
 }
 
 .ym-task-row {
+  position: relative;
   display: flex;
   gap: 0.85rem;
-  border: 1px solid var(--ym-soft-border);
+  border: 1px solid color-mix(in srgb, var(--ym-soft-border) 78%, transparent);
   border-radius: 18px;
-  background: var(--ym-control-bg);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--ym-control-bg) 86%, rgba(255, 255, 255, 0.04)), var(--ym-control-bg));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   padding: 1rem;
-  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
 }
 
 .ym-task-row:hover {
-  border-color: var(--ym-card-border);
-  background: var(--ym-row-hover);
+  border-color: color-mix(in srgb, var(--ym-card-border) 80%, rgba(45, 212, 191, 0.18));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--ym-row-hover) 80%, rgba(45, 212, 191, 0.08)), var(--ym-row-hover));
+  box-shadow:
+    0 14px 30px rgba(45, 212, 191, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
   transform: translateY(-1px);
 }
 
@@ -354,7 +510,7 @@ const tasks = [
   flex: 0 0 13px;
   border-radius: 999px;
   margin-top: 0.32rem;
-  box-shadow: 0 0 18px currentColor;
+  box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 13%, transparent), 0 0 18px currentColor;
 }
 
 .ym-task-row strong {
@@ -369,5 +525,101 @@ const tasks = [
   font-size: 14px;
   font-weight: 850;
   line-height: 1.55;
+}
+
+:global(.ym-dashboard-light .ym-staff-page) {
+  background: transparent;
+}
+
+:global(.ym-dashboard-light .ym-staff-page .ym-prototype-notice) {
+  background:
+    linear-gradient(180deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.07)),
+    rgba(255, 255, 255, 0.62);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.46),
+    0 12px 28px rgba(180, 83, 9, 0.08);
+}
+
+:global(.ym-dashboard-light .ym-staff-page .ym-staff-hero) {
+  border-color: rgba(20, 184, 166, 0.34);
+  background:
+    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.5), transparent 14rem),
+    radial-gradient(circle at 84% 8%, rgba(20, 184, 166, 0.22), transparent 18rem),
+    radial-gradient(circle at 96% 92%, rgba(99, 102, 241, 0.14), transparent 22rem),
+    linear-gradient(135deg, rgba(4, 120, 87, 0.94), rgba(13, 148, 136, 0.9) 48%, rgba(14, 165, 233, 0.78));
+  box-shadow:
+    0 34px 80px rgba(6, 95, 70, 0.18),
+    0 14px 32px rgba(15, 23, 42, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    inset 0 -1px 0 rgba(20, 184, 166, 0.1);
+}
+
+:global(.ym-dashboard-light .ym-staff-page .ym-staff-hero::before) {
+  background:
+    linear-gradient(115deg, rgba(255, 255, 255, 0.28), transparent 34%),
+    linear-gradient(290deg, rgba(209, 250, 229, 0.16), transparent 43%);
+}
+
+:global(.ym-dashboard-light .ym-staff-page .ym-staff-hero__grid) {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.11) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.11) 1px, transparent 1px);
+  opacity: 0.32;
+}
+
+:global(.ym-dashboard-light .ym-staff-page .ym-staff-hero__glow) {
+  filter: blur(34px);
+  opacity: 0.2;
+}
+
+:global(.ym-dashboard-light .ym-staff-page .ym-staff-focus) {
+  border-color: rgba(255, 255, 255, 0.36);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.27), rgba(255, 255, 255, 0.17)),
+    rgba(255, 255, 255, 0.2);
+  box-shadow:
+    0 22px 52px rgba(6, 95, 70, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.44),
+    inset 0 -1px 0 rgba(20, 184, 166, 0.06);
+  backdrop-filter: blur(8px);
+}
+
+:global(.ym-dashboard-light .ym-staff-page .ym-staff-panel) {
+  border-color: color-mix(in srgb, var(--ym-card-border) 88%, rgba(20, 184, 166, 0.16));
+  background:
+    radial-gradient(circle at 90% 0%, rgba(20, 184, 166, 0.08), transparent 16rem),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(248, 244, 255, 0.95)),
+    var(--ym-card-bg);
+  box-shadow:
+    var(--ym-card-shadow),
+    0 18px 42px rgba(76, 29, 149, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -1px 0 rgba(20, 184, 166, 0.05);
+}
+
+:global(.ym-dashboard-light .ym-staff-page .ym-staff-panel::after) {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent 68%);
+}
+
+:global(.ym-dashboard-light .ym-staff-page .ym-task-row) {
+  border-color: color-mix(in srgb, var(--ym-soft-border) 84%, rgba(20, 184, 166, 0.08));
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(248, 244, 255, 0.88));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
+}
+
+:global(.ym-dashboard-light .ym-staff-page .ym-task-row:hover) {
+  box-shadow:
+    0 14px 30px rgba(20, 184, 166, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.48);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ym-staff-hero:hover,
+  .ym-inline-action:hover,
+  .ym-staff-panel:hover,
+  .ym-task-row:hover {
+    transform: none;
+  }
 }
 </style>
