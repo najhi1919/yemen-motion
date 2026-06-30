@@ -18,5 +18,6 @@ Route::middleware(['auth:sanctum'])->prefix('dashboard')->group(function () {
     Route::get('/stats', [\App\Http\Controllers\Api\DashboardController::class, 'stats']);
     Route::get('/activity', [\App\Http\Controllers\Api\DashboardController::class, 'activity']);
     Route::get('/chart', [\App\Http\Controllers\Api\DashboardController::class, 'chart']);
+    Route::get('/overview', [\App\Http\Controllers\Api\DashboardController::class, 'overview']);
 });
 
