@@ -993,6 +993,27 @@ function hideDelegatedControlTooltip(event: MouseEvent | FocusEvent): void {
   }
 }
 
+@media (max-width: 1024px) {
+  .ym-control-block--sections {
+    justify-items: stretch;
+  }
+
+  .ym-control-panel :deep(.ym-section-filter) {
+    width: 100%;
+    max-height: none;
+    overflow: visible;
+    column-gap: 0.48rem;
+    row-gap: 0.48rem;
+  }
+
+  .ym-control-panel :deep(.ym-section-chip) {
+    min-width: 0;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
 .ym-control-group {
   display: flex;
   flex-wrap: wrap;
@@ -1216,5 +1237,320 @@ function hideDelegatedControlTooltip(event: MouseEvent | FocusEvent): void {
   color: var(--ym-text);
   font-size: 17px;
   font-weight: 950;
+}
+
+@media (max-width: 640px) {
+  .ym-dashboard-page.space-y-7 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 1rem;
+  }
+
+  .ym-dashboard-page > section.grid,
+  .ym-dashboard-page > section.space-y-5,
+  .ym-dashboard-page > section.grid > div.grid {
+    gap: 1rem;
+  }
+
+  .ym-dashboard-page > section.space-y-5 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 1rem;
+  }
+
+  .ym-prototype-notice {
+    gap: 0.55rem;
+    border-radius: 16px;
+    padding: 0.72rem 0.8rem;
+  }
+
+  .ym-prototype-notice__badge {
+    padding: 0.28rem 0.58rem;
+    font-size: 12px;
+  }
+
+  .ym-prototype-notice p {
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .ym-hero-card,
+  .ym-side-panel {
+    border-radius: 22px;
+  }
+
+  .ym-hero-card {
+    padding: 1rem;
+  }
+
+  .ym-admin-hero::before {
+    border-radius: 21px;
+  }
+
+  .ym-hero-grid {
+    background-size: 40px 40px;
+    opacity: 0.35;
+  }
+
+  .ym-hero-content {
+    gap: 1rem;
+  }
+
+  .ym-hero-content > .flex {
+    align-items: flex-start;
+    gap: 0.85rem;
+  }
+
+  .ym-hero-avatar {
+    width: 68px;
+    height: 68px;
+    flex-basis: 68px;
+    border-radius: 20px;
+    box-shadow:
+      0 16px 34px rgba(15, 23, 42, 0.22),
+      inset 0 1px 0 rgba(255, 255, 255, 0.34),
+      inset 0 -1px 0 rgba(15, 23, 42, 0.1);
+  }
+
+  .ym-hero-chips {
+    gap: 0.35rem;
+    margin-bottom: 0.45rem;
+  }
+
+  .ym-hero-chip {
+    gap: 0.3rem;
+    padding: 0.22rem 0.52rem;
+    font-size: 11.75px;
+  }
+
+  .ym-hero-chip-dot {
+    width: 6px;
+    height: 6px;
+  }
+
+  .ym-hero-kicker {
+    margin-bottom: 0.2rem;
+    font-size: 13px;
+  }
+
+  .ym-hero-title {
+    font-size: clamp(1.55rem, 8vw, 1.9rem);
+    line-height: 1.12;
+  }
+
+  .ym-hero-copy {
+    margin-top: 0.35rem;
+    font-size: 13.5px;
+    line-height: 1.55;
+  }
+
+  .ym-hero-summary {
+    min-width: 0;
+    width: 100%;
+    border-radius: 16px;
+    padding: 0.72rem 0.8rem;
+  }
+
+  .ym-hero-summary strong {
+    font-size: 15.5px;
+    line-height: 1.35;
+    margin: 0.12rem 0;
+  }
+
+  .ym-hero-orb {
+    filter: blur(28px);
+    opacity: 0.2;
+  }
+
+  .ym-hero-orb-one {
+    width: 10rem;
+    height: 10rem;
+  }
+
+  .ym-hero-orb-two {
+    width: 11rem;
+    height: 11rem;
+  }
+
+  .ym-hero-orb-three {
+    width: 9rem;
+    height: 9rem;
+  }
+
+  .ym-control-panel {
+    gap: 0.8rem;
+    border-radius: 22px;
+    padding: 0.95rem;
+  }
+
+  .ym-control-panel::before {
+    inset-inline: 0.9rem;
+    height: 2px;
+  }
+
+  .ym-control-panel::after {
+    height: 42%;
+    border-radius: 21px 21px 0 0;
+  }
+
+  .ym-control-panel-head {
+    padding-bottom: 0.72rem;
+  }
+
+  .ym-controls-row {
+    gap: 0.78rem;
+  }
+
+  .ym-control-block {
+    gap: 0.45rem;
+  }
+
+  .ym-control-block--sections {
+    margin-top: 0;
+    padding-top: 0.72rem;
+  }
+
+  .ym-control-panel :deep(.ym-section-filter) {
+    width: 100%;
+    max-height: none;
+    row-gap: 0.35rem;
+    overflow: visible;
+  }
+
+  .ym-control-block > span {
+    font-size: 12.5px;
+  }
+
+  .ym-control-panel h3,
+  .ym-section-title h3,
+  .ym-side-panel h3 {
+    font-size: 18px;
+    line-height: 1.22;
+  }
+
+  .ym-control-panel p,
+  .ym-section-title p {
+    font-size: 13px;
+    line-height: 1.48;
+  }
+
+  .ym-control-group,
+  .ym-control-panel :deep(.ym-control-group) {
+    gap: 0.3rem;
+    border-radius: 15px;
+    padding: 0.25rem;
+  }
+
+  .ym-control-pill,
+  .ym-control-panel :deep(.ym-control-pill) {
+    min-height: 38px;
+    border-radius: 11px;
+    padding: 0 0.72rem;
+    font-size: 13.5px;
+  }
+
+  .ym-section-title {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .ym-side-panel {
+    padding: 0.95rem;
+  }
+
+  .ym-side-panel .space-y-3 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.65rem;
+  }
+
+  .ym-side-row {
+    gap: 0.7rem;
+    border-radius: 13px;
+    padding: 0.72rem;
+  }
+
+  .ym-side-row span {
+    font-size: 13.5px;
+  }
+
+  .ym-side-row strong {
+    font-size: 15.5px;
+  }
+}
+
+@media (max-width: 430px) {
+  .ym-dashboard-page.space-y-7 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.85rem;
+  }
+
+  .ym-hero-card {
+    padding: 0.85rem;
+  }
+
+  .ym-hero-content {
+    gap: 0.85rem;
+  }
+
+  .ym-hero-content > .flex {
+    gap: 0.7rem;
+  }
+
+  .ym-hero-avatar {
+    width: 60px;
+    height: 60px;
+    flex-basis: 60px;
+    border-radius: 18px;
+  }
+
+  .ym-hero-title {
+    font-size: clamp(1.42rem, 7.4vw, 1.72rem);
+  }
+
+  .ym-hero-copy {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .ym-control-panel {
+    gap: 0.68rem;
+    padding: 0.82rem;
+  }
+
+  .ym-control-panel h3,
+  .ym-section-title h3,
+  .ym-side-panel h3 {
+    font-size: 17px;
+  }
+
+  .ym-control-panel p,
+  .ym-section-title p {
+    font-size: 12.75px;
+  }
+
+  .ym-control-pill,
+  .ym-control-panel :deep(.ym-control-pill) {
+    min-height: 36px;
+    padding: 0 0.62rem;
+    font-size: 13px;
+  }
+
+  .ym-control-block--sections {
+    padding-bottom: 0.18rem;
+  }
+
+  .ym-control-panel :deep(.ym-section-filter) {
+    row-gap: 0.32rem;
+    padding-bottom: 0.15rem;
+  }
+
+  .ym-dashboard-page > section.grid,
+  .ym-dashboard-page > section.space-y-5,
+  .ym-dashboard-page > section.grid > div.grid {
+    gap: 0.85rem;
+  }
+
+  .ym-dashboard-page > section.space-y-5 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.85rem;
+  }
+
+  .ym-side-panel {
+    padding: 0.82rem;
+  }
 }
 </style>

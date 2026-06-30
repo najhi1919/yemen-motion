@@ -704,4 +704,13 @@ function formatValue(value: number): string {
     transform: none !important;
   }
 }
+
+/* Mobile/Tablet density: إخفاء النصوص الثابتة المتداخلة في الرسم المجمّع فقط.
+   الأعمدة والألوان والـ tooltip تظل تعمل — التعرّف يتم عبر اللون وhover/focus. */
+@media (max-width: 1024px) {
+  .ym-chart-top-value,
+  .ym-chart-bottom-label {
+    display: none !important;
+  }
+}
 </style>

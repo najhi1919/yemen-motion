@@ -51,7 +51,12 @@
             leave-from-class="opacity-100 translate-y-0 scale-100"
             leave-to-class="opacity-0 translate-y-2 scale-95"
           >
-            <section v-if="isNotificationsOpen" ref="notificationsPanel" class="ym-popover ym-notifications-panel">
+            <section
+              v-if="isNotificationsOpen"
+              ref="notificationsPanel"
+              class="ym-popover ym-notifications-panel"
+              :style="notificationsPopoverStyle"
+            >
               <div class="ym-popover-head">
                 <div>
                   <p>{{ copy.notifications }}</p>
@@ -118,7 +123,12 @@
             leave-from-class="opacity-100 translate-y-0 scale-100"
             leave-to-class="opacity-0 translate-y-2 scale-95"
           >
-            <section v-if="isAccountMenuOpen" ref="accountPanel" class="ym-popover ym-account-panel">
+            <section
+              v-if="isAccountMenuOpen"
+              ref="accountPanel"
+              class="ym-popover ym-account-panel"
+              :style="accountPopoverStyle"
+            >
               <div class="ym-popover-head">
                 <div>
                   <p>{{ copy.accountMenu }}</p>
@@ -214,6 +224,8 @@ const notificationsButton = ref<HTMLElement | null>(null)
 const accountButton = ref<HTMLElement | null>(null)
 const notificationsPanel = ref<HTMLElement | null>(null)
 const accountPanel = ref<HTMLElement | null>(null)
+const notificationsPopoverStyle = ref<Record<string, string>>({})
+const accountPopoverStyle = ref<Record<string, string>>({})
 
 const dictionary = {
   ar: {
@@ -410,12 +422,50 @@ function toggleNotifications() {
   hideTopbarTooltip()
   isNotificationsOpen.value = !isNotificationsOpen.value
   if (isNotificationsOpen.value) isAccountMenuOpen.value = false
+  void nextTick(updatePopoverPositions)
 }
 
 function toggleAccountMenu() {
   hideTopbarTooltip()
   isAccountMenuOpen.value = !isAccountMenuOpen.value
   if (isAccountMenuOpen.value) isNotificationsOpen.value = false
+  void nextTick(updatePopoverPositions)
+}
+
+function buildPopoverStyle(button: HTMLElement | null, preferredWidth: number): Record<string, string> {
+  if (!button || typeof window === 'undefined') return {}
+
+  const viewportPadding = 16
+  const rect = button.getBoundingClientRect()
+  const containerRect = button.closest('.ym-topbar-shell')?.getBoundingClientRect()
+  const containerLeft = containerRect?.left ?? 0
+  const containerTop = containerRect?.top ?? 0
+  const width = Math.min(preferredWidth, Math.max(0, window.innerWidth - viewportPadding * 2))
+  const centeredLeft = rect.left + rect.width / 2 - width / 2
+  const maxLeft = Math.max(viewportPadding, window.innerWidth - width - viewportPadding)
+  const left = Math.min(
+    Math.max(viewportPadding, centeredLeft),
+    maxLeft
+  )
+  const top = rect.bottom + 12
+  const availableHeight = Math.max(220, window.innerHeight - top - viewportPadding)
+
+  return {
+    top: `${top - containerTop}px`,
+    left: `${left - containerLeft}px`,
+    width: `${width}px`,
+    maxHeight: `${availableHeight}px`
+  }
+}
+
+function updatePopoverPositions() {
+  if (isNotificationsOpen.value) {
+    notificationsPopoverStyle.value = buildPopoverStyle(notificationsButton.value, 420)
+  }
+
+  if (isAccountMenuOpen.value) {
+    accountPopoverStyle.value = buildPopoverStyle(accountButton.value, 340)
+  }
 }
 
 function toggleLocale() {
@@ -467,15 +517,20 @@ function hideTopbarTooltip() {
 
 const handlePointerDown = (event: PointerEvent) => closeMenusForTarget(event.target)
 const handleKeyDown = (event: KeyboardEvent) => closeMenusForEscape(event)
+const handleViewportChange = () => updatePopoverPositions()
 
 onMounted(() => {
   document.addEventListener('pointerdown', handlePointerDown)
   document.addEventListener('keydown', handleKeyDown)
+  window.addEventListener('resize', handleViewportChange)
+  window.addEventListener('scroll', handleViewportChange, { passive: true })
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', handlePointerDown)
   document.removeEventListener('keydown', handleKeyDown)
+  window.removeEventListener('resize', handleViewportChange)
+  window.removeEventListener('scroll', handleViewportChange)
 })
 </script>
 
@@ -839,11 +894,14 @@ onBeforeUnmount(() => {
 }
 
 .ym-popover {
-  position: absolute;
-  inset-block-start: calc(100% + 12px);
-  inset-inline-end: 0;
+  position: fixed;
+  top: calc(100% + 12px);
+  left: 1rem;
   z-index: 95;
   overflow: hidden;
+  width: min(92vw, 420px);
+  max-width: calc(100vw - 2rem);
+  max-height: calc(100vh - 140px);
   border: 1px solid var(--ym-shell-border);
   border-radius: 22px;
   background: var(--ym-dropdown-bg);
