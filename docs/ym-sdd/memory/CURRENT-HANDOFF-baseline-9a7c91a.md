@@ -3,7 +3,8 @@
 ## 1. Current Baseline
 
 - المشروع الآن على branch `main`.
-- آخر حالة مستقرة موثقة هي commit `aadbcea fix: improve mobile dashboard sidebar layout`.
+- آخر حالة مستقرة موثقة هي commit `c7dff54 fix: reduce staff mobile dashboard density`.
+- `origin/main` متزامن مع `c7dff54`.
 - تم اعتماد YM-Lite SDD كسير عمل خفيف وآمن.
 - كل مراحل UI polish الأخيرة تم تنفيذها كخطوات صغيرة ومراجعتها وبناؤها قبل الاعتماد.
 
@@ -17,6 +18,8 @@
 
 ## 3. Recent Stable UI Polish Commits
 
+- `c7dff54 fix: reduce staff mobile dashboard density`
+- `a7172a1 fix: improve admin mobile dashboard density`
 - `aadbcea fix: improve mobile dashboard sidebar layout`
 - `03fbb57 fix: polish staff dashboard visuals`
 - `4f32adc fix: polish admin activity feed visuals`
@@ -31,15 +34,17 @@
 
 ## 4. Completed Phases
 
-1. Admin TopBar polish
-2. Admin Hero Card polish
-3. Admin Metric Cards polish
-4. Admin Chart Card polish
-5. Admin Controls Card polish
-6. Admin Activity Feed polish
-7. Staff Dashboard visual consistency
-8. Responsive P0 Mobile Sidebar/Main Layout fix
-9. Current Handoff update
+1. TopBar polish ✅
+2. Admin Hero polish ✅
+3. Admin Metric Cards polish ✅
+4. Admin Chart Card polish ✅
+5. Admin Controls Card polish ✅
+6. Admin Activity Feed polish ✅
+7. Staff Dashboard polish ✅
+8. Mobile Sidebar P0 ✅
+9. Handoff update after dashboard polish ✅
+10. P1-A Admin Mobile Density ✅
+11. P1-B Staff Mobile Density ✅
 
 ## 5. Stable UI Files From The Polish Sequence
 
@@ -54,15 +59,52 @@
 - `frontend/layouts/admin.vue`
 - `frontend/layouts/staff.vue`
 
-## 6. Current State After `aadbcea`
+## 6. Current State After `c7dff54`
 
 - `/admin` و `/staff` أصبحا قابلين للاستخدام على mobile بعد إصلاح sidebar.
 - عند `375px` لم يعد `main` مضغوطا إلى `87px`.
 - sidebar أصبح drawer على mobile مع زر فتح وbackdrop.
+- تم تقليل كثافة `/admin` و `/staff` على mobile/tablet ضمن مرحلتي P1-A و P1-B.
 - Light Mode مستقر ولا توجد عودة للخلفية البيضاء الكاملة.
 - Dark Mode مستقر.
 
-## 7. Critical Design And Workflow Decisions
+## 7. Completed P1 Density Passes
+
+### P1-A: Admin Mobile Density Pass ✅
+
+تم تنفيذها في commit `a7172a1 fix: improve admin mobile dashboard density`.
+
+شملت:
+
+- تقليل كثافة `/admin` على mobile/tablet.
+- إصلاح خروج chips/buttons داخل بطاقة عناصر العرض التفاعلية على tablet.
+- إصلاح قوائم TopBar المنسدلة حتى تبقى داخل viewport بدون اقتطاع.
+- إخفاء أسماء/أرقام الرسم البياني المتداخلة على mobile/tablet مع إبقائها على desktop.
+- الحفاظ على الأعمدة والألوان والـ tooltip.
+
+الملفات التي شملها commit:
+
+- `frontend/pages/admin/index.vue`
+- `frontend/components/AppTopBar.vue`
+- `frontend/components/dashboard/DashboardSvgChart.vue`
+
+### P1-B: Staff Mobile Density Pass ✅
+
+تم تنفيذها في commit `c7dff54 fix: reduce staff mobile dashboard density`.
+
+شملت:
+
+- تقليل كثافة `/staff` على mobile/tablet.
+- تحسين spacing/padding داخل Staff Hero.
+- تحسين panels/task rows على الشاشات الصغيرة.
+- الحفاظ على desktop تقريبا كما هو.
+- عدم لمس admin أو المكونات المشتركة.
+
+الملف الذي شمله commit:
+
+- `frontend/pages/staff/index.vue`
+
+## 8. Critical Design And Workflow Decisions
 
 - عدم استخدام native `title` tooltip.
 - عدم استخدام `data-tooltip` أو CSS pseudo tooltip مثل `content: attr(data-tooltip)`.
@@ -74,15 +116,15 @@
 - أي تعديل UI يجب أن يحافظ على Light Mode و Dark Mode.
 - لا يتم تعديل admin و staff معا إلا إذا كان السبب shell/layout مشتركا مثل إصلاح mobile sidebar.
 
-## 8. Known Build Warnings
+## 9. Known Build Warnings
 
-`npm run build` ينجح. التحذيرات التالية معروفة وقديمة/بنيوية وليست مانعا حاليا:
+`npm run build` ينجح. التحذيرات التالية هي build warnings معروفة وقديمة/بنيوية وليست blockers حاليا:
 
 - `nuxt:module-preload-polyfill` sourcemap warning.
 - `authStore.ts` dynamic/static import warning.
 - Some chunks are larger than 500 kB after minification.
 
-## 9. Sensitive Areas
+## 10. Sensitive Areas
 
 - Auth
 - `authStore.ts`
@@ -94,19 +136,17 @@
 - `.env`
 - package/composer dependencies
 
-## 10. Recommended Next Steps
+## 11. Recommended Next Steps
 
-هذه الخطوات مقترحة لاحقا وليست منفذة بعد:
+المرحلة التالية المقترحة:
 
-P1 Responsive Density Pass:
+P1-C: Accessibility / Contrast / Keyboard Audit
 
-- تقليل كثافة Hero/TopBar على mobile.
-- تحسين Chart labels على mobile.
-- مراجعة ActivityFeed وMetricCard عند أقل من `430px`.
-- فحص contrast رقمي WCAG.
-- فحص tab order وkeyboard navigation.
+- Audit first.
+- No code changes before scoped findings.
+- Focus on contrast, focus-visible, keyboard navigation, semantic labels, and dropdown accessibility.
 
-## 11. How A New Agent Should Start
+## 12. How A New Agent Should Start
 
 - اقرأ `README.md`.
 - اقرأ `00-project-context.md`.
