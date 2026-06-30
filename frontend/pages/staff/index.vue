@@ -614,6 +614,135 @@ const tasks = [
     inset 0 1px 0 rgba(255, 255, 255, 0.48);
 }
 
+/* ===== Mobile/Tablet density pass (P1-B) ===== */
+/* تقليل كثافة الصفحة على التابلت دون لمس desktop */
+
+@media (max-width: 1024px) {
+  .ym-staff-page {
+    gap: clamp(1rem, 2vw, 1.35rem);
+  }
+
+  .ym-staff-hero {
+    padding: clamp(1.15rem, 2.4vw, 1.6rem);
+  }
+
+  .ym-staff-hero-content {
+    gap: 1.15rem;
+  }
+
+  .ym-staff-panel {
+    padding: clamp(1rem, 2vw, 1.2rem);
+  }
+}
+
+/* الهاتف: تقليل padding وارتفاع العناصر مع الحفاظ على القراءة */
+
+@media (max-width: 640px) {
+  .ym-staff-page {
+    gap: 1rem;
+  }
+
+  .ym-staff-hero {
+    padding: 1.1rem;
+  }
+
+  .ym-staff-hero-content {
+    gap: 1rem;
+  }
+
+  /* تقليل حجم الـ avatar وتباعده على الجوال لفتح مساحة للنص */
+  .ym-staff-avatar {
+    height: 72px;
+    width: 72px;
+    flex: 0 0 72px;
+    border-radius: 20px;
+  }
+
+  /* الترتيب الرأسي للرأس يضغط gap من 1.25rem (gap-5) إلى 0.85rem */
+  .ym-staff-hero-content > .flex {
+    gap: 0.85rem;
+  }
+
+  .ym-staff-title {
+    font-size: clamp(1.7rem, 6vw, 2rem);
+    line-height: 1.1;
+  }
+
+  .ym-staff-copy {
+    font-size: 14.5px;
+    line-height: 1.65;
+    margin-top: 0.4rem;
+  }
+
+  .ym-staff-focus {
+    min-width: 100%;
+    padding: 0.9rem;
+  }
+
+  .ym-staff-panel {
+    padding: 1rem;
+  }
+
+  .ym-staff-panel h3 {
+    font-size: 19px;
+    margin-bottom: 0.8rem;
+    padding-bottom: 0.7rem;
+  }
+
+  .ym-task-row {
+    gap: 0.75rem;
+    padding: 0.85rem;
+  }
+
+  .ym-task-row strong {
+    font-size: 15px;
+  }
+
+  .ym-task-row small {
+    font-size: 13.5px;
+    line-height: 1.5;
+  }
+}
+
+/* الجوال الصغير جدًا: منع أي ضغط زائد أو overflow */
+
+@media (max-width: 380px) {
+  .ym-staff-page {
+    gap: 0.85rem;
+  }
+
+  .ym-staff-hero {
+    padding: 0.95rem;
+  }
+
+  .ym-staff-avatar {
+    height: 64px;
+    width: 64px;
+    flex: 0 0 64px;
+    border-radius: 18px;
+  }
+
+  .ym-staff-title {
+    font-size: 1.55rem;
+  }
+
+  .ym-staff-copy {
+    font-size: 14px;
+  }
+
+  .ym-staff-focus {
+    padding: 0.85rem;
+  }
+
+  .ym-staff-focus strong {
+    font-size: 16px;
+  }
+
+  .ym-task-row {
+    padding: 0.75rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ym-staff-hero:hover,
   .ym-inline-action:hover,
