@@ -140,11 +140,24 @@
 
 المرحلة التالية المقترحة:
 
+**Phase 2 Completion — Dashboard Core APIs & Real Data Integration**
+
+- راجع `PROJECT_MAP.md` كمرجع أعلى لتفاصيل المرحلة 2.
+- فحص Dashboard endpoints الحالية.
+- تحديد الفجوة بين الموجود والمطلوب في المرحلة 2.
+- إنشاء spec/task للربط الوظيفي.
+- حماية Dashboard API بالصلاحيات.
+- ربط Dashboard UI ببيانات فعلية تدريجيًا.
+
+---
+
+### مؤجلة (Postponed)
+
 P1-C: Accessibility / Contrast / Keyboard Audit
 
-- Audit first.
-- No code changes before scoped findings.
-- Focus on contrast, focus-visible, keyboard navigation, semantic labels, and dropdown accessibility.
+- تم تأجيلها كتحسين UX لاحق.
+- لا يتم فتح polish بصري عام جديد إلا بعد إكمال Dashboard Core إنتاجيًا.
+- عند العودة إليها: Audit first, No code changes before scoped findings, Focus on contrast, focus-visible, keyboard navigation, semantic labels, and dropdown accessibility.
 
 ## 12. How A New Agent Should Start
 

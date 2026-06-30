@@ -8,6 +8,117 @@
 
 ---
 
+## 0. CURRENT IMPLEMENTATION STATUS — 2026-06-30
+
+> هذا القسم يصف موضع التنفيذ الحالي فقط، ولا يغيّر المواصفات المعمارية أو خطة البناء الأصلية في هذا الملف.
+
+### 0.1 Authoritative Source
+
+`PROJECT_MAP.md` هو المرجع المعماري والبنائي الأعلى للمشروع.
+ملفات `docs/ym-sdd/` تُستخدم كسجل تنفيذ وتسليم خفيف، ولا تستبدل هذا الملف.
+
+### 0.2 Current Stable Point
+
+آخر نقطة مستقرة موثقة:
+
+- `6109972 docs: update YM-Lite SDD handoff after mobile density passes`
+
+### 0.3 Completed UI Foundation Work
+
+تم تثبيت أساس بصري مستقر لواجهات Dashboard التالية:
+
+- `/admin`
+- `/staff`
+
+يشمل ذلك:
+
+- تحسين App Shell وDashboard cards.
+- استقرار Light/Dark.
+- إصلاح Mobile Sidebar drawer.
+- تحسين كثافة `/admin` و `/staff` على mobile/tablet.
+- ضبط TopBar dropdowns داخل حدود الشاشة.
+- معالجة ازدحام chart labels على mobile/tablet.
+
+الـ commits المرجعية المختصرة:
+
+- `aadbcea fix: improve mobile dashboard sidebar layout`
+- `a7172a1 fix: improve admin mobile dashboard density`
+- `c7dff54 fix: reduce staff mobile dashboard density`
+- `6109972 docs: update YM-Lite SDD handoff after mobile density passes`
+
+للتفاصيل التنفيذية المرحلية، راجع:
+
+```
+docs/ym-sdd/memory/CURRENT-HANDOFF-baseline-9a7c91a.md
+```
+
+### 0.4 Current Build Position
+
+المنجز الحالي هو:
+
+```
+Dashboard UI Foundation
+```
+
+وليس:
+
+```
+Production Dashboard Core
+```
+
+بالتالي، المرحلة 2 من خطة البناء:
+
+```
+المرحلة 2 — Dashboard Core المتقدم
+```
+
+لم تكتمل إنتاجيًا بعد.
+
+المتبقي من المرحلة 2 يشمل على الأقل:
+
+- Dashboard API حقيقي وآمن.
+- بيانات KPIs فعلية بدل البيانات التجريبية.
+- فلترة period/sections.
+- role-scoped statistics حسب الصلاحيات.
+- Activity Feed من مصدر بيانات فعلي.
+- ربط `/admin` و `/staff` بالـ API أو store بدل static arrays.
+- حالات loading/error/empty.
+- اختبارات API وAuthorization.
+
+### 0.5 Product Direction Decision
+
+بعد اكتمال أساس Dashboard البصري، لا يتم فتح polish بصري عام جديد إلا لمعالجة blocker واضح.
+
+المرحلة التالية يجب أن تنتقل إلى إكمال البناء الوظيفي حسب هذا الملف.
+
+### 0.6 Recommended Next Build Phase
+
+```
+Phase 2 Completion — Dashboard Core APIs & Real Data Integration
+```
+
+#### Reason
+
+لأن `PROJECT_MAP.md` يضع Dashboard Core قبل Users Management، والمرحلة 3 تعتمد على اكتمال المرحلة 2.
+
+#### Initial Scope
+
+- فحص Dashboard endpoints الحالية.
+- تحديد الفجوة بين الموجود فعليًا والمطلوب في المرحلة 2.
+- إنشاء spec/task منفصل للربط الوظيفي.
+- حماية Dashboard API بالصلاحيات.
+- ربط Dashboard UI ببيانات فعلية تدريجيًا.
+
+#### Out of Scope
+
+- Users Management.
+- Roles & Permissions UI.
+- Staff Management.
+- أي UI polish عام جديد.
+- أي توسع في صفحات `/client` أو `/designer` قبل إغلاق الحد الأدنى من Dashboard Core.
+
+---
+
 ## 1. TECH_STACK — المعمارية النهائية المعتمدة
 
 ### الـ Stack الكامل
