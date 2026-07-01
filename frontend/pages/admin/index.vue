@@ -40,7 +40,16 @@
 
     <aside class="ym-prototype-notice" role="note">
       <span class="ym-prototype-notice__badge">{{ copy.prototypeBadge }}</span>
-      <p>{{ copy.prototypeNotice }}</p>
+      <div class="min-w-0">
+        <p>{{ copy.prototypeNotice }}</p>
+        <small
+          v-if="overviewStatusMessage"
+          class="ym-prototype-notice__status"
+          :class="dashboardOverviewError ? 'is-error' : ''"
+        >
+          {{ overviewStatusMessage }}
+        </small>
+      </div>
     </aside>
 
     <section
@@ -139,7 +148,7 @@
           :key="section.key"
           :title="section.label[currentLocale]"
           :subtitle="copy.individualHint"
-          :labels="periodLabels"
+          :labels="sectionBreakdown(section).map(item => item.label)"
           :data="sectionBreakdown(section).map(item => item.value)"
           :line-color="section.color"
           :height="260"
@@ -188,6 +197,86 @@ type Period = 'day' | 'week' | 'month' | 'year'
 type ViewMode = 'all' | 'cards' | 'charts'
 type ChartMode = 'individual' | 'combined'
 type ControlTooltipPlacement = 'bottom'
+type ActivityTone = 'success' | 'info' | 'warning' | 'error'
+
+type DashboardLocalizedLabel = {
+  ar: string
+  en: string
+}
+
+type DashboardOverviewSection = {
+  key: string
+  label: DashboardLocalizedLabel
+  icon?: string
+  color?: string
+  permission?: string | null
+  is_active?: boolean
+}
+
+type DashboardOverviewCard = {
+  key: string
+  label: DashboardLocalizedLabel
+  value: number
+  change?: number
+  trend?: 'up' | 'down' | 'neutral' | string
+  section?: string
+}
+
+type DashboardOverviewChart = {
+  key: string
+  type?: string
+  section?: string
+  points?: Array<{
+    label: string
+    value: number
+  }>
+}
+
+type DashboardOverviewActivity = {
+  id?: string | number
+  key?: string
+  label?: DashboardLocalizedLabel
+  title?: string
+  description?: string
+  time?: string
+  icon?: string
+  link?: string | null
+}
+
+type DashboardOverviewData = {
+  role: string
+  period: string
+  sections: DashboardOverviewSection[]
+  cards: DashboardOverviewCard[]
+  charts: DashboardOverviewChart[]
+  activities: DashboardOverviewActivity[]
+}
+
+type DashboardOverviewResponse = {
+  success: boolean
+  data: DashboardOverviewData | null
+  message?: string
+  errors?: Record<string, string[]> | null
+  meta?: {
+    periods?: Period[]
+    selected_period?: Period
+  }
+}
+
+type DashboardSectionModel = {
+  key: string
+  color: string
+  icon: string
+  label: DashboardLocalizedLabel
+  subtitle: DashboardLocalizedLabel
+  base: number
+  trend: number
+  series: Record<Period, number[]>
+  apiPoints?: Array<{
+    label: string
+    value: number
+  }>
+}
 
 const auth = useAuthStore()
 const currentLocale = useState<Locale>('ym-dashboard-locale', () => 'ar')
@@ -195,6 +284,10 @@ const currentLocale = useState<Locale>('ym-dashboard-locale', () => 'ar')
 const period = ref<Period>('month')
 const viewMode = ref<ViewMode>('all')
 const chartMode = ref<ChartMode>('individual')
+const dashboardOverview = ref<DashboardOverviewData | null>(null)
+const dashboardOverviewLoading = ref(false)
+const dashboardOverviewError = ref<string | null>(null)
+const hasSyncedOverviewSections = ref(false)
 const controlPanelRef = ref<HTMLElement | null>(null)
 const controlTooltip = reactive({
   visible: false,
@@ -285,7 +378,7 @@ const copyMap = {
   }
 }
 
-const sectionModels = [
+const sectionModels: DashboardSectionModel[] = [
   { key: 'orders', color: '#6366f1', icon: '◈', label: { ar: 'الطلبات', en: 'Orders' }, subtitle: { ar: 'طلبات نشطة', en: 'Active orders' }, base: 342, trend: 8.2, series: { day: [18, 25, 21, 31, 28, 36], week: [92, 130, 118, 145, 160, 176], month: [210, 260, 310, 342, 370, 420], year: [2100, 2450, 2720, 3180, 3640, 4100] } },
   { key: 'bookings', color: '#f59e0b', icon: '▣', label: { ar: 'الحجوزات', en: 'Bookings' }, subtitle: { ar: 'حجوزات استوديو', en: 'Studio bookings' }, base: 88, trend: 5.4, series: { day: [4, 6, 7, 5, 8, 9], week: [28, 34, 31, 44, 52, 61], month: [62, 70, 76, 88, 94, 101], year: [600, 720, 815, 920, 1030, 1180] } },
   { key: 'users', color: '#10b981', icon: '●', label: { ar: 'المستخدمون', en: 'Users' }, subtitle: { ar: 'مستخدمون جدد', en: 'New users' }, base: 12847, trend: 12.5, series: { day: [42, 58, 71, 89, 105, 128], week: [320, 420, 510, 620, 700, 790], month: [420, 580, 710, 890, 1050, 1280], year: [4200, 5800, 7100, 8900, 10500, 12847] } },
@@ -298,17 +391,60 @@ const sectionModels = [
   { key: 'notifications', color: '#f97316', icon: '!', label: { ar: 'الإشعارات', en: 'Notifications' }, subtitle: { ar: 'تنبيهات مرسلة', en: 'Sent alerts' }, base: 512, trend: 4.6, series: { day: [30, 42, 50, 61, 58, 73], week: [120, 180, 240, 310, 420, 512], month: [260, 330, 380, 440, 490, 512], year: [2100, 2800, 3600, 4200, 5000, 6200] } },
   { key: 'flags', color: '#ef4444', icon: '▲', label: { ar: 'البلاغات', en: 'Reports/Flags' }, subtitle: { ar: 'بلاغات مفتوحة', en: 'Open flags' }, base: 27, trend: -7.2, series: { day: [8, 7, 6, 5, 4, 3], week: [42, 39, 36, 32, 30, 27], month: [58, 51, 44, 39, 32, 27], year: [700, 620, 540, 460, 350, 270] } },
   { key: 'support', color: '#0ea5e9', icon: '?', label: { ar: 'الدعم', en: 'Support' }, subtitle: { ar: 'تذاكر مفتوحة', en: 'Open tickets' }, base: 43, trend: -1.8, series: { day: [9, 8, 7, 8, 6, 5], week: [54, 50, 48, 46, 44, 43], month: [70, 63, 59, 52, 48, 43], year: [680, 640, 590, 530, 480, 430] } }
-] as const
+]
 
 const selectedSections = ref<string[]>(sectionModels.map(section => section.key))
 
 const copy = computed(() => copyMap[currentLocale.value])
 const periodLabel = computed(() => copy.value.periodNames[period.value])
-const localizedSections = computed(() => sectionModels.map(section => ({ key: section.key, color: section.color, icon: section.icon, label: section.label[currentLocale.value] })))
-const activeSectionModels = computed(() => sectionModels.filter(section => selectedSections.value.includes(section.key)))
+const overviewStatusMessage = computed(() => {
+  if (dashboardOverviewLoading.value) {
+    return currentLocale.value === 'ar' ? 'يتم تحديث بيانات لوحة التحكم من API...' : 'Updating dashboard data from the API...'
+  }
+
+  if (dashboardOverviewError.value) return dashboardOverviewError.value
+
+  return ''
+})
+
+const dashboardOverviewSections = computed(() => dashboardOverview.value?.sections?.filter(section => section.is_active !== false) || [])
+const dashboardOverviewCards = computed(() => dashboardOverview.value?.cards || [])
+const dashboardOverviewCharts = computed(() => dashboardOverview.value?.charts || [])
+const dashboardOverviewActivities = computed(() => dashboardOverview.value?.activities || [])
+
+const fallbackSectionByKey = computed(() => new Map(sectionModels.map(section => [section.key, section])))
+const overviewCardBySection = computed(() => new Map(dashboardOverviewCards.value.map(card => [card.section || card.key, card])))
+const overviewChartBySection = computed(() => new Map(dashboardOverviewCharts.value.map(chart => [chart.section || chart.key, chart])))
+
+const dashboardSections = computed<DashboardSectionModel[]>(() => {
+  if (!dashboardOverviewSections.value.length) return sectionModels
+
+  return dashboardOverviewSections.value.map((section) => {
+    const fallback = fallbackSectionByKey.value.get(section.key)
+    const card = overviewCardBySection.value.get(section.key)
+    const chart = overviewChartBySection.value.get(section.key)
+    const apiPoints = normalizeChartPoints(chart?.points)
+    const base = Number(card?.value ?? apiPoints[apiPoints.length - 1]?.value ?? fallback?.base ?? 0)
+
+    return {
+      key: section.key,
+      color: section.color || fallback?.color || '#6366f1',
+      icon: normalizeSectionIcon(section.icon, fallback?.icon),
+      label: normalizeLabel(section.label, fallback?.label, section.key),
+      subtitle: fallback?.subtitle || normalizeLabel(card?.label, section.label, section.key),
+      base,
+      trend: normalizeTrend(card),
+      series: buildSeries(apiPoints, fallback?.series, base),
+      apiPoints: apiPoints.length ? apiPoints : undefined
+    }
+  })
+})
+
+const localizedSections = computed(() => dashboardSections.value.map(section => ({ key: section.key, color: section.color, icon: section.icon, label: section.label[currentLocale.value] })))
+const activeSectionModels = computed(() => dashboardSections.value.filter(section => selectedSections.value.includes(section.key)))
 
 const selectedSectionsLabel = computed(() => {
-  if (selectedSections.value.length === sectionModels.length) return copy.value.allSections
+  if (selectedSections.value.length === dashboardSections.value.length) return copy.value.allSections
   return activeSectionModels.value.map(section => section.label[currentLocale.value]).join(currentLocale.value === 'ar' ? '، ' : ', ')
 })
 
@@ -349,7 +485,9 @@ const periodBreakdownProfiles: Record<Period, number[]> = {
   year: [0.31, 0.38, 0.44, 0.52, 0.59, 0.67, 0.73, 0.82, 0.77, 0.88, 0.94, 1]
 }
 
-function sectionBreakdown(section: typeof sectionModels[number]) {
+function sectionBreakdown(section: DashboardSectionModel) {
+  if (section.apiPoints?.length) return section.apiPoints
+
   const source = section.series[period.value]
   const total = source[source.length - 1]
   return periodLabels.value.map((label, index) => ({
@@ -366,7 +504,7 @@ const combinedBars = computed(() => activeSectionModels.value.map(section => ({
   breakdown: sectionBreakdown(section)
 })))
 
-const localizedActivities = computed(() => {
+const fallbackLocalizedActivities = computed(() => {
   const items = {
     ar: [
       { icon: '●', title: 'طلب هوية بصرية دخل مرحلة المراجعة', description: 'قسم الطلبات تأثر بالفلاتر الحالية', time: 'منذ 5 دقائق', type: 'info' as const },
@@ -382,12 +520,24 @@ const localizedActivities = computed(() => {
   return items[currentLocale.value]
 })
 
+const localizedActivities = computed(() => {
+  if (!dashboardOverviewActivities.value.length) return fallbackLocalizedActivities.value
+
+  return dashboardOverviewActivities.value.map(activity => ({
+    icon: activity.icon || '●',
+    title: activity.title || activity.label?.[currentLocale.value] || activity.label?.ar || activity.key || String(activity.id || ''),
+    description: activity.description || (currentLocale.value === 'ar' ? 'نشاط من بيانات لوحة التحكم' : 'Dashboard activity'),
+    time: activity.time || '',
+    type: 'info' as ActivityTone
+  }))
+})
+
 const quickStats = computed(() => copy.value.quick.map(([label, value]) => ({ label, value })))
 
 const heroAvatar = computed(() => auth.user?.avatar || '/logo.svg')
 
 function toggleAllSections() {
-  selectedSections.value = selectedSections.value.length === sectionModels.length ? [] : sectionModels.map(section => section.key)
+  selectedSections.value = selectedSections.value.length === dashboardSections.value.length ? [] : dashboardSections.value.map(section => section.key)
 }
 
 function toggleSection(key: string) {
@@ -431,6 +581,107 @@ function hideDelegatedControlTooltip(event: MouseEvent | FocusEvent): void {
 
   controlTooltip.visible = false
 }
+
+function normalizeLabel(label: DashboardLocalizedLabel | undefined, fallback: DashboardLocalizedLabel | undefined, key: string): DashboardLocalizedLabel {
+  return {
+    ar: label?.ar || fallback?.ar || key,
+    en: label?.en || fallback?.en || key
+  }
+}
+
+function normalizeSectionIcon(icon: string | undefined, fallback: string | undefined): string {
+  const iconMap: Record<string, string> = {
+    'briefcase': '▰',
+    'chart-bar': '▤',
+    'clipboard-check': '✓',
+    'flag': '▲',
+    'rectangle-group': '●',
+    'shopping-cart': '◈',
+    'trophy': '★',
+    'user-group': '●',
+    'wallet': '$'
+  }
+
+  return (icon && iconMap[icon]) || fallback || '●'
+}
+
+function normalizeTrend(card: DashboardOverviewCard | undefined): number {
+  const change = Number(card?.change ?? 0)
+  if (card?.trend === 'down') return -Math.abs(change)
+  if (card?.trend === 'up') return Math.abs(change)
+  return change
+}
+
+function normalizeChartPoints(points: DashboardOverviewChart['points'] | undefined): Array<{ label: string; value: number }> {
+  if (!points?.length) return []
+
+  return points
+    .map(point => ({
+      label: point.label,
+      value: Number(point.value)
+    }))
+    .filter(point => point.label && Number.isFinite(point.value))
+}
+
+function buildSeries(
+  points: Array<{ label: string; value: number }>,
+  fallback: Record<Period, number[]> | undefined,
+  base: number
+): Record<Period, number[]> {
+  if (!points.length) {
+    return fallback || {
+      day: [base],
+      week: [base],
+      month: [base],
+      year: [base]
+    }
+  }
+
+  const values = points.map(point => point.value)
+  return {
+    day: values,
+    week: values,
+    month: values,
+    year: values
+  }
+}
+
+async function fetchDashboardOverview(): Promise<void> {
+  const { apiFetch } = useApiClient()
+
+  dashboardOverviewLoading.value = true
+  dashboardOverviewError.value = null
+
+  try {
+    const response = await apiFetch<DashboardOverviewResponse>('/dashboard/overview', {
+      query: { period: period.value }
+    })
+
+    dashboardOverview.value = response.success ? response.data : null
+
+    if (dashboardOverview.value?.sections?.length && !hasSyncedOverviewSections.value) {
+      selectedSections.value = dashboardOverview.value.sections
+        .filter(section => section.is_active !== false)
+        .map(section => section.key)
+      hasSyncedOverviewSections.value = true
+    }
+  } catch {
+    dashboardOverview.value = null
+    dashboardOverviewError.value = currentLocale.value === 'ar'
+      ? 'تعذر جلب بيانات لوحة التحكم، يتم عرض البيانات الاحتياطية.'
+      : 'Could not load dashboard data. Showing fallback data.'
+  } finally {
+    dashboardOverviewLoading.value = false
+  }
+}
+
+onMounted(() => {
+  void fetchDashboardOverview()
+})
+
+watch(period, () => {
+  void fetchDashboardOverview()
+})
 </script>
 
 <style scoped>
