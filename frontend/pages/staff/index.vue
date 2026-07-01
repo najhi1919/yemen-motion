@@ -30,12 +30,21 @@
 
     <aside class="ym-prototype-notice" role="note">
       <span class="ym-prototype-notice__badge">{{ copy.prototypeBadge }}</span>
-      <p>{{ copy.prototypeNotice }}</p>
+      <div class="min-w-0">
+        <p>{{ copy.prototypeNotice }}</p>
+        <small
+          v-if="overviewStatusMessage"
+          class="ym-prototype-notice__status"
+          :class="dashboardOverviewError ? 'is-error' : ''"
+        >
+          {{ overviewStatusMessage }}
+        </small>
+      </div>
     </aside>
 
     <section class="ym-staff-metrics grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
       <DashboardMetricCard
-        v-for="card in kpis"
+        v-for="card in visibleKpis"
         :key="card.key"
         :label="card.label[currentLocale]"
         :value="card.value"
@@ -50,7 +59,7 @@
 
     <section class="ym-staff-operations grid grid-cols-1 gap-5 xl:grid-cols-3">
       <div class="xl:col-span-2">
-        <DashboardActivityFeed :title="copy.activityTitle" :items="activities" :empty-label="copy.emptyActivity">
+        <DashboardActivityFeed :title="copy.activityTitle" :items="visibleActivities" :empty-label="copy.emptyActivity">
           <template #actions>
             <button class="ym-inline-action" :aria-label="copy.viewAll">{{ copy.viewAll }}</button>
           </template>
@@ -79,8 +88,48 @@ definePageMeta({ layout: 'staff' })
 
 type Locale = 'ar' | 'en'
 
+type DashboardLocalizedLabel = {
+  ar: string
+  en: string
+}
+
+type DashboardOverviewCard = {
+  key: string
+  label?: DashboardLocalizedLabel
+  value?: number
+  change?: number
+  trend?: 'up' | 'down' | 'neutral' | string
+  section?: string
+}
+
+type DashboardOverviewActivity = {
+  id?: string | number
+  key?: string
+  label?: DashboardLocalizedLabel
+  title?: string
+  description?: string
+  time?: string
+  icon?: string
+  link?: string | null
+}
+
+type DashboardOverviewData = {
+  role: string
+  period: string
+  cards: DashboardOverviewCard[]
+  activities: DashboardOverviewActivity[]
+}
+
+type DashboardOverviewResponse = {
+  success: boolean
+  data: DashboardOverviewData | null
+  message?: string
+  errors?: Record<string, string[]> | null
+}
+
 const auth = useAuthStore()
 const currentLocale = useState<Locale>('ym-dashboard-locale', () => 'ar')
+const { apiFetch } = useApiClient()
 
 const copyMap = {
   ar: {
@@ -119,14 +168,14 @@ const copy = computed(() => copyMap[currentLocale.value])
 
 const heroAvatar = computed(() => auth.user?.avatar || '/logo.svg')
 
-const kpis = [
+const fallbackKpis = [
   { key: 'review', value: 47, trend: -5.2, color: '#f59e0b', icon: '◉', label: { ar: 'محتوى للمراجعة', en: 'Pending review' }, subtitle: { ar: 'عنصر معلّق', en: 'Items waiting' } },
   { key: 'done', value: 23, trend: 12, color: '#10b981', icon: '✓', label: { ar: 'تمت المراجعة اليوم', en: 'Reviewed today' }, subtitle: { ar: 'عنصر مكتمل', en: 'Completed items' } },
   { key: 'flags', value: 8, trend: -2.1, color: '#ef4444', icon: '!', label: { ar: 'بلاغات نشطة', en: 'Active flags' }, subtitle: { ar: 'بلاغ يتطلب مراجعة', en: 'Need review' } },
   { key: 'response', value: 98, trend: 1.5, color: '#0ea5e9', icon: '↯', label: { ar: 'معدل الاستجابة', en: 'Response rate' }, subtitle: { ar: 'نسبة مئوية', en: 'Percent score' } }
 ]
 
-const activities = computed(() => {
+const fallbackActivities = computed(() => {
   const items = {
     ar: [
       { icon: '▰', title: 'مشروع جديد يحتاج مراجعة', description: 'تصميم هوية بصرية مقدم من عميل جديد', time: 'منذ 10 دقائق', type: 'info' as const },
@@ -142,6 +191,90 @@ const activities = computed(() => {
     ]
   }
   return items[currentLocale.value]
+})
+
+const dashboardOverview = ref<DashboardOverviewData | null>(null)
+const dashboardOverviewLoading = ref(false)
+const dashboardOverviewError = ref<string | null>(null)
+const overviewPeriod = 'month'
+
+const dashboardOverviewCards = computed(() => dashboardOverview.value?.cards || [])
+
+const visibleKpis = computed(() => {
+  if (!dashboardOverviewCards.value.length) return fallbackKpis
+
+  return dashboardOverviewCards.value.slice(0, 4).map((card, index) => {
+    const fallback = fallbackKpis[index] || fallbackKpis[0]
+    const change = Number(card.change ?? 0)
+    const trend = card.trend === 'down'
+      ? -Math.abs(change)
+      : card.trend === 'up'
+        ? Math.abs(change)
+        : change
+
+    return {
+      key: card.section || card.key || fallback.key,
+      value: Number(card.value ?? fallback.value),
+      trend,
+      color: fallback.color,
+      icon: fallback.icon,
+      label: {
+        ar: card.label?.ar || fallback.label.ar,
+        en: card.label?.en || fallback.label.en
+      },
+      subtitle: fallback.subtitle
+    }
+  })
+})
+
+const dashboardOverviewActivities = computed(() => dashboardOverview.value?.activities || [])
+
+const visibleActivities = computed(() => {
+  if (!dashboardOverviewActivities.value.length) return fallbackActivities.value
+
+  return dashboardOverviewActivities.value.map(activity => ({
+    icon: activity.icon || '▰',
+    title: activity.title || activity.label?.[currentLocale.value] || activity.label?.ar || activity.key || String(activity.id || ''),
+    description: activity.description || (currentLocale.value === 'ar' ? 'نشاط من بيانات لوحة الفريق' : 'Team dashboard activity'),
+    time: activity.time || '',
+    type: 'info' as const
+  }))
+})
+
+const overviewStatusMessage = computed(() => {
+  if (dashboardOverviewLoading.value) {
+    return currentLocale.value === 'ar'
+      ? 'يتم تحديث بيانات لوحة الفريق من API...'
+      : 'Updating team dashboard data from the API...'
+  }
+
+  if (dashboardOverviewError.value) return dashboardOverviewError.value
+
+  return ''
+})
+
+async function fetchDashboardOverview(): Promise<void> {
+  dashboardOverviewLoading.value = true
+  dashboardOverviewError.value = null
+
+  try {
+    const response = await apiFetch<DashboardOverviewResponse>('/dashboard/overview', {
+      query: { period: overviewPeriod }
+    })
+
+    dashboardOverview.value = response.success ? response.data : null
+  } catch {
+    dashboardOverview.value = null
+    dashboardOverviewError.value = currentLocale.value === 'ar'
+      ? 'تعذر جلب بيانات لوحة الفريق، يتم عرض البيانات الاحتياطية.'
+      : 'Could not load team dashboard data. Showing fallback data.'
+  } finally {
+    dashboardOverviewLoading.value = false
+  }
+}
+
+onMounted(() => {
+  void fetchDashboardOverview()
 })
 
 const tasks = [
@@ -195,6 +328,19 @@ const tasks = [
   font-size: 14px;
   font-weight: 800;
   line-height: 1.7;
+}
+
+.ym-prototype-notice__status {
+  display: block;
+  margin-top: 0.25rem;
+  color: color-mix(in srgb, var(--ym-muted) 86%, #f59e0b);
+  font-size: 12.5px;
+  font-weight: 850;
+  line-height: 1.6;
+}
+
+.ym-prototype-notice__status.is-error {
+  color: #ef4444;
 }
 
 @media (max-width: 640px) {
