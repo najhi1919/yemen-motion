@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Api\AuthApiController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -19,5 +20,9 @@ Route::middleware(['auth:sanctum'])->prefix('dashboard')->group(function () {
     Route::get('/activity', [\App\Http\Controllers\Api\DashboardController::class, 'activity']);
     Route::get('/chart', [\App\Http\Controllers\Api\DashboardController::class, 'chart']);
     Route::get('/overview', [\App\Http\Controllers\Api\DashboardController::class, 'overview']);
+});
+
+Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
+    Route::get('/users', [AdminUserController::class, 'index']);
 });
 
