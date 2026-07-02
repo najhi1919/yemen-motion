@@ -40,7 +40,7 @@ class AuthApiController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'User registered successfully',
+                'message' => 'تم إنشاء الحساب بنجاح.',
                 'data' => [
                     'user' => new UserResource($user),
                     'token' => $token,
@@ -64,7 +64,7 @@ class AuthApiController extends Controller
         if (RateLimiter::tooManyAttempts($key, 5)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Too many login attempts. Please try again later.',
+                'message' => 'تم إيقاف محاولات تسجيل الدخول مؤقتًا. حاول مرة أخرى بعد دقيقة.',
                 'data' => null,
                 'errors' => null,
             ], 429);
@@ -90,7 +90,7 @@ class AuthApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Login successful',
+            'message' => 'تم تسجيل الدخول بنجاح.',
             'data' => [
                 'user' => new UserResource($user),
                 'token' => $token,
@@ -107,7 +107,7 @@ class AuthApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Logged out successfully',
+            'message' => 'تم تسجيل الخروج بنجاح.',
             'data' => null,
             'errors' => null,
         ]);
@@ -119,7 +119,7 @@ class AuthApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'User data retrieved',
+            'message' => 'تم جلب بيانات المستخدم بنجاح.',
             'data' => [
                 'user' => new UserResource($user),
                 'role' => $user->roles->first()?->name,

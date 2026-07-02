@@ -40,7 +40,7 @@ class AuthApiTest extends TestCase
         ]);
         $response->assertJson([
             'success' => true,
-            'message' => 'User registered successfully',
+            'message' => 'تم إنشاء الحساب بنجاح.',
             'errors' => null,
         ]);
         $response->assertJson(['data' => ['user' => ['email' => 'client@example.com']]]);
