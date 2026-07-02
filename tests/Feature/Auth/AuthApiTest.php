@@ -176,4 +176,89 @@ class AuthApiTest extends TestCase
                          ->getJson('/api/user');
         $response->assertStatus(401);
     }
+
+    public function test_login_is_rate_limited_after_too_many_failed_attempts(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'rate-limit@example.com',
+        ]);
+        $user->password = 'Password123!';
+        $user->save();
+        $user->assignRole('client');
+
+        for ($attempt = 1; $attempt <= 5; $attempt++) {
+            $this->postJson('/api/auth/login', [
+                'email' => 'rate-limit@example.com',
+                'password' => 'wrong-password',
+            ])
+                ->assertStatus(401)
+                ->assertJson([
+                    'success' => false,
+                    'data' => null,
+                    'errors' => null,
+                ]);
+        }
+
+        $this->postJson('/api/auth/login', [
+            'email' => 'rate-limit@example.com',
+            'password' => 'wrong-password',
+        ])
+            ->assertStatus(429)
+            ->assertJson([
+                'success' => false,
+                'data' => null,
+                'errors' => null,
+            ]);
+    }
+
+    public function test_successful_login_clears_previous_failed_login_attempts(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'clear-rate-limit@example.com',
+        ]);
+        $user->password = 'Password123!';
+        $user->save();
+        $user->assignRole('client');
+
+        for ($attempt = 1; $attempt <= 4; $attempt++) {
+            $this->postJson('/api/auth/login', [
+                'email' => 'clear-rate-limit@example.com',
+                'password' => 'wrong-password',
+            ])->assertStatus(401);
+        }
+
+        $this->postJson('/api/auth/login', [
+            'email' => 'clear-rate-limit@example.com',
+            'password' => 'Password123!',
+        ])
+            ->assertStatus(200)
+            ->assertJson(['success' => true]);
+
+        for ($attempt = 1; $attempt <= 5; $attempt++) {
+            $this->postJson('/api/auth/login', [
+                'email' => 'clear-rate-limit@example.com',
+                'password' => 'wrong-password',
+            ])->assertStatus(401);
+        }
+    }
+
+    public function test_register_rolls_back_user_creation_when_role_assignment_fails(): void
+    {
+        Role::where('name', 'client')->delete();
+
+        $response = $this->postJson('/api/auth/register', [
+            'name' => 'Rollback Client',
+            'email' => 'rollback-client@example.com',
+            'password' => 'Password123!',
+            'password_confirmation' => 'Password123!',
+            'role' => 'client',
+        ]);
+
+        $response->assertStatus(500);
+
+        $this->assertDatabaseMissing('users', [
+            'email' => 'rollback-client@example.com',
+        ]);
+    }
+
 }
