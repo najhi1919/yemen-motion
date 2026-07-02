@@ -6676,3 +6676,151 @@ Baseline قابل للدفع جزئيًا بعد توثيق PROJECT_MAP، لكن
 
 القرار الأفضل حاليًا: استكمال Backend APIs الأساسية قبل بناء الواجهة، حتى لا تُبنى الواجهة فوق API ناقص.
 
+
+---
+
+## Memory Update — 2026-07-02 — Protected Access Management API Completed
+
+- **Status:** APPROVED — تم استكمال APIs إدارة الأدوار والصلاحيات المحمية.
+- **Branch:** `main`
+- **Commit:** `ea66429`
+- **Related Commit:**
+  - `ea66429 feat: complete protected access management api`
+
+### Scope
+
+تم استكمال Backend APIs الأساسية لإدارة الأدوار والصلاحيات قبل بناء الواجهة الرسومية.
+
+هذه المرحلة توسّع أساس Access Management API السابق، وتضيف إدارة محمية للأدوار والصلاحيات المخصصة.
+
+### Routes Added / Completed
+
+تم دعم المسارات التالية:
+
+#### Roles
+
+- `GET /api/admin/roles`
+- `GET /api/admin/roles/{role}`
+- `POST /api/admin/roles`
+- `PATCH /api/admin/roles/{role}`
+- `DELETE /api/admin/roles/{role}`
+- `PUT /api/admin/roles/{role}/permissions`
+
+#### Permissions
+
+- `GET /api/admin/permissions`
+- `POST /api/admin/permissions`
+- `PATCH /api/admin/permissions/{permission}`
+- `DELETE /api/admin/permissions/{permission}`
+
+### Backend Files Updated
+
+تم تحديث:
+
+- `app/Http/Controllers/Api/Admin/RoleController.php`
+- `app/Http/Controllers/Api/Admin/PermissionController.php`
+- `routes/api.php`
+- `tests/Feature/Admin/AccessManagementApiTest.php`
+
+تمت إضافة:
+
+- `app/Http/Requests/Admin/StorePermissionRequest.php`
+- `app/Http/Requests/Admin/UpdatePermissionRequest.php`
+- `app/Http/Requests/Admin/UpdateRoleRequest.php`
+
+### Roles Behavior
+
+تم تثبيت السلوك التالي:
+
+- `super-admin` يستطيع إنشاء roles مخصصة.
+- `super-admin` يستطيع تعديل اسم role مخصص.
+- `super-admin` يستطيع حذف role مخصص غير مستخدم.
+- لا يمكن تعديل roles المحمية.
+- لا يمكن حذف roles المحمية.
+- لا يمكن حذف role مرتبط بمستخدمين.
+- لا يمكن تحويل role مخصص إلى اسم role محمي.
+- ربط الصلاحيات بالأدوار يتم عبر `PUT /api/admin/roles/{role}/permissions`.
+- لا يمكن تعديل صلاحيات دور `super-admin` عبر API الربط الحالي.
+
+### Permissions Behavior
+
+تم تثبيت السلوك التالي:
+
+- `super-admin` يستطيع إنشاء custom permissions.
+- أي custom permission جديدة تُعطى تلقائيًا لدور `super-admin`.
+- لا يمكن إنشاء permission باسم system permission موجود في registry.
+- لا يمكن تعديل system permissions.
+- لا يمكن حذف system permissions.
+- لا يمكن تحويل custom permission إلى system permission.
+- لا يمكن تعديل أو حذف custom permission إذا كانت مرتبطة بدور غير `super-admin`.
+- لا يمكن حذف custom permission إذا كانت مرتبطة مباشرة بمستخدم.
+- يمكن حذف custom permission إذا كانت مستخدمة فقط بواسطة `super-admin`.
+
+### Security Decisions
+
+تم اعتماد قيود الأمان التالية:
+
+- `super-admin` محفوظ كدور محمي عالي الصلاحية.
+- `admin` محفوظ كدور محمي إداري.
+- system permissions هي الصلاحيات الموجودة في `config/yemen-motion-permissions.php`.
+- custom permissions هي الصلاحيات التي تُنشأ من API/واجهة الإدارة.
+- system permissions لا تُعدل ولا تُحذف من الواجهة.
+- roles المحمية لا تُعدل ولا تُحذف من الواجهة.
+- حذف roles محمي بشرط عدم وجود مستخدمين مرتبطين بها.
+- حذف permissions محمي بشرط عدم وجود ارتباطات مؤثرة خارج `super-admin`.
+
+### Tests Updated
+
+تم توسيع:
+
+- `tests/Feature/Admin/AccessManagementApiTest.php`
+
+الاختبارات الآن تثبت:
+
+- عرض الصلاحيات.
+- إنشاء roles مخصصة.
+- تعديل roles مخصصة.
+- حذف roles مخصصة غير مستخدمة.
+- منع تعديل وحذف roles محمية.
+- منع حذف roles مرتبطة بمستخدمين.
+- ربط permissions بدور مخصص.
+- منع تعديل صلاحيات `super-admin`.
+- إنشاء custom permissions.
+- منع admin من إنشاء custom permissions.
+- منع تعديل وحذف system permissions.
+- تعديل custom permissions غير المرتبطة خارجيًا.
+- منع حذف custom permissions المرتبطة بدور غير `super-admin`.
+- حذف custom permissions المستخدمة فقط بواسطة `super-admin`.
+
+### Validation
+
+آخر تحقق كامل قبل commit:
+
+- `php artisan test --filter=AccessManagementApiTest`
+  - `19 passed`
+  - `58 assertions`
+
+- `php artisan test --filter=AdminAccessControlTest`
+  - `8 passed`
+  - `18 assertions`
+
+- `php artisan test --filter=PermissionsFoundationTest`
+  - `4 passed`
+  - `54 assertions`
+
+- `php artisan test`
+  - `64 passed`
+  - `314 assertions`
+
+### Final Decision
+
+تم اعتماد Backend Access Management APIs كجاهزة مبدئيًا لبناء الواجهة الرسومية.
+
+المرحلة التالية المنطقية:
+
+- بناء واجهة إدارة الأدوار والصلاحيات.
+- ربط صفحة roles الحالية بالمسارات الجديدة.
+- إضافة صفحة permissions.
+- إضافة شاشة matrix لاحقًا لربط roles بالpermissions بصريًا.
+- بعدها ربط إدارة أدوار المستخدمين/الموظفين بهذا النظام.
+
