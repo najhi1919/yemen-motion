@@ -6319,3 +6319,128 @@ Baseline قابل للدفع جزئيًا بعد توثيق PROJECT_MAP، لكن
 
 أي تغيير لاحق في سياسات الوصول يجب أن يتم عبر مهمة scoped واضحة.
 
+
+---
+
+## Memory Update — 2026-07-02 — Permissions Foundation Registry
+
+- **Status:** APPROVED — أساس الصلاحيات والأدوار مضاف ومثبت بالاختبارات.
+- **Branch:** `main`
+- **Commit:** `93609d0`
+- **Related Commit:**
+  - `93609d0 feat: add permissions foundation registry`
+
+### Scope
+
+تم إنشاء الأساس الأول لنظام الصلاحيات والأدوار المرن في Yemen Motion.
+
+الهدف من هذه المرحلة هو الانتقال تدريجيًا من الاعتماد على `hasRole` فقط إلى نظام مبني على permissions يمكن إدارته لاحقًا من الواجهة.
+
+### Added
+
+تمت إضافة ملف registry للصلاحيات:
+
+- `config/yemen-motion-permissions.php`
+
+ويحتوي على:
+
+- protected roles
+- baseline roles
+- baseline system permissions
+- baseline permissions لكل role
+
+### Roles
+
+الأدوار الأساسية الحالية:
+
+- `super-admin`
+- `admin`
+- `staff`
+- `client`
+- `designer`
+
+### Super Admin Decision
+
+تم اعتماد `super-admin` كأعلى حساب إداري في المنصة.
+
+`super-admin` يمتلك التحكم الكامل في المنصة من الواجهة مستقبلًا، ويستطيع:
+
+- إنشاء الأدوار.
+- تعديل الأدوار.
+- إنشاء الصلاحيات.
+- ربط أي صلاحية بأي دور.
+- إزالة الصلاحيات من الأدوار.
+- ربط الأدوار بالمستخدمين والموظفين.
+- إدارة النظام بدون الرجوع للكود بالنسبة للميزات الموجودة والمربوطة بالصلاحيات.
+
+`super-admin` يعتبر role محميًا ولا يتم حذفه أو تجريده من التحكم الكامل إلا ضمن مهمة أمان scoped شديدة الوضوح.
+
+### Seeders Updated
+
+تم تحديث:
+
+- `database/seeders/AuthRolesSeeder.php`
+- `database/seeders/DatabaseSeeder.php`
+
+السلوك الجديد:
+
+- إنشاء `super-admin`.
+- إنشاء baseline permissions.
+- إعطاء `super-admin` كل الصلاحيات الحالية.
+- إعطاء `admin` صلاحيات baseline الحالية فقط.
+- تحويل `admin@yemenmotion.com` إلى مستخدم بدور `super-admin`.
+
+### Baseline Permission Count
+
+عدد الصلاحيات الأساسية الحالية:
+
+- `19`
+
+### Local DB Verification
+
+تم تنفيذ seed محليًا، وكانت النتيجة:
+
+- `roles_count=5`
+- `permissions_count=19`
+- `admin_user_exists=yes`
+- `admin_user_roles=super-admin`
+- `admin_user_permissions_count=19`
+
+### Tests Added
+
+تم إنشاء:
+
+- `tests/Feature/Permissions/PermissionsFoundationTest.php`
+
+الاختبارات تثبت:
+
+- إنشاء الأدوار المحمية والأساسية.
+- إنشاء baseline permissions.
+- حصول `super-admin` على كل الصلاحيات المسجلة.
+- حصول `admin` على baseline permissions.
+- إنشاء حساب `admin@yemenmotion.com` كـ `super-admin`.
+
+### Validation
+
+آخر تحقق كامل:
+
+- `php artisan test --filter=PermissionsFoundationTest`
+  - `4 passed`
+  - `54 assertions`
+
+- `php artisan test`
+  - `42 passed`
+  - `246 assertions`
+
+### Final Decision
+
+تم اعتماد Permissions Foundation كمرحلة أساسية ناجحة.
+
+المرحلة التالية يجب أن تكون تحويل الحماية الحالية تدريجيًا من role-based إلى permission-based، مثل:
+
+- `admin.users.view`
+- `admin.roles.view`
+- `dashboard.stats.view`
+- `dashboard.activity.view`
+- `dashboard.chart.view`
+
