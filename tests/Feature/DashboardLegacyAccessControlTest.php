@@ -3,9 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use Database\Seeders\AuthRolesSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class DashboardLegacyAccessControlTest extends TestCase
@@ -16,9 +16,7 @@ class DashboardLegacyAccessControlTest extends TestCase
     {
         parent::setUp();
 
-        foreach (['admin', 'staff', 'client', 'designer'] as $role) {
-            Role::firstOrCreate(['name' => $role, 'guard_name' => 'web']);
-        }
+        $this->seed(AuthRolesSeeder::class);
     }
 
     public function test_unauthenticated_user_cannot_access_legacy_dashboard_endpoints(): void
@@ -35,7 +33,24 @@ class DashboardLegacyAccessControlTest extends TestCase
         }
     }
 
-    public function test_admin_can_access_legacy_dashboard_endpoints(): void
+    public function test_super_admin_can_access_legacy_dashboard_endpoints(): void
+    {
+        $superAdmin = User::factory()->create(['email' => 'legacy-dashboard-super-admin@example.com']);
+        $superAdmin->assignRole('super-admin');
+
+        Sanctum::actingAs($superAdmin, ['*']);
+
+        foreach ($this->legacyDashboardEndpoints() as $endpoint) {
+            $this->getJson($endpoint)
+                ->assertStatus(200)
+                ->assertJson([
+                    'success' => true,
+                    'errors' => null,
+                ]);
+        }
+    }
+
+    public function test_admin_can_access_legacy_dashboard_endpoints_with_permissions(): void
     {
         $admin = User::factory()->create(['email' => 'legacy-dashboard-admin@example.com']);
         $admin->assignRole('admin');

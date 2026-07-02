@@ -15,7 +15,7 @@ class RoleController extends Controller
     {
         $viewer = $request->user();
 
-        if (! $viewer || ! $viewer->hasRole('admin')) {
+        if (! $viewer || ! $viewer->can('admin.roles.view')) {
             abort(403, 'غير مصرح لك بعرض الأدوار.');
         }
 

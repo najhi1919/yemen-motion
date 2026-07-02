@@ -3,9 +3,9 @@
 namespace Tests\Feature\Admin;
 
 use App\Models\User;
+use Database\Seeders\AuthRolesSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class AdminAccessControlTest extends TestCase
@@ -16,9 +16,7 @@ class AdminAccessControlTest extends TestCase
     {
         parent::setUp();
 
-        foreach (['admin', 'staff', 'client', 'designer'] as $role) {
-            Role::firstOrCreate(['name' => $role, 'guard_name' => 'web']);
-        }
+        $this->seed(AuthRolesSeeder::class);
     }
 
     public function test_unauthenticated_user_cannot_access_admin_users_endpoint(): void
@@ -45,7 +43,39 @@ class AdminAccessControlTest extends TestCase
             ]);
     }
 
-    public function test_admin_can_access_admin_users_endpoint(): void
+    public function test_super_admin_can_access_admin_users_endpoint(): void
+    {
+        $superAdmin = User::factory()->create(['email' => 'super-admin-users-access@example.com']);
+        $superAdmin->assignRole('super-admin');
+
+        Sanctum::actingAs($superAdmin, ['*']);
+
+        $this->getJson('/api/admin/users')
+            ->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'message' => 'تم جلب المستخدمين بنجاح',
+                'errors' => null,
+            ]);
+    }
+
+    public function test_super_admin_can_access_admin_roles_endpoint(): void
+    {
+        $superAdmin = User::factory()->create(['email' => 'super-admin-roles-access@example.com']);
+        $superAdmin->assignRole('super-admin');
+
+        Sanctum::actingAs($superAdmin, ['*']);
+
+        $this->getJson('/api/admin/roles')
+            ->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'message' => 'تم جلب الأدوار بنجاح',
+                'errors' => null,
+            ]);
+    }
+
+    public function test_admin_can_access_admin_users_endpoint_with_permission(): void
     {
         $admin = User::factory()->create(['email' => 'admin-access@example.com']);
         $admin->assignRole('admin');
@@ -61,7 +91,7 @@ class AdminAccessControlTest extends TestCase
             ]);
     }
 
-    public function test_admin_can_access_admin_roles_endpoint(): void
+    public function test_admin_can_access_admin_roles_endpoint_with_permission(): void
     {
         $admin = User::factory()->create(['email' => 'admin-roles-access@example.com']);
         $admin->assignRole('admin');

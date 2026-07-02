@@ -13,7 +13,7 @@ class UserController extends Controller
     {
         $viewer = $request->user();
 
-        if (! $viewer || ! $viewer->hasRole('admin')) {
+        if (! $viewer || ! $viewer->can('admin.users.view')) {
             abort(403, 'غير مصرح لك بعرض المستخدمين.');
         }
 
@@ -62,7 +62,7 @@ class UserController extends Controller
             'message' => 'تم جلب المستخدمين بنجاح',
             'errors' => null,
             'meta' => [
-                'available_roles' => ['admin', 'staff', 'client', 'designer'],
+                'available_roles' => ['super-admin', 'admin', 'staff', 'client', 'designer'],
             ],
         ]);
     }

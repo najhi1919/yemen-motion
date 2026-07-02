@@ -12,7 +12,7 @@ class DashboardController extends Controller
 {
     public function stats(Request $request): JsonResponse
     {
-        $this->authorizeLegacyDashboardAccess($request);
+        $this->authorizeDashboardPermission($request, 'dashboard.stats.view');
 
         $user = $request->user();
         $role = $user->roles->first()?->name;
@@ -48,7 +48,7 @@ class DashboardController extends Controller
 
     public function activity(Request $request): JsonResponse
     {
-        $this->authorizeLegacyDashboardAccess($request);
+        $this->authorizeDashboardPermission($request, 'dashboard.activity.view');
 
         $recentUsers = User::latest('created_at')
             ->take(10)
@@ -73,7 +73,7 @@ class DashboardController extends Controller
 
     public function chart(Request $request): JsonResponse
     {
-        $this->authorizeLegacyDashboardAccess($request);
+        $this->authorizeDashboardPermission($request, 'dashboard.chart.view');
 
         $days = 30;
         $labels = [];
@@ -96,11 +96,11 @@ class DashboardController extends Controller
         ]);
     }
 
-    private function authorizeLegacyDashboardAccess(Request $request): void
+    private function authorizeDashboardPermission(Request $request, string $permission): void
     {
         $viewer = $request->user();
 
-        if (! $viewer || (! $viewer->hasRole('admin') && ! $viewer->hasRole('super-admin'))) {
+        if (! $viewer || ! $viewer->can($permission)) {
             abort(403, 'غير مصرح لك بعرض بيانات لوحة التحكم.');
         }
     }
