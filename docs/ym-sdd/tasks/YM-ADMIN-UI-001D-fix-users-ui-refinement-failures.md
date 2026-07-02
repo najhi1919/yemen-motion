@@ -1,0 +1,45 @@
+# YM-ADMIN-UI-001D — Fix Users UI Refinement Failures Task
+
+## Checklist
+
+- [x] Added backend `sort_by` support in `Admin\UserController`.
+- [x] Added backend `sort_direction` support in `Admin\UserController`.
+- [x] Restricted backend sort columns to `id`, `name`, `email`, and `created_at`.
+- [x] Restricted backend sort directions to `asc` and `desc`.
+- [x] Changed default users sort to `id asc`.
+- [x] Applied backend `orderBy` before `paginate`.
+- [x] Preserved `/admin/users` response shape.
+- [x] Preserved role filtering.
+- [x] Preserved admin authorization check.
+- [x] Removed local current-page sorting from users.
+- [x] Removed local current-page sorting from staff.
+- [x] Sent `sort_by` and `sort_direction` from users.
+- [x] Sent `sort_by` and `sort_direction` from staff.
+- [x] Reset users pagination to page `1` when sort changes.
+- [x] Reset staff pagination to page `1` when sort changes.
+- [x] Kept roles sorting frontend-only.
+- [x] Improved users hero gradient while preserving dashboard visual elements.
+- [x] Made summary card accents visibly affect users.
+- [x] Made summary card accents visibly affect staff.
+- [x] Made summary card accents visibly affect roles.
+- [x] Improved users role filter pill buttons.
+- [x] Kept users role filter as buttons, not `select`.
+- [x] Kept internal search absent from users/staff/roles pages.
+- [x] Added visible truncation for users names.
+- [x] Added visible truncation for users emails.
+- [x] Fixed users email LTR alignment.
+- [x] Added visible truncation for staff names.
+- [x] Added visible truncation for staff emails.
+- [x] Fixed staff email LTR alignment.
+- [x] Kept native `title` tooltips on users role badges.
+- [x] Kept native `title` tooltips on staff role badges.
+- [x] Fixed resizable columns in users using computed table width.
+- [x] Fixed resizable columns in staff using computed table width.
+- [x] Fixed resizable columns in roles using computed table width.
+- [x] Switched users dates to `YYYY-MM-DD HH:mm`.
+- [x] Switched staff dates to `YYYY-MM-DD HH:mm`.
+- [x] Switched roles dates to `YYYY-MM-DD HH:mm`.
+- [x] Did not add create, edit, or delete actions.
+- [x] Did not modify routes, auth, middleware, models, migrations, seeders, API client, stores, layouts, sidebar, topbar, or shared components.
+- [x] Did not run build or tests, per instruction.
+- [x] Did not commit or push.

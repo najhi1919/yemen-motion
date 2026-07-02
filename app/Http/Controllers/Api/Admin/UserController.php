@@ -22,6 +22,18 @@ class UserController extends Controller
 
         $search = trim((string) $request->query('search', ''));
         $role = trim((string) $request->query('role', ''));
+        $allowedSortColumns = ['id', 'name', 'email', 'created_at'];
+        $allowedSortDirections = ['asc', 'desc'];
+        $sortBy = (string) $request->query('sort_by', 'id');
+        $sortDirection = strtolower((string) $request->query('sort_direction', 'asc'));
+
+        if (! in_array($sortBy, $allowedSortColumns, true)) {
+            $sortBy = 'id';
+        }
+
+        if (! in_array($sortDirection, $allowedSortDirections, true)) {
+            $sortDirection = 'asc';
+        }
 
         $users = User::query()
             ->with('roles:id,name')
@@ -35,7 +47,7 @@ class UserController extends Controller
             ->when($role !== '', function ($query) use ($role) {
                 $query->whereHas('roles', fn ($roleQuery) => $roleQuery->where('name', $role));
             })
-            ->latest('id')
+            ->orderBy($sortBy, $sortDirection)
             ->paginate($perPage);
 
         return response()->json([
