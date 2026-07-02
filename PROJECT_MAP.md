@@ -6555,3 +6555,124 @@ Baseline قابل للدفع جزئيًا بعد توثيق PROJECT_MAP، لكن
 - ثم بناء واجهة إدارة الصلاحيات وربطها بالأدوار.
 - ثم ربط إدارة أدوار المستخدمين/الموظفين بالنظام الجديد.
 
+
+---
+
+## Memory Update — 2026-07-02 — Access Management API Foundation
+
+- **Status:** APPROVED — أول أساس API لإدارة الأدوار والصلاحيات مضاف ومثبت بالاختبارات.
+- **Branch:** `main`
+- **Commit:** `fee9b9c`
+- **Related Commit:**
+  - `fee9b9c feat: add access management api foundation`
+
+### Scope
+
+تم إنشاء أول مجموعة APIs لإدارة الأدوار والصلاحيات من Backend.
+
+هذه المرحلة تمثل البداية العملية لتحويل نظام الصلاحيات إلى نظام قابل للإدارة من الواجهة الرسومية لاحقًا.
+
+### Routes Added
+
+تمت إضافة المسارات التالية:
+
+- `GET /api/admin/permissions`
+- `GET /api/admin/roles/{role}`
+- `POST /api/admin/roles`
+- `PUT /api/admin/roles/{role}/permissions`
+
+مع استمرار المسارات السابقة:
+
+- `GET /api/admin/roles`
+- `GET /api/admin/users`
+
+### Controllers Updated
+
+تم تحديث:
+
+- `app/Http/Controllers/Api/Admin/RoleController.php`
+
+وتمت إضافة:
+
+- `app/Http/Controllers/Api/Admin/PermissionController.php`
+
+### Requests Added
+
+تمت إضافة Form Requests:
+
+- `app/Http/Requests/Admin/StoreRoleRequest.php`
+- `app/Http/Requests/Admin/SyncRolePermissionsRequest.php`
+
+### Implemented Behavior
+
+تم تثبيت السلوك التالي:
+
+- `super-admin` يستطيع عرض الصلاحيات.
+- `admin` لا يستطيع عرض صفحة الصلاحيات لأنه لا يملك `admin.permissions.view`.
+- `super-admin` يستطيع إنشاء role مخصص جديد.
+- `admin` لا يستطيع إنشاء roles لأنه لا يملك `admin.roles.create`.
+- `super-admin` يستطيع ربط permissions بدور مخصص.
+- لا يمكن تعديل صلاحيات دور `super-admin` من هذه الواجهة.
+- `super-admin` يستطيع عرض تفاصيل role محدد.
+
+### Security Decisions
+
+تم اعتماد قيود أمان أولية:
+
+- `super-admin` role محمي.
+- لا يسمح بتعديل صلاحيات `super-admin` عبر API الربط الحالي.
+- إنشاء الأدوار يتطلب `admin.roles.create`.
+- ربط الصلاحيات بالأدوار يتطلب `admin.roles.sync_permissions`.
+- عرض الصلاحيات يتطلب `admin.permissions.view`.
+- عرض الأدوار يتطلب `admin.roles.view`.
+
+### Tests Added
+
+تم إنشاء:
+
+- `tests/Feature/Admin/AccessManagementApiTest.php`
+
+الاختبار يثبت:
+
+- عرض الصلاحيات بواسطة `super-admin`.
+- منع `admin` من عرض الصلاحيات بدون permission مناسبة.
+- إنشاء role مخصص بواسطة `super-admin`.
+- منع `admin` من إنشاء role.
+- ربط permissions بدور مخصص بواسطة `super-admin`.
+- منع تعديل صلاحيات `super-admin`.
+- عرض تفاصيل role بواسطة `super-admin`.
+
+### Validation
+
+آخر تحقق كامل قبل commit:
+
+- `php artisan test --filter=AccessManagementApiTest`
+  - `7 passed`
+  - `25 assertions`
+
+- `php artisan test --filter=AdminAccessControlTest`
+  - `8 passed`
+  - `18 assertions`
+
+- `php artisan test`
+  - `52 passed`
+  - `281 assertions`
+
+### Final Decision
+
+تم اعتماد Access Management API Foundation كمرحلة أولى ناجحة.
+
+المرحلة التالية يجب أن تكون واحدة من خيارين:
+
+1. توسيع Backend APIs بإضافة:
+   - تعديل اسم role.
+   - حذف role غير محمي.
+   - إنشاء permissions مخصصة.
+   - تعديل permissions مخصصة.
+   - حذف permissions مخصصة.
+   - قيود منع حذف roles المستخدمة أو المحمية.
+
+2. أو البدء بواجهة إدارة الأدوار والصلاحيات وربطها بهذه APIs.
+
+القرار الأفضل حاليًا: استكمال Backend APIs الأساسية قبل بناء الواجهة، حتى لا تُبنى الواجهة فوق API ناقص.
+
