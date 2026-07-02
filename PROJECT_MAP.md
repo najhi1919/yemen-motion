@@ -6824,3 +6824,113 @@ Baseline قابل للدفع جزئيًا بعد توثيق PROJECT_MAP، لكن
 - إضافة شاشة matrix لاحقًا لربط roles بالpermissions بصريًا.
 - بعدها ربط إدارة أدوار المستخدمين/الموظفين بهذا النظام.
 
+
+---
+
+## Memory Update — 2026-07-02 — Permissions Admin UI Read Only
+
+- **Status:** APPROVED — تم إنشاء صفحة الصلاحيات للقراءة فقط وإضافتها إلى القائمة الجانبية.
+- **Branch:** `main`
+- **Commit:** `10d820b`
+- **Related Commits:**
+  - `865f61d feat: add read only permissions admin page`
+  - `10d820b feat: add permissions link to admin sidebar`
+
+### Scope
+
+تم بناء أول واجهة رسومية لعرض permissions داخل لوحة الإدارة.
+
+هذه المرحلة لا تضيف إنشاء أو تعديل أو حذف من الواجهة بعد، بل تثبت عرض الصلاحيات وربط الصفحة بالقائمة الجانبية.
+
+### Page Added
+
+تم إنشاء:
+
+- `frontend/pages/admin/permissions/index.vue`
+
+المسار:
+
+- `/admin/permissions`
+
+### Sidebar Updated
+
+تم تحديث:
+
+- `frontend/components/AppSidebar.vue`
+
+وإضافة رابط:
+
+- عربيًا: `الصلاحيات`
+- English: `Permissions`
+- Path: `/admin/permissions`
+
+تم وضع الرابط بجانب:
+
+- `/admin/roles`
+
+### Implemented UI Behavior
+
+صفحة الصلاحيات تعرض:
+
+- إجمالي الصلاحيات.
+- عدد system permissions.
+- عدد custom permissions.
+- guard الأساسي.
+- فلتر حسب النوع:
+  - all
+  - system
+  - custom
+- جدول الصلاحيات.
+- اسم الصلاحية.
+- group.
+- label_ar.
+- type: system/custom.
+- guard_name.
+- تجميع الصلاحيات حسب group.
+
+### API Used
+
+الصفحة تستخدم:
+
+- `GET /api/admin/permissions`
+
+وهذا endpoint محمي بصلاحية:
+
+- `admin.permissions.view`
+
+### Access Note
+
+حساب `super-admin` يستطيع فتح الصفحة لأن لديه كل الصلاحيات.
+
+حساب `admin` العادي لا يستطيع فتح بيانات الصفحة حاليًا لأنه لا يملك `admin.permissions.view` ضمن baseline permissions.
+
+هذا السلوك مقصود ومثبت في Backend tests.
+
+### Validation
+
+تم تشغيل:
+
+- `npm run build`
+
+والنتيجة:
+
+- `Build complete`
+
+ظهرت تحذيرات Vite/Nuxt القديمة الخاصة بـ:
+
+- dynamic import في `authStore`
+- chunk size warning
+
+لكنها غير حاجبة ولم تفشل البناء.
+
+### Final Decision
+
+تم اعتماد صفحة الصلاحيات للقراءة فقط كأول خطوة UI في Access Management.
+
+المرحلة التالية المنطقية:
+
+- تطوير صفحة `/admin/roles` من قراءة فقط إلى إدارة فعلية تدريجية.
+- إضافة actions لإنشاء role مخصص.
+- إضافة edit/delete للroles المخصصة.
+- ثم إضافة شاشة ربط permissions بالroles.
+
