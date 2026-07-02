@@ -177,7 +177,9 @@ async function submitLogin() {
     successAnimation([pageRoot.value, submitButton.value])
 
     const routeMap: Record<string, string> = {
+      'super-admin': '/admin',
       admin: '/admin',
+      staff: '/staff',
       designer: '/designer',
       client: '/'
     }
