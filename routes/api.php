@@ -28,10 +28,15 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
     Route::get('/users', [AdminUserController::class, 'index']);
 
     Route::get('/permissions', [AdminPermissionController::class, 'index']);
+    Route::post('/permissions', [AdminPermissionController::class, 'store']);
+    Route::patch('/permissions/{permission}', [AdminPermissionController::class, 'update']);
+    Route::delete('/permissions/{permission}', [AdminPermissionController::class, 'destroy']);
 
     Route::get('/roles', [AdminRoleController::class, 'index']);
     Route::post('/roles', [AdminRoleController::class, 'store']);
     Route::get('/roles/{role}', [AdminRoleController::class, 'show']);
+    Route::patch('/roles/{role}', [AdminRoleController::class, 'update']);
+    Route::delete('/roles/{role}', [AdminRoleController::class, 'destroy']);
     Route::put('/roles/{role}/permissions', [AdminRoleController::class, 'syncPermissions']);
 });
 

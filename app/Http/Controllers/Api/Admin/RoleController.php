@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreRoleRequest;
 use App\Http\Requests\Admin\SyncRolePermissionsRequest;
+use App\Http\Requests\Admin\UpdateRoleRequest;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -78,6 +79,63 @@ class RoleController extends Controller
         ], 201);
     }
 
+    public function update(UpdateRoleRequest $request, Role $role): JsonResponse
+    {
+        $validated = $request->validated();
+        $protectedRoles = config('yemen-motion-permissions.protected_roles', []);
+
+        if (in_array($role->name, $protectedRoles, true)) {
+            abort(422, 'لا يمكن تعديل دور محمي.');
+        }
+
+        if (in_array($validated['name'], $protectedRoles, true)) {
+            abort(422, 'لا يمكن تحويل دور مخصص إلى دور محمي.');
+        }
+
+        $role->update([
+            'name' => $validated['name'],
+        ]);
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+        return response()->json([
+            'success' => true,
+            'data' => $this->rolePayload($role->fresh('permissions:id,name')),
+            'message' => 'تم تحديث الدور بنجاح',
+            'errors' => null,
+        ]);
+    }
+
+    public function destroy(Request $request, Role $role): JsonResponse
+    {
+        $viewer = $request->user();
+
+        if (! $viewer || ! $viewer->can('admin.roles.delete')) {
+            abort(403, 'غير مصرح لك بحذف الأدوار.');
+        }
+
+        $protectedRoles = config('yemen-motion-permissions.protected_roles', []);
+
+        if (in_array($role->name, $protectedRoles, true)) {
+            abort(422, 'لا يمكن حذف دور محمي.');
+        }
+
+        if ($this->usersCount($role) > 0) {
+            abort(422, 'لا يمكن حذف دور مرتبط بمستخدمين.');
+        }
+
+        $role->delete();
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+        return response()->json([
+            'success' => true,
+            'data' => null,
+            'message' => 'تم حذف الدور بنجاح',
+            'errors' => null,
+        ]);
+    }
+
     public function syncPermissions(SyncRolePermissionsRequest $request, Role $role): JsonResponse
     {
         $validated = $request->validated();
@@ -100,12 +158,6 @@ class RoleController extends Controller
 
     private function rolePayload(Role $role): array
     {
-        $tableNames = config('permission.table_names');
-        $columnNames = config('permission.column_names');
-
-        $modelHasRolesTable = $tableNames['model_has_roles'] ?? 'model_has_roles';
-        $rolePivotKey = $columnNames['role_pivot_key'] ?? 'role_id';
-
         $protectedRoles = config('yemen-motion-permissions.protected_roles', []);
 
         return [
@@ -113,10 +165,7 @@ class RoleController extends Controller
             'name' => $role->name,
             'guard_name' => $role->guard_name,
             'is_protected' => in_array($role->name, $protectedRoles, true),
-            'users_count' => DB::table($modelHasRolesTable)
-                ->where($rolePivotKey, $role->id)
-                ->where('model_type', User::class)
-                ->count(),
+            'users_count' => $this->usersCount($role),
             'permissions_count' => $role->permissions->count(),
             'permissions' => $role->permissions
                 ->pluck('name')
@@ -124,5 +173,19 @@ class RoleController extends Controller
                 ->values(),
             'created_at' => $role->created_at?->toJSON(),
         ];
+    }
+
+    private function usersCount(Role $role): int
+    {
+        $tableNames = config('permission.table_names');
+        $columnNames = config('permission.column_names');
+
+        $modelHasRolesTable = $tableNames['model_has_roles'] ?? 'model_has_roles';
+        $rolePivotKey = $columnNames['role_pivot_key'] ?? 'role_id';
+
+        return DB::table($modelHasRolesTable)
+            ->where($rolePivotKey, $role->id)
+            ->where('model_type', User::class)
+            ->count();
     }
 }
