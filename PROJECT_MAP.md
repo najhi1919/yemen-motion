@@ -6078,3 +6078,97 @@ Baseline قابل للدفع جزئيًا بعد توثيق PROJECT_MAP، لكن
 - لا يعدل ملفات خارج المهمة المحددة.
 - أي تغيير يجب أن يظهر كـ diff ثم تتم مراجعته واختباره قبل الاعتماد.
 
+
+---
+
+## Memory Update — 2026-07-02 — Auth Quality Baseline Verified
+
+- **Status:** APPROVED — مقبول ومثبت بالاختبارات.
+- **Branch:** `main`
+- **Commit:** `5fbbc6f`
+- **Related Commits:**
+  - `dadc653 test: lock auth quality behavior`
+  - `5fbbc6f fix: normalize auth api messages`
+
+### Scope
+
+تم فحص وتحسين جودة مسارات المصادقة الأساسية في Yemen Motion دون إعادة بناء Auth ودون تعديل واجهات Frontend.
+
+المسارات المشمولة:
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `GET /api/user`
+- `POST /api/auth/forgot-password`
+- `POST /api/auth/reset-password`
+
+### Verified Existing Behavior
+
+تم التأكد من أن الأساس الموجود جيد:
+
+- تسجيل المستخدم `register` يعمل داخل `DB::transaction`.
+- تسجيل الدخول `login` يستخدم `RateLimiter`.
+- محاولات الدخول الفاشلة يتم تسجيلها.
+- الدخول الناجح يمسح محاولات الفشل السابقة.
+- نسيان كلمة المرور يرجع رسالة عامة آمنة لا تكشف هل البريد مسجل أم لا.
+- إعادة تعيين كلمة المرور تستخدم Laravel Password broker.
+- إعادة تعيين كلمة المرور تحذف Sanctum tokens القديمة.
+- `UserResource` لا يرجع كلمة المرور أو remember token.
+- `/api/user` و `/api/auth/logout` محميان عبر `auth:sanctum`.
+
+### Tests Added
+
+تمت إضافة اختبارات تثبيت جودة Auth في:
+
+- `tests/Feature/Auth/AuthApiTest.php`
+
+الاختبارات الجديدة تثبت:
+
+- إيقاف تسجيل الدخول مؤقتًا بعد كثرة المحاولات الفاشلة.
+- الدخول الناجح يمسح محاولات الفشل السابقة.
+- تسجيل المستخدم يعمل rollback إذا فشل تعيين الدور، ولا يترك user ناقصًا في قاعدة البيانات.
+
+### Messages Normalized
+
+تم توحيد رسائل Auth API الظاهرة للمستخدم إلى العربية في:
+
+- `app/Http/Controllers/Api/AuthApiController.php`
+
+شمل ذلك:
+
+- رسالة إنشاء الحساب.
+- رسالة تسجيل الدخول.
+- رسالة تسجيل الخروج.
+- رسالة جلب بيانات المستخدم.
+- رسالة كثرة محاولات تسجيل الدخول.
+
+### Validation
+
+آخر تحقق كامل:
+
+- `php artisan test --filter=AuthApiTest`
+  - `11 passed`
+  - `60 assertions`
+
+- `php artisan test --filter=PasswordResetApiTest`
+  - `7 passed`
+  - `20 assertions`
+
+- `php artisan test`
+  - `26 passed`
+  - `154 assertions`
+
+### Final Decision
+
+مرحلة Auth Quality الأساسية أصبحت مثبتة ومقبولة.
+
+لا يتم إعادة بناء Auth في هذه المرحلة.  
+أي تطوير لاحق في Auth يجب أن يكون scoped بوضوح، مثل:
+
+- email verification
+- API-wide throttle
+- advanced RBAC
+- auth message translation layer
+- frontend auth UX polishing
+
