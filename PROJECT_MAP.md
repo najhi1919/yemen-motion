@@ -6234,3 +6234,88 @@ Baseline قابل للدفع جزئيًا بعد توثيق PROJECT_MAP، لكن
 
 هذه المسارات لا تُخلط مع قرار Admin RBAC الحالي.
 
+
+---
+
+## Memory Update — 2026-07-02 — Dashboard Legacy RBAC Protected
+
+- **Status:** APPROVED — محمي ومثبت بالاختبارات.
+- **Branch:** `main`
+- **Commit:** `25a9096`
+- **Related Commit:**
+  - `25a9096 fix: protect legacy dashboard endpoints`
+
+### Scope
+
+تم تثبيت سياسة الوصول لمسارات Dashboard القديمة التالية:
+
+- `GET /api/dashboard/stats`
+- `GET /api/dashboard/activity`
+- `GET /api/dashboard/chart`
+
+### Final Access Policy
+
+تم اعتماد السياسة التالية:
+
+- `/api/dashboard/stats` متاح فقط للمستخدمين بدور `admin` أو `super-admin`.
+- `/api/dashboard/activity` متاح فقط للمستخدمين بدور `admin` أو `super-admin`.
+- `/api/dashboard/chart` متاح فقط للمستخدمين بدور `admin` أو `super-admin`.
+- `/api/dashboard/overview` يبقى متاحًا لكل مستخدم مصادق، مع role-scoping داخلي حسب الدور.
+
+### Implementation
+
+تمت إضافة حماية داخل:
+
+- `app/Http/Controllers/Api/DashboardController.php`
+
+عبر method داخلية:
+
+- `authorizeLegacyDashboardAccess(Request $request): void`
+
+وتُستدعى قبل تنفيذ:
+
+- `stats`
+- `activity`
+- `chart`
+
+### Tests Added
+
+تم إنشاء اختبار جديد:
+
+- `tests/Feature/DashboardLegacyAccessControlTest.php`
+
+الاختبار يثبت:
+
+- غير المصادق لا يستطيع الوصول إلى legacy dashboard endpoints ويرجع `401`.
+- `admin` يستطيع الوصول إلى legacy dashboard endpoints ويرجع `200`.
+- `staff` لا يستطيع الوصول ويرجع `403`.
+- `client` لا يستطيع الوصول ويرجع `403`.
+- `designer` لا يستطيع الوصول ويرجع `403`.
+- غير admin المصادق ما زال يستطيع الوصول إلى `/api/dashboard/overview` وفق role-scoping.
+
+### Validation
+
+آخر تحقق كامل:
+
+- `php artisan test --filter=DashboardLegacyAccessControlTest`
+  - `6 passed`
+  - `24 assertions`
+
+- `php artisan test --filter=DashboardOverviewTest`
+  - `6 passed`
+  - `72 assertions`
+
+- `php artisan test`
+  - `38 passed`
+  - `192 assertions`
+
+### Final Decision
+
+ملف RBAC الأساسي أصبح مغلقًا لهذه المرحلة:
+
+- Admin endpoints محمية ومثبتة.
+- Dashboard legacy endpoints محمية ومثبتة.
+- Dashboard overview يبقى هو المسار المفضل للوحة التحكم لأنه يحتوي role-scoping داخلي.
+
+أي تغيير لاحق في سياسات الوصول يجب أن يتم عبر مهمة scoped واضحة.
+
