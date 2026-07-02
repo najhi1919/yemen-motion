@@ -6444,3 +6444,114 @@ Baseline قابل للدفع جزئيًا بعد توثيق PROJECT_MAP، لكن
 - `dashboard.activity.view`
 - `dashboard.chart.view`
 
+
+---
+
+## Memory Update — 2026-07-02 — Permission-Based Guards Enabled
+
+- **Status:** APPROVED — تم تحويل الحماية الحالية إلى permissions.
+- **Branch:** `main`
+- **Commit:** `f073dcb`
+- **Related Commit:**
+  - `f073dcb refactor: use permissions for admin dashboard guards`
+
+### Scope
+
+تم تحويل حمايات Admin وDashboard الحالية من role-based checks إلى permission-based checks.
+
+الهدف من هذه المرحلة هو جعل الوصول إلى المسارات الحالية قابلًا للإدارة لاحقًا من الواجهة عبر ربط الصلاحيات بالأدوار، بدل الاعتماد الثابت على أسماء الأدوار داخل الكود.
+
+### Updated Backend Guards
+
+تم تحديث:
+
+- `app/Http/Controllers/Api/Admin/UserController.php`
+- `app/Http/Controllers/Api/Admin/RoleController.php`
+- `app/Http/Controllers/Api/DashboardController.php`
+
+### Guard Changes
+
+تم استبدال الحماية القديمة:
+
+- `hasRole('admin')`
+
+بحماية مبنية على permissions:
+
+- `admin.users.view`
+- `admin.roles.view`
+- `dashboard.stats.view`
+- `dashboard.activity.view`
+- `dashboard.chart.view`
+
+### Super Admin Behavior
+
+`super-admin` يستطيع الوصول لأنه يمتلك كل الصلاحيات المسجلة في Permissions Registry.
+
+هذا يثبت أن التحكم الأعلى لم يعد معتمدًا فقط على اسم الدور داخل controller، بل على الصلاحيات الفعلية المرتبطة بالدور.
+
+### Admin Behavior
+
+`admin` يستطيع الوصول إلى المسارات الحالية لأنه يمتلك baseline permissions التالية:
+
+- `admin.users.view`
+- `admin.roles.view`
+- `dashboard.stats.view`
+- `dashboard.activity.view`
+- `dashboard.chart.view`
+
+### Non-Admin Behavior
+
+الأدوار التالية لا تستطيع الوصول إلى Admin وDashboard legacy endpoints المحمية:
+
+- `staff`
+- `client`
+- `designer`
+
+إلا إذا تم منحها الصلاحيات المناسبة لاحقًا من نظام إدارة الصلاحيات.
+
+### Tests Updated
+
+تم تحديث:
+
+- `tests/Feature/Admin/AdminAccessControlTest.php`
+- `tests/Feature/DashboardLegacyAccessControlTest.php`
+
+الاختبارات الآن تستخدم:
+
+- `AuthRolesSeeder`
+- `super-admin`
+- `admin`
+- permission-based access behavior
+
+### Last Validation
+
+آخر تحقق كامل قبل commit:
+
+- `php artisan test --filter=AdminAccessControlTest`
+  - `8 passed`
+  - `18 assertions`
+
+- `php artisan test --filter=DashboardLegacyAccessControlTest`
+  - `7 passed`
+  - `30 assertions`
+
+- `php artisan test --filter=PermissionsFoundationTest`
+  - `4 passed`
+  - `54 assertions`
+
+- `php artisan test`
+  - `45 passed`
+  - `256 assertions`
+
+### Final Decision
+
+تم اعتماد permission-based guards كأساس جديد لحماية المسارات الحالية.
+
+أي endpoint أو زر أو حقل حساس جديد يجب أن يرتبط بصلاحية واضحة من الآن فصاعدًا.
+
+المرحلة التالية المنطقية:
+
+- بناء APIs إدارة الأدوار والصلاحيات من الواجهة.
+- ثم بناء واجهة إدارة الصلاحيات وربطها بالأدوار.
+- ثم ربط إدارة أدوار المستخدمين/الموظفين بالنظام الجديد.
+
