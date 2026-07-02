@@ -3,30 +3,70 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 class AuthRolesSeeder extends Seeder
 {
     public function run(): void
     {
-        Role::firstOrCreate([
-            'name' => 'client',
-            'guard_name' => 'web',
-        ]);
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-        Role::firstOrCreate([
-            'name' => 'designer',
-            'guard_name' => 'web',
-        ]);
+        $config = config('yemen-motion-permissions');
 
-        Role::firstOrCreate([
-            'name' => 'admin',
-            'guard_name' => 'web',
-        ]);
+        $roles = $config['roles'] ?? [];
+        $permissions = collect($config['permissions'] ?? [])
+            ->pluck('name')
+            ->filter()
+            ->unique()
+            ->values();
 
-        Role::firstOrCreate([
-            'name' => 'staff',
-            'guard_name' => 'web',
-        ]);
+        foreach ($permissions as $permissionName) {
+            Permission::firstOrCreate([
+                'name' => $permissionName,
+                'guard_name' => 'web',
+            ]);
+        }
+
+        foreach ($roles as $roleName) {
+            Role::firstOrCreate([
+                'name' => $roleName,
+                'guard_name' => 'web',
+            ]);
+        }
+
+        $availablePermissions = Permission::query()
+            ->where('guard_name', 'web')
+            ->pluck('name')
+            ->all();
+
+        $superAdmin = Role::where('name', 'super-admin')
+            ->where('guard_name', 'web')
+            ->firstOrFail();
+
+        // Super Admin must receive every current permission without removing
+        // future UI-created custom permissions.
+        $superAdmin->givePermissionTo($availablePermissions);
+
+        foreach (($config['role_permissions'] ?? []) as $roleName => $permissionNames) {
+            $role = Role::where('name', $roleName)
+                ->where('guard_name', 'web')
+                ->first();
+
+            if (! $role) {
+                continue;
+            }
+
+            $validPermissions = array_values(array_intersect($permissionNames, $availablePermissions));
+
+            if ($validPermissions !== []) {
+                // Do not sync here, because future UI-managed permissions must not
+                // be removed by rerunning this seeder.
+                $role->givePermissionTo($validPermissions);
+            }
+        }
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
 }

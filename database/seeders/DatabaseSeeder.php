@@ -17,16 +17,24 @@ class DatabaseSeeder extends Seeder
     {
         $this->call(AuthRolesSeeder::class);
 
+        $superAdmin = User::firstOrCreate(
+            ['email' => 'admin@yemenmotion.com'],
+            [
+                'name' => 'مدير المنصة',
+                'password' => bcrypt('password123'),
+            ],
+        );
 
-        User::factory()->create([
-            'name' => 'مدير المنصة',
-            'email' => 'admin@yemenmotion.com',
-            'password' => bcrypt('password123'),
-        ]);
+        if (! $superAdmin->hasRole('super-admin')) {
+            $superAdmin->assignRole('super-admin');
+        }
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        User::firstOrCreate(
+            ['email' => 'test@example.com'],
+            [
+                'name' => 'Test User',
+                'password' => bcrypt('password'),
+            ],
+        );
     }
 }
