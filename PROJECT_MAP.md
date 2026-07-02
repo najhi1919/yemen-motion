@@ -6934,3 +6934,98 @@ Baseline قابل للدفع جزئيًا بعد توثيق PROJECT_MAP، لكن
 - إضافة edit/delete للroles المخصصة.
 - ثم إضافة شاشة ربط permissions بالroles.
 
+
+---
+
+## Memory Update — 2026-07-02 — Custom Role Creation UI
+
+- **Status:** APPROVED — تم ترقية صفحة الأدوار من قراءة فقط إلى إنشاء role مخصص.
+- **Branch:** `main`
+- **Commit:** `5621c5f`
+- **Related Commit:**
+  - `5621c5f feat: add custom role creation to admin roles page`
+
+### Scope
+
+تم تنفيذ أول إجراء فعلي داخل صفحة:
+
+- `/admin/roles`
+
+هذه المرحلة تضيف إنشاء role مخصص فقط، بدون تعديل أو حذف أو ربط permissions.
+
+### Frontend File Updated
+
+تم تحديث:
+
+- `frontend/pages/admin/roles/index.vue`
+
+### UI Behavior Added
+
+تمت إضافة بطاقة إنشاء role مخصص تحتوي على:
+
+- عنوان إنشاء role.
+- وصف مختصر.
+- input لاسم الدور.
+- زر إنشاء.
+- رسالة نجاح.
+- رسالة خطأ.
+- تلميح بأن الأدوار المحمية مثل `super-admin` و `admin` لا تُنشأ من الواجهة.
+
+### API Used
+
+تم استخدام:
+
+- `POST /api/admin/roles`
+
+Payload:
+
+- `name`
+
+بعد نجاح الإنشاء يتم:
+
+- تفريغ input.
+- عرض رسالة نجاح.
+- إعادة تحميل جدول الأدوار عبر `fetchRoles()`.
+
+### Current Limitations
+
+هذه المرحلة لا تتضمن:
+
+- تعديل role.
+- حذف role.
+- ربط permissions بالrole.
+- شاشة matrix.
+- إدارة roles للمستخدمين.
+
+هذه القيود مقصودة للحفاظ على التنفيذ التدريجي الآمن.
+
+### Validation
+
+تم تشغيل:
+
+- `npm run build`
+
+والنتيجة:
+
+- `Build complete`
+
+تم تشغيل:
+
+- `php artisan test --filter=AccessManagementApiTest`
+
+والنتيجة:
+
+- `19 passed`
+- `58 assertions`
+
+### Final Decision
+
+تم اعتماد إنشاء roles المخصصة من واجهة الإدارة.
+
+المرحلة التالية المنطقية:
+
+- إضافة edit/delete للأدوار المخصصة فقط.
+- منع تعديل أو حذف الأدوار المحمية من الواجهة.
+- احترام `is_protected` و `users_count`.
+- بعدها إضافة ربط permissions بالroles.
+
