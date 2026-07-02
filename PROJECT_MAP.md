@@ -6011,3 +6011,70 @@ Baseline قابل للدفع جزئيًا بعد توثيق PROJECT_MAP، لكن
 
 لا يتم فتح تعديلات بصرية جديدة عليها إلا من خلال مهمة scoped جديدة وواضحة.
 
+
+---
+
+## Memory Update — 2026-07-02 — Local Agents Hygiene Baseline
+
+- **Status:** PASSED مبدئيًا.
+- **Branch:** `main`
+- **Baseline Commit Before This Note:** `b284512`
+- **Important Clarification:** لن يتم استخدام أي وكيل عبر GitHub. جميع الوكلاء المقصودين في سير العمل محليون على جهاز التطوير فقط.
+
+### Local Agent Scope
+
+الوكلاء المقصودون في هذا المشروع يعملون محليًا فقط، مثل:
+
+- GLM/ZCode
+- Codex CLI
+- OpenCode
+- أي agent محلي آخر يتم تشغيله داخل بيئة الجهاز
+
+لا يتم منح أي وكيل صلاحية GitHub مباشرة، ولا يتم الاعتماد على GitHub كبيئة تنفيذ للوكيل.
+
+### Hygiene Results
+
+تم فحص نظافة المستودع محليًا قبل تشغيل الوكلاء المحليين:
+
+- `.env` غير متتبع في Git.
+- `.env` محمي عبر `.gitignore`.
+- `cookies.txt` وملفات cookies المحلية ignored.
+- `database/database.sqlite` ignored.
+- `frontend/.nuxt` ignored.
+- `frontend/.output` ignored.
+- `frontend/node_modules` ignored.
+- `node_modules` ignored.
+- `vendor` ignored.
+- `storage/logs/laravel.log` ignored.
+- لا توجد untracked files في وقت الفحص.
+- working tree كان نظيفًا.
+
+### Secret Scan Decision
+
+ظهور `frontend/stores/authStore.ts:156` في فحص الأسرار كان false positive.  
+السطر يحتوي على قراءة عادية من `tokenCookie.value`:
+
+- لا يوجد token ثابت داخل الكود.
+- لا توجد قيمة سرية مطبوعة.
+- لا يوجد مفتاح API أو password hardcoded.
+
+### Frontend Env Example
+
+تم اعتماد إنشاء `frontend/.env.example` لتوثيق متغير البيئة العام:
+
+- `NUXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000/api`
+
+هذا الملف مثال آمن ولا يحتوي أسرارًا.
+
+### Local Agent Operating Rules
+
+أي وكيل محلي يعمل على المشروع يجب أن يلتزم بالقواعد التالية:
+
+- لا يعمل على كامل المشروع بدون scope واضح.
+- لا يقرأ `.env` إلا إذا تم السماح بذلك صراحة.
+- لا يطبع أسرارًا أو tokens في المخرجات.
+- لا ينشئ commit تلقائيًا.
+- لا ينفذ `git push`.
+- لا يعدل ملفات خارج المهمة المحددة.
+- أي تغيير يجب أن يظهر كـ diff ثم تتم مراجعته واختباره قبل الاعتماد.
+
