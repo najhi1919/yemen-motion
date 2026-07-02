@@ -6172,3 +6172,65 @@ Baseline قابل للدفع جزئيًا بعد توثيق PROJECT_MAP، لكن
 - auth message translation layer
 - frontend auth UX polishing
 
+
+---
+
+## Memory Update — 2026-07-02 — Admin RBAC Baseline Verified
+
+- **Status:** APPROVED — مثبت بالاختبارات.
+- **Branch:** `main`
+- **Commit:** `88893ba`
+- **Related Commit:**
+  - `88893ba test: lock admin endpoint access control`
+
+### Scope
+
+تم فحص وتثبيت حماية مسارات إدارة الأدمن التالية:
+
+- `GET /api/admin/users`
+- `GET /api/admin/roles`
+
+### Verified Behavior
+
+تم تثبيت السلوك التالي بالاختبارات:
+
+- المستخدم غير المصادق لا يستطيع الوصول إلى `/api/admin/users` ويرجع `401`.
+- المستخدم غير المصادق لا يستطيع الوصول إلى `/api/admin/roles` ويرجع `401`.
+- المستخدم بدور `admin` يستطيع الوصول إلى `/api/admin/users` ويرجع `200`.
+- المستخدم بدور `admin` يستطيع الوصول إلى `/api/admin/roles` ويرجع `200`.
+- المستخدم بدور `staff` لا يستطيع الوصول إلى admin endpoints ويرجع `403`.
+- المستخدم بدور `client` لا يستطيع الوصول إلى admin endpoints ويرجع `403`.
+- المستخدم بدور `designer` لا يستطيع الوصول إلى admin endpoints ويرجع `403`.
+
+### Tests Added
+
+تم إنشاء ملف اختبار جديد:
+
+- `tests/Feature/Admin/AdminAccessControlTest.php`
+
+نتيجة التحقق:
+
+- `php artisan test --filter=AdminAccessControlTest`
+  - `6 passed`
+  - `14 assertions`
+
+- `php artisan test`
+  - `32 passed`
+  - `168 assertions`
+
+### Final Decision
+
+حماية Admin endpoints الأساسية أصبحت مثبتة ومقبولة.
+
+لا يتم تغيير منطق حماية `/api/admin/users` و `/api/admin/roles` إلا من خلال مهمة scoped واضحة.
+
+### Deferred
+
+مسارات Dashboard القديمة التالية تحتاج قرارًا مستقلًا لاحقًا:
+
+- `GET /api/dashboard/stats`
+- `GET /api/dashboard/activity`
+- `GET /api/dashboard/chart`
+
+هذه المسارات لا تُخلط مع قرار Admin RBAC الحالي.
+
