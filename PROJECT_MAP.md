@@ -5930,3 +5930,84 @@ audit_login_page_fast.sh
 Baseline قابل للدفع جزئيًا بعد توثيق PROJECT_MAP، لكن working tree لا يزال يحتوي ملفات Hold غير محسومة.
 
 لا يتم push النهائي قبل حسم أو تجاهل أو توثيق ملفات Hold المتبقية.
+
+---
+
+## Memory Update — 2026-07-02 — Admin Management Tables Refinement
+
+- **Status:** APPROVED — مقبول مبدئيًا.
+- **Branch:** `main`
+- **Commit:** `775afde`
+- **Commit Message:** `feat: refine admin management tables`
+
+### Scope
+
+تم تثبيت وتحسين صفحات إدارة الأدمن التالية:
+
+- `/admin/users`
+- `/admin/staff`
+- `/admin/roles`
+
+### Completed
+
+- إعادة بناء الهوية البصرية لصفحات الإدارة الفرعية بما ينسجم مع لوحة التحكم الرئيسية.
+- تثبيت summary cards ملوّنة وواضحة.
+- تثبيت read-only notice في الصفحات.
+- إزالة أدوات البحث/الفلترة الداخلية غير المطلوبة من الجداول.
+- تحويل الجداول إلى semantic HTML tables مستقرة.
+- حذف `colgroup` من جداول users/staff/roles.
+- حذف مقابض تمديد الأعمدة `ym-column-resize-handle`.
+- حذف كود resize الميت:
+  - `tableColumns`
+  - `columnWidths`
+  - `minimumColumnWidths`
+  - `resizingColumn`
+  - `tableWidth`
+  - `startColumnResize`
+  - `handleColumnResize`
+  - `resizeDelta`
+  - `stopColumnResize`
+- تثبيت ترتيب `th/td` في الجداول الثلاثة.
+- ضبط قص الأسماء والبريد بطول 15 حرفًا.
+- ضبط اتجاه النص المختلط RTL/LTR للأسماء والبريد.
+- تثبيت التاريخ بصيغة:
+  - `YYYY-MM-DD HH:mm`
+- إضافة دعم الفرز في backend لصفحة المستخدمين عبر:
+  - `sort_by`
+  - `sort_direction`
+- اعتماد الفرز في users/staff عبر backend.
+- اعتماد الفرز في roles محليًا داخل الصفحة لأن endpoint الأدوار يعيد القائمة كاملة دون pagination.
+
+### Validation
+
+- `git diff --check` نظيف.
+- dead resize check نظيف للصفحات الثلاث.
+- forbidden internal controls check نظيف:
+  - لا `type="search"`
+  - لا `searchPlaceholder`
+  - لا `<select>`
+- semantic table check أكد وجود:
+  - `ym-users-table`
+  - `ym-staff-table`
+  - `ym-roles-table`
+- `npm run build` نجح وانتهى بـ:
+  - `✨ Build complete!`
+- `php artisan test` نجح:
+  - `23 passed`
+  - `129 assertions`
+
+### Deferred
+
+إمكانية تمديد الأعمدة مؤجلة عمدًا إلى مهمة مستقلة لاحقًا.  
+لا يتم إرجاع `resize/colgroup/columnWidths` إلى صفحات users/staff/roles في المرحلة الحالية.
+
+### Final Decision
+
+صفحات الإدارة التالية مثبتة ومقبولة مبدئيًا:
+
+- `/admin/users`
+- `/admin/staff`
+- `/admin/roles`
+
+لا يتم فتح تعديلات بصرية جديدة عليها إلا من خلال مهمة scoped جديدة وواضحة.
+
