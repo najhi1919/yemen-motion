@@ -166,7 +166,7 @@ const t = {
 }
 
 const copy = computed(() => t[currentLocale.value])
-const isAdmin = computed(() => auth.role === 'admin')
+const isAdmin = computed(() => ['super-admin', 'admin'].includes(auth.role || ''))
 const isStaff = computed(() => auth.role === 'staff')
 
 const roleLabel = computed(() => {
