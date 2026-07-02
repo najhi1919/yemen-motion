@@ -34,6 +34,42 @@
       <p>{{ copy.readonlyNotice }}</p>
     </aside>
 
+    <section class="ym-create-role-card" aria-labelledby="ym-create-role-title">
+      <div class="ym-create-role-card__copy">
+        <h2 id="ym-create-role-title">{{ copy.createTitle }}</h2>
+        <p>{{ copy.createCopy }}</p>
+      </div>
+
+      <form class="ym-create-role-form" @submit.prevent="createRole">
+        <label class="ym-create-role-field">
+          <span>{{ copy.createNameLabel }}</span>
+          <input
+            v-model="createRoleName"
+            type="text"
+            dir="ltr"
+            autocomplete="off"
+            :placeholder="copy.createNamePlaceholder"
+            :disabled="creatingRole"
+            @input="clearCreateFeedback"
+          />
+        </label>
+
+        <button type="submit" class="ym-create-role-button" :disabled="!canCreateRole">
+          {{ creatingRole ? copy.creating : copy.createAction }}
+        </button>
+      </form>
+
+      <p
+        v-if="createRoleFeedback"
+        class="ym-create-role-feedback"
+        :class="createRoleFeedbackType === 'success' ? 'is-success' : 'is-error'"
+      >
+        {{ createRoleFeedback }}
+      </p>
+
+      <small class="ym-create-role-hint">{{ copy.createHint }}</small>
+    </section>
+
     <section class="ym-summary-grid">
       <article
         v-for="card in summaryCards"
@@ -169,6 +205,13 @@ type AdminRolesResponse = {
   errors?: Record<string, string[]> | null
 }
 
+type StoreRoleResponse = {
+  success: boolean
+  data: AdminRole
+  message?: string
+  errors?: Record<string, string[]> | null
+}
+
 type RolesSortKey = 'id' | 'name' | 'guard_name' | 'users_count' | 'permissions_count' | 'created_at'
 type SortDirection = 'asc' | 'desc'
 
@@ -178,11 +221,11 @@ const currentLocale = useState<Locale>('ym-dashboard-locale', () => 'ar')
 const copyMap = {
   ar: {
     brandChip: 'Yemen Motion',
-    readonlyBadge: 'قراءة فقط',
+    readonlyBadge: 'إدارة محدودة',
     kicker: 'الأدوار والصلاحيات',
     title: 'مركز الأدوار',
-    copy: 'عرض رقابي للأدوار وعدد المستخدمين والصلاحيات المرتبطة بها دون أي تعديل في الصلاحيات أو إنشاء أدوار جديدة.',
-    readonlyNotice: 'هذه الصفحة مخصصة للقراءة فقط. لا توجد عمليات إنشاء أو تعديل أو حذف أو تغيير صلاحيات.',
+    copy: 'عرض رقابي للأدوار وعدد المستخدمين والصلاحيات المرتبطة بها مع إمكانية إنشاء أدوار مخصصة.',
+    readonlyNotice: 'هذه المرحلة تسمح بإنشاء role مخصص فقط. التعديل والحذف وربط الصلاحيات مؤجل لخطوات لاحقة.',
     primaryGuard: 'Guard الأساسي',
     rolesCount: 'عدد الأدوار',
     tableTitle: 'سجل الأدوار',
@@ -202,15 +245,24 @@ const copyMap = {
     colGuardName: 'Guard Name',
     colUsersCount: 'عدد المستخدمين',
     colPermissionsCount: 'عدد الصلاحيات',
-    colCreatedAt: 'تاريخ الإنشاء'
+    colCreatedAt: 'تاريخ الإنشاء',
+    createTitle: 'إنشاء دور مخصص',
+    createCopy: 'أضف role جديدًا لاستخدامه لاحقًا في ربط الصلاحيات أو تعيين المستخدمين.',
+    createNameLabel: 'اسم الدور',
+    createNamePlaceholder: 'مثال: support-agent',
+    createAction: 'إنشاء الدور',
+    creating: 'جارٍ الإنشاء...',
+    createSuccess: 'تم إنشاء الدور بنجاح.',
+    createNameRequired: 'اكتب اسم الدور أولًا.',
+    createHint: 'الأدوار المحمية مثل super-admin و admin لا تُنشأ من هذه الواجهة.'
   },
   en: {
     brandChip: 'Yemen Motion',
-    readonlyBadge: 'Read-only',
+    readonlyBadge: 'Limited management',
     kicker: 'Roles and permissions',
     title: 'Roles Command Center',
-    copy: 'A governance view of roles, users, and linked permissions without permission changes or role creation.',
-    readonlyNotice: 'This page is read-only. There are no create, edit, delete, or permission-change actions.',
+    copy: 'A governance view of roles, users, and linked permissions with custom role creation.',
+    readonlyNotice: 'This phase only allows creating custom roles. Edit, delete, and permission binding are deferred.',
     primaryGuard: 'Primary guard',
     rolesCount: 'Roles count',
     tableTitle: 'Roles register',
@@ -230,7 +282,16 @@ const copyMap = {
     colGuardName: 'Guard Name',
     colUsersCount: 'Users Count',
     colPermissionsCount: 'Permissions Count',
-    colCreatedAt: 'Created at'
+    colCreatedAt: 'Created at',
+    createTitle: 'Create custom role',
+    createCopy: 'Add a new role to use later for permission binding or user assignment.',
+    createNameLabel: 'Role name',
+    createNamePlaceholder: 'Example: support-agent',
+    createAction: 'Create role',
+    creating: 'Creating...',
+    createSuccess: 'Role created successfully.',
+    createNameRequired: 'Enter a role name first.',
+    createHint: 'Protected roles like super-admin and admin are not created from this UI.'
   }
 }
 
@@ -239,11 +300,17 @@ const copy = computed(() => copyMap[currentLocale.value])
 const roles = ref<AdminRole[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
+const createRoleName = ref('')
+const creatingRole = ref(false)
+const createRoleFeedback = ref<string | null>(null)
+const createRoleFeedbackType = ref<'success' | 'error' | null>(null)
 const sortKey = ref<RolesSortKey>('id')
 const sortDirection = ref<SortDirection>('asc')
 const totalRoleUsers = computed(() => roles.value.reduce((total, role) => total + Number(role.users_count || 0), 0))
 const totalRolePermissions = computed(() => roles.value.reduce((total, role) => total + Number(role.permissions_count || 0), 0))
 const primaryGuard = computed(() => roles.value.find(role => role.guard_name)?.guard_name || 'web')
+const normalizedCreateRoleName = computed(() => createRoleName.value.trim())
+const canCreateRole = computed(() => normalizedCreateRoleName.value.length > 0 && !creatingRole.value)
 const summaryCards = computed(() => [
   { label: copy.value.totalRoles, value: roles.value.length, subtitle: copy.value.liveData, color: '#8b5cf6' },
   { label: copy.value.totalUsers, value: totalRoleUsers.value, subtitle: copy.value.usersScope, color: '#10b981' },
@@ -317,6 +384,60 @@ function formatCreatedAt(value: string | null): string {
 
 function padDatePart(value: number): string {
   return String(value).padStart(2, '0')
+}
+
+function clearCreateFeedback(): void {
+  createRoleFeedback.value = null
+  createRoleFeedbackType.value = null
+}
+
+function firstValidationError(errors?: Record<string, string[]> | null): string | null {
+  if (!errors) return null
+
+  for (const messages of Object.values(errors)) {
+    const firstMessage = messages.find(Boolean)
+    if (firstMessage) return firstMessage
+  }
+
+  return null
+}
+
+async function createRole(): Promise<void> {
+  if (!normalizedCreateRoleName.value) {
+    createRoleFeedback.value = copy.value.createNameRequired
+    createRoleFeedbackType.value = 'error'
+    return
+  }
+
+  creatingRole.value = true
+  createRoleFeedback.value = null
+  createRoleFeedbackType.value = null
+
+  try {
+    await apiFetch<StoreRoleResponse>('/admin/roles', {
+      method: 'POST',
+      body: {
+        name: normalizedCreateRoleName.value
+      }
+    })
+
+    createRoleName.value = ''
+    createRoleFeedback.value = copy.value.createSuccess
+    createRoleFeedbackType.value = 'success'
+
+    await fetchRoles()
+  } catch (requestError: unknown) {
+    const err = requestError as any
+    createRoleFeedback.value = firstValidationError(err?.data?.errors)
+      || err?.data?.message
+      || err?.message
+      || (currentLocale.value === 'ar'
+        ? 'فشل إنشاء الدور.'
+        : 'Could not create role.')
+    createRoleFeedbackType.value = 'error'
+  } finally {
+    creatingRole.value = false
+  }
 }
 
 async function fetchRoles(): Promise<void> {
@@ -594,6 +715,117 @@ onMounted(() => {
   line-height: 1.7;
 }
 
+.ym-create-role-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, #10b981 38%, var(--ym-card-border));
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 8% 0%, color-mix(in srgb, #10b981 16%, transparent), transparent 16rem),
+    linear-gradient(180deg, color-mix(in srgb, var(--ym-card-bg) 92%, rgba(16, 185, 129, 0.08)), var(--ym-card-bg));
+  box-shadow: var(--ym-card-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  padding: clamp(1rem, 2vw, 1.25rem);
+}
+
+.ym-create-role-card__copy h2 {
+  margin: 0;
+  color: var(--ym-text);
+  font-size: 18px;
+  font-weight: 950;
+}
+
+.ym-create-role-card__copy p,
+.ym-create-role-hint {
+  color: var(--ym-muted);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.7;
+}
+
+.ym-create-role-card__copy p {
+  margin: 0.3rem 0 0;
+}
+
+.ym-create-role-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.8rem;
+  align-items: end;
+  margin-top: 1rem;
+}
+
+.ym-create-role-field {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.ym-create-role-field span {
+  color: var(--ym-muted);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.ym-create-role-field input {
+  width: 100%;
+  border: 1px solid var(--ym-soft-border);
+  border-radius: 16px;
+  background: var(--ym-control-bg);
+  color: var(--ym-text);
+  font-size: 14px;
+  font-weight: 850;
+  outline: none;
+  padding: 0.75rem 0.9rem;
+}
+
+.ym-create-role-field input:focus {
+  border-color: color-mix(in srgb, #10b981 62%, var(--ym-soft-border));
+  box-shadow: 0 0 0 4px color-mix(in srgb, #10b981 14%, transparent);
+}
+
+.ym-create-role-button {
+  border: 1px solid color-mix(in srgb, #10b981 54%, transparent);
+  border-radius: 16px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 950;
+  min-height: 44px;
+  padding: 0.72rem 1rem;
+  transition: transform 160ms ease, opacity 160ms ease;
+}
+
+.ym-create-role-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.ym-create-role-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ym-create-role-feedback {
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 850;
+  margin: 0.8rem 0 0;
+  padding: 0.65rem 0.75rem;
+}
+
+.ym-create-role-feedback.is-success {
+  background: color-mix(in srgb, #10b981 16%, transparent);
+  color: #10b981;
+}
+
+.ym-create-role-feedback.is-error {
+  background: color-mix(in srgb, #ef4444 14%, transparent);
+  color: #ef4444;
+}
+
+.ym-create-role-hint {
+  display: block;
+  margin-top: 0.75rem;
+}
+
 .ym-summary-grid {
   display: grid;
   grid-template-columns: repeat(1, minmax(0, 1fr));
@@ -867,9 +1099,19 @@ onMounted(() => {
 }
 
 @media (max-width: 640px) {
-  .ym-readonly-notice {
+  .ym-readonly-notice,
+  .ym-create-role-form {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .ym-create-role-form {
+    display: flex;
+  }
+
+  .ym-create-role-field,
+  .ym-create-role-button {
+    width: 100%;
   }
 }
 /* YM-ADMIN-UI final fix: clean semantic roles table */
