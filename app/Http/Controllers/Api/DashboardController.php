@@ -12,6 +12,8 @@ class DashboardController extends Controller
 {
     public function stats(Request $request): JsonResponse
     {
+        $this->authorizeLegacyDashboardAccess($request);
+
         $user = $request->user();
         $role = $user->roles->first()?->name;
 
@@ -46,6 +48,8 @@ class DashboardController extends Controller
 
     public function activity(Request $request): JsonResponse
     {
+        $this->authorizeLegacyDashboardAccess($request);
+
         $recentUsers = User::latest('created_at')
             ->take(10)
             ->get()
@@ -69,6 +73,8 @@ class DashboardController extends Controller
 
     public function chart(Request $request): JsonResponse
     {
+        $this->authorizeLegacyDashboardAccess($request);
+
         $days = 30;
         $labels = [];
         $newUsers = [];
@@ -88,6 +94,15 @@ class DashboardController extends Controller
             'message' => 'تم جلب بيانات الرسم البياني بنجاح',
             'errors' => null,
         ]);
+    }
+
+    private function authorizeLegacyDashboardAccess(Request $request): void
+    {
+        $viewer = $request->user();
+
+        if (! $viewer || (! $viewer->hasRole('admin') && ! $viewer->hasRole('super-admin'))) {
+            abort(403, 'غير مصرح لك بعرض بيانات لوحة التحكم.');
+        }
     }
 
     public function overview(Request $request): JsonResponse
