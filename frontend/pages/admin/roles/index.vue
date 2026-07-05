@@ -40,24 +40,11 @@
         <p>{{ copy.createCopy }}</p>
       </div>
 
-      <form class="ym-create-role-form" @submit.prevent="createRole">
-        <label class="ym-create-role-field">
-          <span>{{ copy.createNameLabel }}</span>
-          <input
-            v-model="createRoleName"
-            type="text"
-            dir="ltr"
-            autocomplete="off"
-            :placeholder="copy.createNamePlaceholder"
-            :disabled="creatingRole"
-            @input="clearCreateFeedback"
-          />
-        </label>
-
-        <button type="submit" class="ym-create-role-button" :disabled="!canCreateRole">
-          {{ creatingRole ? copy.creating : copy.createAction }}
+      <div class="ym-create-role-card__actions">
+        <button type="button" class="ym-create-role-button" @click="openCreateRoleModal">
+          {{ copy.openCreateAction }}
         </button>
-      </form>
+      </div>
 
       <p
         v-if="createRoleFeedback"
@@ -69,6 +56,143 @@
 
       <small class="ym-create-role-hint">{{ copy.createHint }}</small>
     </section>
+
+    <Transition name="ym-role-modal-fade">
+      <div
+        v-if="roleModalMode"
+        class="ym-role-modal-backdrop"
+        role="presentation"
+        @click.self="closeRoleModal"
+      >
+        <section
+          class="ym-role-modal"
+          role="dialog"
+          aria-modal="true"
+          :aria-labelledby="roleModalTitleId"
+        >
+          <button
+            type="button"
+            class="ym-role-modal__close"
+            :aria-label="copy.closeModal"
+            @click="closeRoleModal"
+          >
+            ×
+          </button>
+
+          <div class="ym-role-modal__head">
+            <span>{{ roleModalEyebrow }}</span>
+            <h2 :id="roleModalTitleId">{{ roleModalTitle }}</h2>
+            <p>{{ roleModalCopy }}</p>
+          </div>
+
+          <p
+            v-if="roleModalFeedback"
+            class="ym-role-modal-feedback"
+            :class="roleModalFeedbackType === 'success' ? 'is-success' : 'is-error'"
+          >
+            {{ roleModalFeedback }}
+          </p>
+
+          <form
+            v-if="roleModalMode === 'create'"
+            class="ym-role-modal-form"
+            @submit.prevent="createRole"
+          >
+            <label class="ym-create-role-field">
+              <span>{{ copy.createNameLabel }}</span>
+              <input
+                v-model="createRoleName"
+                type="text"
+                dir="ltr"
+                autocomplete="off"
+                :placeholder="copy.createNamePlaceholder"
+                :disabled="creatingRole"
+                @input="clearRoleModalFeedback"
+              />
+            </label>
+
+            <div class="ym-role-modal-actions">
+              <button type="button" class="ym-role-modal-button" @click="closeRoleModal">
+                {{ copy.cancelAction }}
+              </button>
+              <button type="submit" class="ym-role-modal-button is-primary" :disabled="!canCreateRole">
+                {{ creatingRole ? copy.creating : copy.createAction }}
+              </button>
+            </div>
+          </form>
+
+          <form
+            v-else-if="roleModalMode === 'edit' && selectedRole"
+            class="ym-role-modal-form"
+            @submit.prevent="updateSelectedRole"
+          >
+            <div class="ym-role-modal-current">
+              <span>{{ copy.currentRoleLabel }}</span>
+              <strong>{{ selectedRole.name }}</strong>
+            </div>
+
+            <label class="ym-create-role-field">
+              <span>{{ copy.createNameLabel }}</span>
+              <input
+                v-model="editingRoleName"
+                type="text"
+                dir="ltr"
+                autocomplete="off"
+                :placeholder="copy.createNamePlaceholder"
+                :disabled="savingRoleId === selectedRole.id"
+                @input="clearRoleModalFeedback"
+              />
+            </label>
+
+            <div class="ym-role-modal-actions">
+              <button type="button" class="ym-role-modal-button" @click="closeRoleModal">
+                {{ copy.cancelAction }}
+              </button>
+              <button
+                type="submit"
+                class="ym-role-modal-button is-primary"
+                :disabled="savingRoleId === selectedRole.id"
+              >
+                {{ savingRoleId === selectedRole.id ? copy.savingAction : copy.saveAction }}
+              </button>
+            </div>
+          </form>
+
+          <div v-else-if="roleModalMode === 'delete' && selectedRole" class="ym-role-modal-form">
+            <div class="ym-role-delete-summary">
+              <span>{{ copy.currentRoleLabel }}</span>
+              <strong>{{ selectedRole.name }}</strong>
+              <small>{{ copy.usersCount }}: {{ selectedRole.users_count }}</small>
+            </div>
+
+            <p
+              v-if="!canDeleteRole(selectedRole)"
+              class="ym-role-delete-warning"
+            >
+              {{ deleteRoleBlockingMessage(selectedRole) }}
+            </p>
+
+            <p v-else class="ym-role-delete-danger">
+              {{ copy.deleteRoleConfirm }}
+            </p>
+
+            <div class="ym-role-modal-actions">
+              <button type="button" class="ym-role-modal-button" @click="closeRoleModal">
+                {{ copy.cancelAction }}
+              </button>
+              <button
+                type="button"
+                class="ym-role-modal-button is-danger"
+                :disabled="!canDeleteRole(selectedRole) || deletingRoleId === selectedRole.id"
+                @click="deleteSelectedRole"
+              >
+                {{ deletingRoleId === selectedRole.id ? copy.deletingAction : copy.confirmDeleteAction }}
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </Transition>
 
     <section class="ym-summary-grid">
       <article
@@ -91,6 +215,14 @@
         </div>
         <span>{{ copy.readonlyBadge }}</span>
       </div>
+
+      <p
+        v-if="roleActionFeedback"
+        class="ym-role-action-feedback"
+        :class="roleActionFeedbackType === 'success' ? 'is-success' : 'is-error'"
+      >
+        {{ roleActionFeedback }}
+      </p>
 
       <div v-if="loading" class="ym-roles-state">
         <span class="ym-roles-state__spinner" aria-hidden="true" />
@@ -157,6 +289,11 @@
                   </button>
                 </div>
               </th>
+              <th class="ym-roles-th-actions">
+                <div class="ym-table-th-content">
+                  <span>{{ copy.colActions }}</span>
+                </div>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -165,6 +302,7 @@
               <td class="ym-roles-cell-name">
                 <span
                   class="ym-role-name"
+                  :class="isRoleProtected(role) ? 'is-protected' : ''"
                   :title="role.name"
                   v-text="truncateText(role.name, 15)"
                 />
@@ -173,6 +311,32 @@
               <td class="ym-roles-cell-users-count">{{ role.users_count }}</td>
               <td class="ym-roles-cell-permissions-count">{{ role.permissions_count }}</td>
               <td class="ym-roles-cell-created">{{ formatCreatedAt(role.created_at) }}</td>
+              <td class="ym-roles-cell-actions">
+                <div class="ym-role-actions">
+                  <span v-if="isRoleProtected(role)" class="ym-role-protected-badge">
+                    {{ copy.protectedRoleBadge }}
+                  </span>
+
+                  <template v-else>
+                    <button
+                      type="button"
+                      class="ym-role-action-button"
+                      @click="openEditRoleModal(role)"
+                    >
+                      {{ copy.editAction }}
+                    </button>
+                    <button
+                      type="button"
+                      class="ym-role-action-button is-danger"
+                      :class="canDeleteRole(role) ? '' : 'is-soft-locked'"
+                      :title="deleteRoleTitle(role)"
+                      @click="openDeleteRoleModal(role)"
+                    >
+                      {{ copy.deleteAction }}
+                    </button>
+                  </template>
+                </div>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -195,6 +359,7 @@ type AdminRole = {
   guard_name: string
   users_count: number
   permissions_count: number
+  is_protected?: boolean
   created_at: string | null
 }
 
@@ -211,6 +376,21 @@ type StoreRoleResponse = {
   message?: string
   errors?: Record<string, string[]> | null
 }
+
+type UpdateRoleResponse = {
+  success: boolean
+  data: AdminRole
+  message?: string
+  errors?: Record<string, string[]> | null
+}
+
+type DeleteRoleResponse = {
+  success: boolean
+  message?: string
+  errors?: Record<string, string[]> | null
+}
+
+type RoleModalMode = 'create' | 'edit' | 'delete' | null
 
 type RolesSortKey = 'id' | 'name' | 'guard_name' | 'users_count' | 'permissions_count' | 'created_at'
 type SortDirection = 'asc' | 'desc'
@@ -254,7 +434,39 @@ const copyMap = {
     creating: 'جارٍ الإنشاء...',
     createSuccess: 'تم إنشاء الدور بنجاح.',
     createNameRequired: 'اكتب اسم الدور أولًا.',
-    createHint: 'الأدوار المحمية مثل super-admin و admin لا تُنشأ من هذه الواجهة.'
+    createHint: 'الأدوار المحمية مثل super-admin و admin لا تُنشأ من هذه الواجهة.',
+    openCreateAction: 'فتح نافذة إنشاء دور',
+    closeModal: 'إغلاق النافذة',
+    colActions: 'الإجراءات',
+    editAction: 'تعديل',
+    deleteAction: 'حذف',
+    saveAction: 'حفظ',
+    savingAction: 'جارٍ الحفظ...',
+    deletingAction: 'جارٍ الحذف...',
+    cancelAction: 'إلغاء',
+    confirmDeleteAction: 'تأكيد الحذف',
+    protectedRoleBadge: 'محمي',
+    assignedRoleDeleteTitle: 'لا يمكن حذف دور مرتبط بمستخدمين.',
+    deleteRoleTitle: 'حذف الدور',
+    updateRoleSuccess: 'تم تعديل الدور بنجاح.',
+    deleteRoleSuccess: 'تم حذف الدور بنجاح.',
+    editRoleNameRequired: 'اكتب اسم الدور قبل الحفظ.',
+    updateRoleFailed: 'فشل تعديل الدور.',
+    deleteRoleFailed: 'فشل حذف الدور.',
+    protectedRoleBlocked: 'لا يمكن تعديل أو حذف دور محمي.',
+    deleteRoleConfirm: 'هل تريد حذف هذا الدور؟ لا يمكن التراجع عن هذه العملية.',
+    currentRoleLabel: 'الدور الحالي',
+    usersCount: 'عدد المستخدمين',
+    createModalEyebrow: 'عملية إنشاء',
+    editModalEyebrow: 'عملية تعديل',
+    deleteModalEyebrow: 'عملية حذف',
+    createModalTitle: 'إنشاء دور مخصص',
+    editModalTitle: 'تعديل اسم الدور',
+    deleteModalTitle: 'حذف الدور',
+    createModalCopy: 'اكتب اسم role جديد وسيتم إضافته إلى جدول الأدوار مباشرة بعد نجاح العملية.',
+    editModalCopy: 'عدّل اسم الدور المخصص من هذه النافذة دون تغيير مكانك داخل الجدول.',
+    deleteModalCopy: 'راجع حالة الدور قبل الحذف. الأدوار المرتبطة بمستخدمين لا يمكن حذفها.',
+    roleAssignedDeleteBlocked: 'هذا الدور مرتبط بمستخدمين حاليًا، لذلك لا يمكن حذفه لحماية العلاقات داخل النظام.'
   },
   en: {
     brandChip: 'Yemen Motion',
@@ -291,7 +503,39 @@ const copyMap = {
     creating: 'Creating...',
     createSuccess: 'Role created successfully.',
     createNameRequired: 'Enter a role name first.',
-    createHint: 'Protected roles like super-admin and admin are not created from this UI.'
+    createHint: 'Protected roles like super-admin and admin are not created from this UI.',
+    openCreateAction: 'Open create role modal',
+    closeModal: 'Close modal',
+    colActions: 'Actions',
+    editAction: 'Edit',
+    deleteAction: 'Delete',
+    saveAction: 'Save',
+    savingAction: 'Saving...',
+    deletingAction: 'Deleting...',
+    cancelAction: 'Cancel',
+    confirmDeleteAction: 'Confirm delete',
+    protectedRoleBadge: 'Protected',
+    assignedRoleDeleteTitle: 'Cannot delete a role assigned to users.',
+    deleteRoleTitle: 'Delete role',
+    updateRoleSuccess: 'Role updated successfully.',
+    deleteRoleSuccess: 'Role deleted successfully.',
+    editRoleNameRequired: 'Enter a role name before saving.',
+    updateRoleFailed: 'Could not update role.',
+    deleteRoleFailed: 'Could not delete role.',
+    protectedRoleBlocked: 'Protected roles cannot be edited or deleted.',
+    deleteRoleConfirm: 'Delete this role? This action cannot be undone.',
+    currentRoleLabel: 'Current role',
+    usersCount: 'Users count',
+    createModalEyebrow: 'Create action',
+    editModalEyebrow: 'Edit action',
+    deleteModalEyebrow: 'Delete action',
+    createModalTitle: 'Create custom role',
+    editModalTitle: 'Edit role name',
+    deleteModalTitle: 'Delete role',
+    createModalCopy: 'Enter a new role name and it will be added to the roles table after success.',
+    editModalCopy: 'Edit the custom role name in this modal without moving inside the table.',
+    deleteModalCopy: 'Review the role state before deletion. Roles assigned to users cannot be deleted.',
+    roleAssignedDeleteBlocked: 'This role is currently assigned to users, so it cannot be deleted.'
   }
 }
 
@@ -304,6 +548,16 @@ const createRoleName = ref('')
 const creatingRole = ref(false)
 const createRoleFeedback = ref<string | null>(null)
 const createRoleFeedbackType = ref<'success' | 'error' | null>(null)
+const roleModalTitleId = 'ym-role-modal-title'
+const roleModalMode = ref<RoleModalMode>(null)
+const selectedRole = ref<AdminRole | null>(null)
+const editingRoleName = ref('')
+const savingRoleId = ref<number | null>(null)
+const deletingRoleId = ref<number | null>(null)
+const roleActionFeedback = ref<string | null>(null)
+const roleActionFeedbackType = ref<'success' | 'error' | null>(null)
+const roleModalFeedback = ref<string | null>(null)
+const roleModalFeedbackType = ref<'success' | 'error' | null>(null)
 const sortKey = ref<RolesSortKey>('id')
 const sortDirection = ref<SortDirection>('asc')
 const totalRoleUsers = computed(() => roles.value.reduce((total, role) => total + Number(role.users_count || 0), 0))
@@ -311,6 +565,21 @@ const totalRolePermissions = computed(() => roles.value.reduce((total, role) => 
 const primaryGuard = computed(() => roles.value.find(role => role.guard_name)?.guard_name || 'web')
 const normalizedCreateRoleName = computed(() => createRoleName.value.trim())
 const canCreateRole = computed(() => normalizedCreateRoleName.value.length > 0 && !creatingRole.value)
+const roleModalEyebrow = computed(() => {
+  if (roleModalMode.value === 'edit') return copy.value.editModalEyebrow
+  if (roleModalMode.value === 'delete') return copy.value.deleteModalEyebrow
+  return copy.value.createModalEyebrow
+})
+const roleModalTitle = computed(() => {
+  if (roleModalMode.value === 'edit') return copy.value.editModalTitle
+  if (roleModalMode.value === 'delete') return copy.value.deleteModalTitle
+  return copy.value.createModalTitle
+})
+const roleModalCopy = computed(() => {
+  if (roleModalMode.value === 'edit') return copy.value.editModalCopy
+  if (roleModalMode.value === 'delete') return copy.value.deleteModalCopy
+  return copy.value.createModalCopy
+})
 const summaryCards = computed(() => [
   { label: copy.value.totalRoles, value: roles.value.length, subtitle: copy.value.liveData, color: '#8b5cf6' },
   { label: copy.value.totalUsers, value: totalRoleUsers.value, subtitle: copy.value.usersScope, color: '#10b981' },
@@ -402,16 +671,178 @@ function firstValidationError(errors?: Record<string, string[]> | null): string 
   return null
 }
 
+function clearRoleModalFeedback(): void {
+  roleModalFeedback.value = null
+  roleModalFeedbackType.value = null
+}
+
+function clearRoleActionFeedback(): void {
+  roleActionFeedback.value = null
+  roleActionFeedbackType.value = null
+}
+
+function setRoleModalError(message: string): void {
+  roleModalFeedback.value = message
+  roleModalFeedbackType.value = 'error'
+}
+
+function isRoleProtected(role: AdminRole): boolean {
+  return Boolean(role.is_protected) || ['super-admin', 'admin'].includes(role.name)
+}
+
+function canDeleteRole(role: AdminRole): boolean {
+  return !isRoleProtected(role) && Number(role.users_count || 0) === 0
+}
+
+function deleteRoleTitle(role: AdminRole): string {
+  if (isRoleProtected(role)) return copy.value.protectedRoleBlocked
+  if (!canDeleteRole(role)) return copy.value.assignedRoleDeleteTitle
+  return copy.value.deleteRoleTitle
+}
+
+function deleteRoleBlockingMessage(role: AdminRole): string {
+  if (isRoleProtected(role)) return copy.value.protectedRoleBlocked
+  return copy.value.roleAssignedDeleteBlocked
+}
+
+function openCreateRoleModal(): void {
+  createRoleName.value = ''
+  createRoleFeedback.value = null
+  createRoleFeedbackType.value = null
+  selectedRole.value = null
+  roleModalMode.value = 'create'
+  clearRoleModalFeedback()
+  clearRoleActionFeedback()
+}
+
+function openEditRoleModal(role: AdminRole): void {
+  if (isRoleProtected(role)) {
+    roleActionFeedback.value = copy.value.protectedRoleBlocked
+    roleActionFeedbackType.value = 'error'
+    return
+  }
+
+  selectedRole.value = role
+  editingRoleName.value = role.name
+  roleModalMode.value = 'edit'
+  clearRoleModalFeedback()
+  clearRoleActionFeedback()
+}
+
+function openDeleteRoleModal(role: AdminRole): void {
+  selectedRole.value = role
+  roleModalMode.value = 'delete'
+  clearRoleModalFeedback()
+  clearRoleActionFeedback()
+}
+
+function closeRoleModal(): void {
+  if (creatingRole.value || savingRoleId.value || deletingRoleId.value) return
+
+  roleModalMode.value = null
+  selectedRole.value = null
+  editingRoleName.value = ''
+  clearRoleModalFeedback()
+}
+
+async function updateSelectedRole(): Promise<void> {
+  if (!selectedRole.value) return
+  await updateRole(selectedRole.value)
+}
+
+async function deleteSelectedRole(): Promise<void> {
+  if (!selectedRole.value) return
+  await deleteRole(selectedRole.value)
+}
+
+async function updateRole(role: AdminRole): Promise<void> {
+  clearRoleModalFeedback()
+  clearRoleActionFeedback()
+
+  if (isRoleProtected(role)) {
+    setRoleModalError(copy.value.protectedRoleBlocked)
+    return
+  }
+
+  const nextName = editingRoleName.value.trim()
+  if (!nextName) {
+    setRoleModalError(copy.value.editRoleNameRequired)
+    return
+  }
+
+  savingRoleId.value = role.id
+
+  try {
+    await apiFetch<UpdateRoleResponse>(`/admin/roles/${role.id}`, {
+      method: 'PATCH',
+      body: {
+        name: nextName
+      }
+    })
+
+    roleActionFeedback.value = copy.value.updateRoleSuccess
+    roleActionFeedbackType.value = 'success'
+    savingRoleId.value = null
+    closeRoleModal()
+    await fetchRoles()
+  } catch (requestError: unknown) {
+    const err = requestError as any
+    setRoleModalError(
+      firstValidationError(err?.data?.errors)
+      || err?.data?.message
+      || err?.message
+      || copy.value.updateRoleFailed
+    )
+  } finally {
+    savingRoleId.value = null
+  }
+}
+
+async function deleteRole(role: AdminRole): Promise<void> {
+  clearRoleModalFeedback()
+  clearRoleActionFeedback()
+
+  if (!canDeleteRole(role)) {
+    setRoleModalError(deleteRoleBlockingMessage(role))
+    return
+  }
+
+  deletingRoleId.value = role.id
+
+  try {
+    await apiFetch<DeleteRoleResponse>(`/admin/roles/${role.id}`, {
+      method: 'DELETE'
+    })
+
+    roleActionFeedback.value = copy.value.deleteRoleSuccess
+    roleActionFeedbackType.value = 'success'
+    deletingRoleId.value = null
+    closeRoleModal()
+    await fetchRoles()
+  } catch (requestError: unknown) {
+    const err = requestError as any
+    setRoleModalError(
+      firstValidationError(err?.data?.errors)
+      || err?.data?.message
+      || err?.message
+      || copy.value.deleteRoleFailed
+    )
+  } finally {
+    deletingRoleId.value = null
+  }
+}
+
 async function createRole(): Promise<void> {
   if (!normalizedCreateRoleName.value) {
-    createRoleFeedback.value = copy.value.createNameRequired
-    createRoleFeedbackType.value = 'error'
+    setRoleModalError(copy.value.createNameRequired)
     return
   }
 
   creatingRole.value = true
   createRoleFeedback.value = null
   createRoleFeedbackType.value = null
+  clearRoleModalFeedback()
+  clearRoleActionFeedback()
 
   try {
     await apiFetch<StoreRoleResponse>('/admin/roles', {
@@ -425,16 +856,19 @@ async function createRole(): Promise<void> {
     createRoleFeedback.value = copy.value.createSuccess
     createRoleFeedbackType.value = 'success'
 
+    creatingRole.value = false
+    closeRoleModal()
     await fetchRoles()
   } catch (requestError: unknown) {
     const err = requestError as any
-    createRoleFeedback.value = firstValidationError(err?.data?.errors)
+    setRoleModalError(
+      firstValidationError(err?.data?.errors)
       || err?.data?.message
       || err?.message
       || (currentLocale.value === 'ar'
         ? 'فشل إنشاء الدور.'
         : 'Could not create role.')
-    createRoleFeedbackType.value = 'error'
+    )
   } finally {
     creatingRole.value = false
   }
@@ -746,11 +1180,17 @@ onMounted(() => {
   margin: 0.3rem 0 0;
 }
 
-.ym-create-role-form {
+.ym-create-role-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.ym-create-role-form,
+.ym-role-modal-form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.8rem;
-  align-items: end;
+  gap: 0.9rem;
   margin-top: 1rem;
 }
 
@@ -824,6 +1264,197 @@ onMounted(() => {
 .ym-create-role-hint {
   display: block;
   margin-top: 0.75rem;
+}
+
+.ym-role-modal-fade-enter-active,
+.ym-role-modal-fade-leave-active {
+  transition: opacity 180ms ease;
+}
+
+.ym-role-modal-fade-enter-from,
+.ym-role-modal-fade-leave-to {
+  opacity: 0;
+}
+
+.ym-role-modal-backdrop {
+  position: fixed;
+  z-index: 80;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 50% 12%, rgba(56, 189, 248, 0.18), transparent 18rem),
+    rgba(2, 6, 23, 0.64);
+  padding: 1rem;
+  backdrop-filter: blur(14px);
+}
+
+.ym-role-modal {
+  position: relative;
+  width: min(100%, 520px);
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--ym-soft-border) 72%, rgba(255, 255, 255, 0.2));
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 8% 0%, color-mix(in srgb, #8b5cf6 22%, transparent), transparent 14rem),
+    radial-gradient(circle at 94% 14%, color-mix(in srgb, #38bdf8 18%, transparent), transparent 14rem),
+    var(--ym-card-bg);
+  box-shadow:
+    0 34px 90px rgba(2, 6, 23, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  padding: clamp(1.1rem, 2.4vw, 1.5rem);
+}
+
+.ym-role-modal__close {
+  position: absolute;
+  top: 0.85rem;
+  inset-inline-end: 0.85rem;
+  display: grid;
+  height: 2rem;
+  width: 2rem;
+  place-items: center;
+  border: 1px solid var(--ym-soft-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ym-control-bg) 86%, transparent);
+  color: var(--ym-text);
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.ym-role-modal__head {
+  padding-inline-end: 2.5rem;
+}
+
+.ym-role-modal__head span {
+  display: inline-flex;
+  border: 1px solid color-mix(in srgb, #38bdf8 34%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, #38bdf8 12%, transparent);
+  color: #38bdf8;
+  font-size: 12px;
+  font-weight: 950;
+  padding: 0.28rem 0.62rem;
+}
+
+.ym-role-modal__head h2 {
+  margin: 0.75rem 0 0;
+  color: var(--ym-text);
+  font-size: clamp(1.35rem, 2.3vw, 1.75rem);
+  font-weight: 950;
+}
+
+.ym-role-modal__head p {
+  margin: 0.45rem 0 0;
+  color: var(--ym-muted);
+  font-size: 13.5px;
+  font-weight: 800;
+  line-height: 1.75;
+}
+
+.ym-role-modal-feedback,
+.ym-role-action-feedback {
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 850;
+  margin: 1rem 0 0;
+  padding: 0.7rem 0.8rem;
+}
+
+.ym-role-action-feedback {
+  margin: 0 0 1rem;
+}
+
+.ym-role-modal-feedback.is-success,
+.ym-role-action-feedback.is-success {
+  background: color-mix(in srgb, #10b981 16%, transparent);
+  color: #10b981;
+}
+
+.ym-role-modal-feedback.is-error,
+.ym-role-action-feedback.is-error {
+  background: color-mix(in srgb, #ef4444 14%, transparent);
+  color: #ef4444;
+}
+
+.ym-role-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.65rem;
+}
+
+.ym-role-modal-button {
+  border: 1px solid var(--ym-soft-border);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--ym-control-bg) 82%, transparent);
+  color: var(--ym-text);
+  font-size: 13px;
+  font-weight: 950;
+  min-height: 42px;
+  padding: 0.68rem 1rem;
+}
+
+.ym-role-modal-button.is-primary {
+  border-color: color-mix(in srgb, #10b981 54%, transparent);
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #fff;
+}
+
+.ym-role-modal-button.is-danger {
+  border-color: color-mix(in srgb, #ef4444 54%, transparent);
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
+  color: #fff;
+}
+
+.ym-role-modal-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ym-role-modal-current,
+.ym-role-delete-summary {
+  display: grid;
+  gap: 0.25rem;
+  border: 1px solid var(--ym-soft-border);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--ym-control-bg) 72%, transparent);
+  padding: 0.85rem;
+}
+
+.ym-role-modal-current span,
+.ym-role-delete-summary span,
+.ym-role-delete-summary small {
+  color: var(--ym-muted);
+  font-size: 12.5px;
+  font-weight: 850;
+}
+
+.ym-role-modal-current strong,
+.ym-role-delete-summary strong {
+  color: var(--ym-text);
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.ym-role-delete-warning,
+.ym-role-delete-danger {
+  border-radius: 16px;
+  font-size: 13.5px;
+  font-weight: 850;
+  line-height: 1.7;
+  margin: 0;
+  padding: 0.85rem;
+}
+
+.ym-role-delete-warning {
+  background: color-mix(in srgb, #f59e0b 14%, transparent);
+  color: #f59e0b;
+}
+
+.ym-role-delete-danger {
+  background: color-mix(in srgb, #ef4444 14%, transparent);
+  color: #ef4444;
 }
 
 .ym-summary-grid {
@@ -981,7 +1612,7 @@ onMounted(() => {
 
 .ym-roles-table {
   width: max-content;
-  min-width: max(100%, 1040px);
+  min-width: max(100%, 1240px);
   border-collapse: collapse;
   table-layout: fixed;
 }
@@ -1080,6 +1711,58 @@ onMounted(() => {
   padding: 0.28rem 0.7rem;
 }
 
+.ym-role-name.is-protected {
+  border-color: color-mix(in srgb, #f59e0b 36%, transparent);
+  background: color-mix(in srgb, #f59e0b 16%, transparent);
+}
+
+.ym-role-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.ym-role-action-button,
+.ym-role-protected-badge {
+  border: 1px solid var(--ym-soft-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ym-control-bg) 82%, transparent);
+  color: var(--ym-text);
+  font-size: 12px;
+  font-weight: 950;
+  line-height: 1;
+  padding: 0.42rem 0.6rem;
+}
+
+.ym-role-action-button {
+  cursor: pointer;
+  transition: transform 150ms ease, opacity 150ms ease, border-color 150ms ease;
+}
+
+.ym-role-action-button:hover {
+  border-color: color-mix(in srgb, #38bdf8 48%, var(--ym-soft-border));
+  transform: translateY(-1px);
+}
+
+.ym-role-action-button.is-danger {
+  border-color: color-mix(in srgb, #ef4444 42%, transparent);
+  background: color-mix(in srgb, #ef4444 12%, transparent);
+  color: #ef4444;
+}
+
+.ym-role-action-button.is-soft-locked {
+  border-color: color-mix(in srgb, #f59e0b 42%, transparent);
+  background: color-mix(in srgb, #f59e0b 11%, transparent);
+  color: #f59e0b;
+}
+
+.ym-role-protected-badge {
+  border-color: color-mix(in srgb, #f59e0b 42%, transparent);
+  background: color-mix(in srgb, #f59e0b 14%, transparent);
+  color: #f59e0b;
+}
+
 @media (min-width: 768px) {
   .ym-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1105,7 +1788,8 @@ onMounted(() => {
     flex-direction: column;
   }
 
-  .ym-create-role-form {
+  .ym-create-role-form,
+  .ym-role-modal-form {
     display: flex;
   }
 
@@ -1121,7 +1805,7 @@ onMounted(() => {
 
 .ym-roles-table {
   width: 100% !important;
-  min-width: 1040px;
+  min-width: 1240px;
   table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
@@ -1129,7 +1813,7 @@ onMounted(() => {
 }
 
 /* من اليمين لليسار:
-   # | الاسم | Guard Name | عدد المستخدمين | عدد الصلاحيات | تاريخ الإنشاء
+   # | الاسم | Guard Name | عدد المستخدمين | عدد الصلاحيات | تاريخ الإنشاء | الإجراءات
 */
 .ym-roles-table th:nth-child(1),
 .ym-roles-table td:nth-child(1) {
@@ -1138,27 +1822,32 @@ onMounted(() => {
 
 .ym-roles-table th:nth-child(2),
 .ym-roles-table td:nth-child(2) {
-  width: 20% !important;
+  width: 18% !important;
 }
 
 .ym-roles-table th:nth-child(3),
 .ym-roles-table td:nth-child(3) {
-  width: 17% !important;
+  width: 15% !important;
 }
 
 .ym-roles-table th:nth-child(4),
 .ym-roles-table td:nth-child(4) {
-  width: 15% !important;
+  width: 13% !important;
 }
 
 .ym-roles-table th:nth-child(5),
 .ym-roles-table td:nth-child(5) {
-  width: 20% !important;
+  width: 17% !important;
 }
 
 .ym-roles-table th:nth-child(6),
 .ym-roles-table td:nth-child(6) {
-  width: 22% !important;
+  width: 17% !important;
+}
+
+.ym-roles-table th:nth-child(7),
+.ym-roles-table td:nth-child(7) {
+  width: 14% !important;
 }
 
 .ym-roles-table th,
@@ -1168,7 +1857,8 @@ onMounted(() => {
 .ym-roles-cell-guard-name,
 .ym-roles-cell-users-count,
 .ym-roles-cell-permissions-count,
-.ym-roles-cell-created {
+.ym-roles-cell-created,
+.ym-roles-cell-actions {
   display: table-cell !important;
   box-sizing: border-box;
   overflow: hidden;
@@ -1193,12 +1883,14 @@ onMounted(() => {
 .ym-roles-th-users-count,
 .ym-roles-th-permissions-count,
 .ym-roles-th-created,
+.ym-roles-th-actions,
 .ym-roles-cell-id,
 .ym-roles-cell-name,
 .ym-roles-cell-guard-name,
 .ym-roles-cell-users-count,
 .ym-roles-cell-permissions-count,
-.ym-roles-cell-created {
+.ym-roles-cell-created,
+.ym-roles-cell-actions {
   text-align: center !important;
   white-space: nowrap !important;
 }
