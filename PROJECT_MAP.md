@@ -7029,3 +7029,196 @@ Payload:
 - احترام `is_protected` و `users_count`.
 - بعدها إضافة ربط permissions بالroles.
 
+
+---
+
+## Memory Update — 2026-07-06 — Super Admin Access and Modal Role Management
+
+- **Status:** APPROVED — تم اعتماد وصول super-admin الكامل للوحة الإدارة الحالية، وتم اعتماد إدارة الأدوار عبر نوافذ Modal.
+- **Branch:** `main`
+- **Current Commit:** `38201ba`
+
+### Related Commits
+
+- `4604edf fix: redirect super admin to admin dashboard`
+- `5304b43 fix: show admin sidebar for super admin`
+- `38201ba feat: manage custom roles with modal actions`
+
+### Scope 1 — Super Admin Frontend Access
+
+تم إصلاح تجربة دخول حساب `super-admin` من واجهة المستخدم.
+
+قبل الإصلاح:
+
+- كان `super-admin` يتم تحويله بعد تسجيل الدخول إلى `/`.
+- صفحة `/admin` كانت تفتح، لكن القائمة الجانبية كانت فارغة.
+
+بعد الإصلاح:
+
+- `super-admin` يتم تحويله بعد تسجيل الدخول إلى `/admin`.
+- `super-admin` يرى قائمة الإدارة الجانبية.
+- `super-admin` يعامل كحساب إداري أعلى من `admin` في Frontend route guards و AppSidebar.
+
+### Frontend Files Updated for Super Admin Access
+
+تم تحديث:
+
+- `frontend/middleware/auth.global.ts`
+- `frontend/pages/auth/login.vue`
+- `frontend/components/AppSidebar.vue`
+
+### Super Admin Access Rules
+
+تم اعتماد القاعدة التالية:
+
+- `super-admin` له وصول إلى `/admin`.
+- `super-admin` يرى عناصر الإدارة في القائمة الجانبية.
+- `super-admin` لا يتم تحويله إلى الصفحة العامة بعد تسجيل الدخول.
+- أي ميزة إدارية مكتملة يجب أن تكون متاحة له.
+- حماية دور `super-admin` من التعديل أو كسر الصلاحيات تبقى مقصودة.
+
+### Backend Super Admin Validation
+
+تم تنفيذ Audit أكد أن:
+
+- مستخدم `admin@yemenmotion.com` موجود.
+- الدور الحالي: `super-admin`.
+- عدد الصلاحيات الكلية للمستخدم: `19`.
+- عدد الصلاحيات المسجلة في النظام: `19`.
+- `super-admin` يمتلك كل الصلاحيات المسجلة حاليًا.
+
+### Scope 2 — Roles Modal Management
+
+تمت ترقية صفحة:
+
+- `/admin/roles`
+
+من إنشاء role فقط إلى إدارة أفضل للأدوار عبر نوافذ منبثقة Modal.
+
+### Frontend File Updated for Role Management
+
+تم تحديث:
+
+- `frontend/pages/admin/roles/index.vue`
+
+### UX Decision
+
+تم رفض تجربة inline edit داخل الجدول لأنها:
+
+- كانت تنقل المستخدم بصريًا إلى أعلى الصفحة.
+- كانت غير مريحة لإدارة role من داخل الجدول مباشرة.
+- لا تقدم تجربة واضحة لسبب منع الحذف.
+
+تم اعتماد Modal UX بدلًا منها.
+
+### Role Management Behavior
+
+تمت إضافة نوافذ Modal للعمليات التالية:
+
+- إنشاء role مخصص.
+- تعديل role غير محمي.
+- حذف role غير محمي وغير مرتبط بمستخدمين.
+- عرض سبب منع الحذف إذا كان role مرتبطًا بمستخدمين.
+
+### Create Role Modal
+
+عند الضغط على زر إنشاء role:
+
+- تظهر نافذة منبثقة.
+- يدخل المستخدم اسم role.
+- عند النجاح تغلق النافذة.
+- تظهر رسالة نجاح.
+- يتم تحديث جدول الأدوار.
+
+### Edit Role Modal
+
+عند الضغط على تعديل role غير محمي:
+
+- تظهر نافذة تعديل في منتصف الشاشة.
+- لا يتم نقل المستخدم لأعلى الصفحة.
+- يظهر اسم الدور الحالي.
+- يمكن تعديل الاسم وحفظه.
+- عند النجاح تغلق النافذة ويتم تحديث الجدول.
+
+### Delete Role Modal
+
+عند الضغط على حذف role:
+
+- إذا كان role غير مرتبط بمستخدمين:
+  - تظهر نافذة تأكيد الحذف.
+  - يمكن تنفيذ الحذف.
+  - تغلق النافذة بعد النجاح.
+  - يختفي role من الجدول.
+
+- إذا كان role مرتبطًا بمستخدمين:
+  - تظهر نافذة تشرح سبب منع الحذف.
+  - زر تأكيد الحذف يكون غير متاح.
+  - لا يتم تنفيذ أي حذف.
+
+### Protected Roles
+
+الأدوار المحمية:
+
+- `super-admin`
+- `admin`
+
+تظهر كـ:
+
+- `محمي`
+
+ولا تظهر لها أزرار تعديل أو حذف.
+
+### API Used
+
+تم استخدام endpoints الموجودة مسبقًا:
+
+- `POST /api/admin/roles`
+- `PATCH /api/admin/roles/{role}`
+- `DELETE /api/admin/roles/{role}`
+
+### Validation
+
+تم تشغيل:
+
+- `npm run build`
+
+والنتيجة:
+
+- `Build complete`
+
+تم تشغيل:
+
+- `php artisan test --filter=AccessManagementApiTest`
+- `php artisan test --filter=AdminAccessControlTest`
+
+والنتيجة:
+
+- `AccessManagementApiTest: 19 passed / 58 assertions`
+- `AdminAccessControlTest: 8 passed / 18 assertions`
+
+### Manual Browser Validation
+
+تم اعتماد الاختبار البصري اليدوي من المتصفح.
+
+تم تأكيد أن:
+
+- نافذة الإنشاء تظهر بشكل صحيح.
+- نافذة التعديل تظهر في منتصف الشاشة ولا تنقل المستخدم لأعلى الصفحة.
+- نافذة الحذف تشرح سبب المنع عند وجود مستخدمين مرتبطين.
+- يمكن حذف role جديد غير مرتبط بمستخدمين.
+- الأدوار المحمية لا تظهر لها أزرار تعديل أو حذف.
+
+### Final Decision
+
+تم اعتماد:
+
+- `super-admin` كحساب إدارة أعلى داخل الواجهة الحالية.
+- إدارة roles المخصصة عبر Modal بدل inline edit.
+- منع حذف roles المرتبطة بمستخدمين.
+- حماية `super-admin` و `admin` من التعديل والحذف.
+
+المرحلة التالية المنطقية:
+
+- إضافة ربط permissions بالroles عبر واجهة واضحة.
+- بناء شاشة Role Permissions Matrix أو Modal تفصيلي لكل role.
+- منع تعديل صلاحيات `super-admin` من الواجهة.
