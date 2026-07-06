@@ -241,6 +241,49 @@ frontend npm run build: Build complete
 
 هذه الخطوة لا تعني اكتمال Production Dashboard Core بالكامل. هي تصحيح عرض الواجهة حتى يطابق الحالة الحالية: بيانات حقيقية جزئية من API للوحدات المبنية، وبيانات صفرية أو قيد البناء للأقسام التي لم تُبنَ مصادرها بعد.
 
+
+### 0.9 Completed Admin Dashboard Static Quick Stats Cleanup — 2026-07-06
+
+تم إنجاز خطوة واجهة محدودة ضمن:
+
+```text
+Phase 2 Completion — Dashboard Core APIs & Real Data Integration
+```
+
+#### YM-DASH-CORE-003A — Admin Dashboard Static Quick Stats Cleanup
+
+تم تنظيف آخر بقايا الملخص التنفيذي الثابت في صفحة `/admin`.
+
+#### المنجز الفعلي
+
+- إزالة اعتماد الملخص التنفيذي على `copy.quick` الثابت.
+- إزالة القيم التشغيلية الوهمية مثل نسب الإكمال ورضا العملاء ومتوسط التسليم.
+- جعل `quickStats` يعتمد على `dashboardOverviewCards` القادمة من `/api/dashboard/overview`.
+- حصر الملخص التنفيذي في مؤشرات مبنية فعليًا حاليًا:
+  - users
+  - staff
+  - roles
+  - permissions
+  - access
+- عند غياب بيانات API تظهر قيم آمنة `0` بدل أرقام وهمية.
+- لم يتم تغيير أي API contract.
+
+#### الملفات المعدلة
+
+```text
+frontend/pages/admin/index.vue
+```
+
+#### نتائج التحقق
+
+```text
+frontend npm run build: Build complete
+```
+
+#### ملاحظات
+
+هذه الخطوة تغلق بقايا static executive stats في `/admin`. المرحلة التالية المنطقية داخل Dashboard Core هي بناء أساس Activity Feed حقيقي بدل النشاط الواحد العام الحالي.
+
 ---
 
 ## 1. TECH_STACK — المعمارية النهائية المعتمدة

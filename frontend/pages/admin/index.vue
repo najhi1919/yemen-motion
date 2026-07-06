@@ -198,6 +198,7 @@ type ViewMode = 'all' | 'cards' | 'charts'
 type ChartMode = 'individual' | 'combined'
 type ControlTooltipPlacement = 'bottom'
 type ActivityTone = 'success' | 'info' | 'warning' | 'error'
+type QuickMetricKey = 'users' | 'staff' | 'roles' | 'permissions' | 'access'
 
 type DashboardLocalizedLabel = {
   ar: string
@@ -329,13 +330,7 @@ const copyMap = {
     tooltipTotal: 'الإجمالي',
     tooltipDemo: 'تفصيل المؤشر حسب القسم الحالي',
     allSections: 'كل الأقسام',
-    periodNames: { day: 'اليوم', week: 'الأسبوع', month: 'الشهر', year: 'السنة' },
-    quick: [
-      ['معدل إتمام الطلبات', '94.2%'],
-      ['متوسط التسليم', '3.2 يوم'],
-      ['رضا العملاء', '4.8/5'],
-      ['بلاغات مفتوحة', '12']
-    ]
+    periodNames: { day: 'اليوم', week: 'الأسبوع', month: 'الشهر', year: 'السنة' }
   },
   en: {
     brandChip: 'Yemen Motion',
@@ -368,13 +363,26 @@ const copyMap = {
     tooltipTotal: 'Total',
     tooltipDemo: 'Current section metric breakdown',
     allSections: 'All sections',
-    periodNames: { day: 'Day', week: 'Week', month: 'Month', year: 'Year' },
-    quick: [
-      ['Order completion rate', '94.2%'],
-      ['Average delivery', '3.2 days'],
-      ['Client satisfaction', '4.8/5'],
-      ['Open reports', '12']
-    ]
+    periodNames: { day: 'Day', week: 'Week', month: 'Month', year: 'Year' }
+  }
+}
+
+const quickMetricKeys: QuickMetricKey[] = ['users', 'staff', 'roles', 'permissions', 'access']
+
+const quickMetricLabels: Record<Locale, Record<QuickMetricKey, string>> = {
+  ar: {
+    users: 'المستخدمون',
+    staff: 'الفريق',
+    roles: 'الأدوار',
+    permissions: 'الصلاحيات',
+    access: 'إدارة الوصول'
+  },
+  en: {
+    users: 'Users',
+    staff: 'Staff',
+    roles: 'Roles',
+    permissions: 'Permissions',
+    access: 'Access'
   }
 }
 
@@ -527,7 +535,15 @@ const localizedActivities = computed(() => {
   }))
 })
 
-const quickStats = computed(() => copy.value.quick.map(([label, value]) => ({ label, value })))
+const quickStats = computed(() => {
+  const numberLocale = currentLocale.value === 'ar' ? 'ar-SA' : 'en-US'
+  const cards = new Map(dashboardOverviewCards.value.map(card => [card.key, card]))
+
+  return quickMetricKeys.map(key => ({
+    label: quickMetricLabels[currentLocale.value][key],
+    value: Number(cards.get(key)?.value ?? 0).toLocaleString(numberLocale)
+  }))
+})
 
 const heroAvatar = computed(() => auth.user?.avatar || '/logo.svg')
 
