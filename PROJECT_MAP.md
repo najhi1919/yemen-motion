@@ -7222,3 +7222,143 @@ Payload:
 - إضافة ربط permissions بالroles عبر واجهة واضحة.
 - بناء شاشة Role Permissions Matrix أو Modal تفصيلي لكل role.
 - منع تعديل صلاحيات `super-admin` من الواجهة.
+
+---
+
+## Memory Update — 2026-07-06 — Role Permissions Modal and Roles UI Refinement
+
+- **Status:** APPROVED — تم اعتماد تحسين صفحة الأدوار بصريًا وإضافة Modal لإدارة صلاحيات الأدوار.
+- **Branch:** `main`
+- **Current Commit:** `be442d3`
+
+### Related Commit
+
+- `be442d3 feat: add role permissions modal and refine roles ui`
+
+### Scope
+
+تم تطوير صفحة:
+
+- `frontend/pages/admin/roles/index.vue`
+
+لتصبح مركزًا أكثر اكتمالًا لإدارة الأدوار والصلاحيات من واجهة الإدارة.
+
+### Visual Refinement
+
+تم تحسين صفحة `/admin/roles` بصريًا وتجريبيًا.
+
+التغييرات المعتمدة:
+
+- إزالة بطاقة إنشاء الدور الكبيرة.
+- نقل زر الإنشاء إلى رأس جدول الأدوار.
+- اختصار زر الإنشاء إلى:
+  - `إنشاء`
+  - `Create`
+- تحسين جدول الأدوار بصريًا.
+- تكبير وتحسين صفوف الجدول.
+- تحويل أزرار الإجراءات إلى أزرار أيقونية.
+- إزالة كلمة `محمي` من عمود الإجراءات.
+- وضع مؤشر حماية كنقطة حمراء بجانب اسم الدور المحمي.
+- إضافة Tooltip واحد واضح لنقطة الحماية.
+- إصلاح مشكلة التلميحات المزدوجة لأزرار الإجراءات.
+- إزالة `title=` من عناصر الإجراءات لتجنب Tooltip المتصفح الافتراضي.
+- اعتماد `aria-label` و `data-tooltip` كنظام Tooltip موحّد.
+
+### Protected Role UX
+
+الأدوار المحمية:
+
+- `super-admin`
+- `admin`
+
+لم تعد تعرض أزرار إجراءات داخل الجدول.
+
+بدلًا من ذلك، يظهر بجانب اسم الدور مؤشر حماية أحمر مع Tooltip يوضح أن الدور محمي.
+
+### Role Action Buttons
+
+الأدوار غير المحمية تعرض أزرار إجراءات أيقونية فقط:
+
+- الصلاحيات والارتباطات.
+- التعديل.
+- الحذف.
+
+كل زر يستخدم Tooltip واحد فقط، بدون Tooltip افتراضي من المتصفح.
+
+### Role Permissions Modal
+
+تمت إضافة Modal لإدارة صلاحيات الدور من نفس صفحة الأدوار.
+
+السلوك المعتمد:
+
+- الضغط على أيقونة الصلاحيات يفتح Modal.
+- يتم جلب تفاصيل الدور.
+- يتم جلب قائمة الصلاحيات المتاحة.
+- يتم عرض الصلاحيات مجمعة حسب المجموعة.
+- يمكن تحديد أو إلغاء تحديد الصلاحيات عبر checkboxes.
+- يمكن حفظ الصلاحيات للدور.
+- تظهر رسائل نجاح أو خطأ حسب نتيجة العملية.
+
+### APIs Used
+
+تم استخدام APIs الموجودة مسبقًا دون تعديل Backend:
+
+- `GET /api/admin/permissions`
+- `GET /api/admin/roles/{role}`
+- `PUT /api/admin/roles/{role}/permissions`
+
+### Protected Permissions Rule
+
+لا تسمح الواجهة بإدارة صلاحيات الأدوار المحمية.
+
+`super-admin` يبقى محميًا ولا يتم تعديل صلاحياته من الواجهة.
+
+### Validation
+
+تم تشغيل:
+
+- `git --no-pager diff --check`
+
+والنتيجة:
+
+- لا توجد مشاكل whitespace.
+
+تم التحقق من إزالة Tooltip المتصفح الافتراضي:
+
+- لا يوجد `title=` في `frontend/pages/admin/roles/index.vue`.
+
+تم تشغيل:
+
+- `npm run build`
+
+والنتيجة:
+
+- `Build complete`
+
+تم تشغيل:
+
+- `php artisan test --filter=AccessManagementApiTest`
+- `php artisan test --filter=AdminAccessControlTest`
+
+والنتيجة:
+
+- `AccessManagementApiTest: 19 passed / 58 assertions`
+- `AdminAccessControlTest: 8 passed / 18 assertions`
+
+### Final Decision
+
+تم اعتماد صفحة الأدوار كواجهة إدارة متقدمة تشمل:
+
+- إنشاء دور.
+- تعديل دور غير محمي.
+- حذف دور غير محمي وغير مستخدم.
+- إدارة صلاحيات الدور عبر Modal.
+- حماية الأدوار الأساسية من الإجراءات الخطرة.
+- تحسين بصري واضح للجدول وأزرار الإجراءات.
+
+### Next Step
+
+المرحلة التالية المنطقية:
+
+- ربط الأدوار بالمستخدمين من واجهة الإدارة.
+- أو تحسين صفحة المستخدمين بحيث يمكن تعيين role للمستخدم مباشرة.
