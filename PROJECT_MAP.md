@@ -186,6 +186,61 @@ frontend npm run build: Build complete
 
 هذه الخطوة لا تعني اكتمال Production Dashboard Core بالكامل. هي أول ربط وظيفي حقيقي داخل Dashboard Core اعتمادًا على الوحدات المبنية فعليًا حتى الآن: Users / Roles / Permissions. الأقسام التشغيلية الأكبر مثل Works / Orders / Wallet / Contests لم تُبنَ models/migrations/APIs الخاصة بها بعد، لذلك لا تُعامل كبيانات إنتاجية.
 
+
+### 0.8 Completed Dashboard Frontend Presentation Cleanup — 2026-07-06
+
+تم إنجاز خطوة واجهة محدودة ضمن:
+
+```text
+Phase 2 Completion — Dashboard Core APIs & Real Data Integration
+```
+
+#### YM-DASH-CORE-002 — Dashboard Frontend Real Data Presentation Cleanup
+
+تم تنظيف عرض واجهة Dashboard بعد ربط `/api/dashboard/overview` ببيانات حقيقية جزئية في `YM-DASH-CORE-001`.
+
+#### المنجز الفعلي
+
+- تحديث نصوص `/admin` من حالة `بيانات تجريبية / Prototype` إلى حالة أدق:
+  - `بيانات حقيقية جزئية`
+  - `Partial live data`
+- توضيح أن Dashboard يعرض مؤشرات حقيقية من API للوحدات المبنية حاليًا:
+  - users
+  - staff
+  - roles
+  - permissions
+  - access
+- توضيح أن الأقسام التشغيلية غير المبنية بعد تبقى بقيمة صفر أو حالة قيد البناء، مثل:
+  - orders
+  - works
+  - contests
+  - wallet
+  - reports
+  - activities_feed
+- تحديث نصوص `/staff` من حالة البيانات التجريبية إلى حالة بيانات متاحة جزئيًا حسب API ودور الفريق.
+- إزالة fallback activities التي توحي بعمليات تشغيلية حقيقية غير مبنية.
+- ضبط fallback KPIs في staff dashboard إلى قيم صفر مع وصف `قيد البناء`.
+- تغيير النص الافتراضي في `DashboardSvgChart` من `Static demo breakdown` إلى `Metric breakdown`.
+- الحفاظ على API contract بدون تغيير.
+
+#### الملفات المعدلة
+
+```text
+frontend/pages/admin/index.vue
+frontend/pages/staff/index.vue
+frontend/components/dashboard/DashboardSvgChart.vue
+```
+
+#### نتائج التحقق
+
+```text
+frontend npm run build: Build complete
+```
+
+#### ملاحظات
+
+هذه الخطوة لا تعني اكتمال Production Dashboard Core بالكامل. هي تصحيح عرض الواجهة حتى يطابق الحالة الحالية: بيانات حقيقية جزئية من API للوحدات المبنية، وبيانات صفرية أو قيد البناء للأقسام التي لم تُبنَ مصادرها بعد.
+
 ---
 
 ## 1. TECH_STACK — المعمارية النهائية المعتمدة

@@ -138,9 +138,9 @@ const copyMap = {
     heroCopy: 'واجهة مراجعة وتشغيل واضحة للمحتوى، البلاغات، وتذاكر الدعم اليومية.',
     todayFocus: 'تركيز اليوم',
     reviewQueue: 'المراجعة والدعم',
-    placeholder: 'بيانات تجريبية ثابتة لهذه المرحلة',
-    prototypeBadge: 'بيانات تجريبية',
-    prototypeNotice: 'بيانات تجريبية للمعاينة البصرية فقط — سيتم استبدالها لاحقًا بإحصاءات حقيقية من API.',
+    placeholder: 'مؤشرات متاحة حسب API',
+    prototypeBadge: 'بيانات متاحة جزئيًا',
+    prototypeNotice: 'تعرض هذه اللوحة ما يتاح حاليًا من API حسب دور الفريق، بينما تبقى مؤشرات الأعمال والبلاغات التشغيلية قيد البناء حتى تكتمل مصادرها.',
     activityTitle: 'آخر نشاطات الفريق',
     emptyActivity: 'لا يوجد نشاط حديث',
     viewAll: 'عرض الكل',
@@ -153,9 +153,9 @@ const copyMap = {
     heroCopy: 'A clear review and operations surface for content, reports, and daily support tickets.',
     todayFocus: 'Today focus',
     reviewQueue: 'Review & support',
-    placeholder: 'Static placeholder data for this phase',
-    prototypeBadge: 'Prototype',
-    prototypeNotice: 'Demo data for visual preview only — it will be replaced later with real API statistics.',
+    placeholder: 'API-available metrics',
+    prototypeBadge: 'Partially available data',
+    prototypeNotice: 'This dashboard shows currently available API data for the staff role. Work review and operational report metrics remain under construction until their sources are implemented.',
     activityTitle: 'Latest team activity',
     emptyActivity: 'No recent activity',
     viewAll: 'View all',
@@ -169,25 +169,19 @@ const copy = computed(() => copyMap[currentLocale.value])
 const heroAvatar = computed(() => auth.user?.avatar || '/logo.svg')
 
 const fallbackKpis = [
-  { key: 'review', value: 47, trend: -5.2, color: '#f59e0b', icon: '◉', label: { ar: 'محتوى للمراجعة', en: 'Pending review' }, subtitle: { ar: 'عنصر معلّق', en: 'Items waiting' } },
-  { key: 'done', value: 23, trend: 12, color: '#10b981', icon: '✓', label: { ar: 'تمت المراجعة اليوم', en: 'Reviewed today' }, subtitle: { ar: 'عنصر مكتمل', en: 'Completed items' } },
-  { key: 'flags', value: 8, trend: -2.1, color: '#ef4444', icon: '!', label: { ar: 'بلاغات نشطة', en: 'Active flags' }, subtitle: { ar: 'بلاغ يتطلب مراجعة', en: 'Need review' } },
-  { key: 'response', value: 98, trend: 1.5, color: '#0ea5e9', icon: '↯', label: { ar: 'معدل الاستجابة', en: 'Response rate' }, subtitle: { ar: 'نسبة مئوية', en: 'Percent score' } }
+  { key: 'review', value: 0, trend: 0, color: '#f59e0b', icon: '◉', label: { ar: 'محتوى للمراجعة', en: 'Pending review' }, subtitle: { ar: 'قيد البناء', en: 'Under construction' } },
+  { key: 'done', value: 0, trend: 0, color: '#10b981', icon: '✓', label: { ar: 'تمت المراجعة اليوم', en: 'Reviewed today' }, subtitle: { ar: 'قيد البناء', en: 'Under construction' } },
+  { key: 'flags', value: 0, trend: 0, color: '#ef4444', icon: '!', label: { ar: 'بلاغات نشطة', en: 'Active flags' }, subtitle: { ar: 'قيد البناء', en: 'Under construction' } },
+  { key: 'response', value: 0, trend: 0, color: '#0ea5e9', icon: '↯', label: { ar: 'معدل الاستجابة', en: 'Response rate' }, subtitle: { ar: 'قيد البناء', en: 'Under construction' } }
 ]
 
 const fallbackActivities = computed(() => {
   const items = {
     ar: [
-      { icon: '▰', title: 'مشروع جديد يحتاج مراجعة', description: 'تصميم هوية بصرية مقدم من عميل جديد', time: 'منذ 10 دقائق', type: 'info' as const },
-      { icon: '✓', title: 'تمت الموافقة على محتوى', description: 'فيديو ترويجي اجتاز معايير النشر', time: 'منذ 25 دقيقة', type: 'success' as const },
-      { icon: '!', title: 'محتوى مخالف تم التعامل معه', description: 'تم إخطار المالك بالإجراء المطلوب', time: 'منذ 45 دقيقة', type: 'error' as const },
-      { icon: '?', title: 'رسالة دعم جديدة', description: 'عميل يطلب توضيح حالة طلب', time: 'منذ ساعة', type: 'warning' as const }
+      { icon: '▰', title: 'لا توجد أنشطة فريق متاحة من API بعد.', description: 'سيظهر نشاط الفريق هنا عند توفر مصدره من API.', time: '', type: 'info' as const }
     ],
     en: [
-      { icon: '▰', title: 'New project needs review', description: 'Brand identity submitted by a new client', time: '10 minutes ago', type: 'info' as const },
-      { icon: '✓', title: 'Content approved', description: 'Promo video passed publishing standards', time: '25 minutes ago', type: 'success' as const },
-      { icon: '!', title: 'Flagged content handled', description: 'Owner was notified about required action', time: '45 minutes ago', type: 'error' as const },
-      { icon: '?', title: 'New support message', description: 'Client asks about order status', time: '1 hour ago', type: 'warning' as const }
+      { icon: '▰', title: 'No staff activities are available from the API yet.', description: 'Staff activity will appear here once its API source is available.', time: '', type: 'info' as const }
     ]
   }
   return items[currentLocale.value]
@@ -266,8 +260,8 @@ async function fetchDashboardOverview(): Promise<void> {
   } catch {
     dashboardOverview.value = null
     dashboardOverviewError.value = currentLocale.value === 'ar'
-      ? 'تعذر جلب بيانات لوحة الفريق، يتم عرض البيانات الاحتياطية.'
-      : 'Could not load team dashboard data. Showing fallback data.'
+      ? 'تعذر تحميل بيانات Dashboard من API. يتم عرض بيانات احتياطية للواجهة فقط.'
+      : 'Could not load dashboard data from the API. Showing visual fallback data only.'
   } finally {
     dashboardOverviewLoading.value = false
   }

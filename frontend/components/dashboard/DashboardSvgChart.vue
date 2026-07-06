@@ -153,7 +153,7 @@ const props = withDefaults(defineProps<{
   width: 680,
   periodLabel: 'Period',
   totalLabel: 'Total',
-  detailLabel: 'Static demo breakdown'
+  detailLabel: 'Metric breakdown'
 })
 
 const chartPadding = 28

@@ -306,10 +306,10 @@ const copyMap = {
     heroCopy: 'نظرة تشغيلية واضحة على الطلبات، المستخدمين، الإيرادات، البلاغات، وأداء الفريق.',
     activeScope: 'النطاق النشط',
     periodLabel: 'الفترة',
-    prototypeBadge: 'بيانات تجريبية',
-    prototypeNotice: 'بيانات تجريبية للمعاينة البصرية فقط — سيتم استبدالها لاحقًا بإحصاءات حقيقية من API.',
+    prototypeBadge: 'بيانات حقيقية جزئية',
+    prototypeNotice: 'تعرض هذه اللوحة مؤشرات حقيقية من API للوحدات المبنية حاليًا مثل المستخدمين والفريق والأدوار والصلاحيات، بينما تبقى الأقسام غير المبنية بعد بقيمة صفر أو حالة قيد البناء.',
     controlsTitle: 'عناصر العرض التفاعلية',
-    controlsSubtitle: 'غيّر الفترة، الأقسام، ونمط العرض لتحديث البيانات التجريبية فوراً.',
+    controlsSubtitle: 'غيّر الفترة، الأقسام، ونمط العرض لعرض مؤشرات Dashboard المتاحة من API.',
     periodControl: 'الفترة',
     viewControl: 'طريقة العرض',
     chartControl: 'نمط الرسم',
@@ -327,7 +327,7 @@ const copyMap = {
     quickTitle: 'ملخص تنفيذي',
     trendLabel: 'مقارنة بالفترة السابقة',
     tooltipTotal: 'الإجمالي',
-    tooltipDemo: 'تفصيل تجريبي ثابت حسب موضع المؤشر',
+    tooltipDemo: 'تفصيل المؤشر حسب القسم الحالي',
     allSections: 'كل الأقسام',
     periodNames: { day: 'اليوم', week: 'الأسبوع', month: 'الشهر', year: 'السنة' },
     quick: [
@@ -345,10 +345,10 @@ const copyMap = {
     heroCopy: 'A clear operational view across orders, users, revenue, reports, and team performance.',
     activeScope: 'Active scope',
     periodLabel: 'Period',
-    prototypeBadge: 'Prototype',
-    prototypeNotice: 'Demo data for visual preview only — it will be replaced later with real API statistics.',
+    prototypeBadge: 'Partial live data',
+    prototypeNotice: 'This dashboard now shows live API metrics for implemented modules such as users, staff, roles, and permissions. Unimplemented operational sections remain zero or marked as under construction.',
     controlsTitle: 'Interactive display controls',
-    controlsSubtitle: 'Change period, sections, and view mode to update placeholder data immediately.',
+    controlsSubtitle: 'Change the period, sections, and view mode to inspect available API-backed dashboard metrics.',
     periodControl: 'Period',
     viewControl: 'View mode',
     chartControl: 'Chart mode',
@@ -366,7 +366,7 @@ const copyMap = {
     quickTitle: 'Executive summary',
     trendLabel: 'vs previous period',
     tooltipTotal: 'Total',
-    tooltipDemo: 'Static demo detail by pointer position',
+    tooltipDemo: 'Current section metric breakdown',
     allSections: 'All sections',
     periodNames: { day: 'Day', week: 'Week', month: 'Month', year: 'Year' },
     quick: [
@@ -379,18 +379,17 @@ const copyMap = {
 }
 
 const sectionModels: DashboardSectionModel[] = [
-  { key: 'orders', color: '#6366f1', icon: '◈', label: { ar: 'الطلبات', en: 'Orders' }, subtitle: { ar: 'طلبات نشطة', en: 'Active orders' }, base: 342, trend: 8.2, series: { day: [18, 25, 21, 31, 28, 36], week: [92, 130, 118, 145, 160, 176], month: [210, 260, 310, 342, 370, 420], year: [2100, 2450, 2720, 3180, 3640, 4100] } },
-  { key: 'bookings', color: '#f59e0b', icon: '▣', label: { ar: 'الحجوزات', en: 'Bookings' }, subtitle: { ar: 'حجوزات استوديو', en: 'Studio bookings' }, base: 88, trend: 5.4, series: { day: [4, 6, 7, 5, 8, 9], week: [28, 34, 31, 44, 52, 61], month: [62, 70, 76, 88, 94, 101], year: [600, 720, 815, 920, 1030, 1180] } },
-  { key: 'users', color: '#10b981', icon: '●', label: { ar: 'المستخدمون', en: 'Users' }, subtitle: { ar: 'مستخدمون جدد', en: 'New users' }, base: 12847, trend: 12.5, series: { day: [42, 58, 71, 89, 105, 128], week: [320, 420, 510, 620, 700, 790], month: [420, 580, 710, 890, 1050, 1280], year: [4200, 5800, 7100, 8900, 10500, 12847] } },
-  { key: 'staff', color: '#06b6d4', icon: '◆', label: { ar: 'الموظفون', en: 'Staff' }, subtitle: { ar: 'أعضاء نشطون', en: 'Active members' }, base: 64, trend: 3.1, series: { day: [8, 9, 9, 10, 10, 11], week: [42, 44, 46, 50, 56, 64], month: [40, 43, 49, 55, 60, 64], year: [34, 38, 44, 51, 58, 64] } },
-  { key: 'works', color: '#3b82f6', icon: '▰', label: { ar: 'الأعمال', en: 'Works' }, subtitle: { ar: 'أعمال منشورة', en: 'Published works' }, base: 2156, trend: 15.7, series: { day: [22, 28, 24, 36, 42, 48], week: [160, 190, 220, 260, 300, 340], month: [780, 900, 1120, 1320, 1640, 2156], year: [8400, 9200, 10100, 11900, 13800, 16000] } },
-  { key: 'contests', color: '#8b5cf6', icon: '★', label: { ar: 'المسابقات', en: 'Contests' }, subtitle: { ar: 'مسابقات فعالة', en: 'Live contests' }, base: 19, trend: 2.2, series: { day: [1, 2, 1, 2, 3, 2], week: [7, 9, 10, 12, 15, 19], month: [8, 11, 13, 16, 18, 19], year: [24, 31, 39, 48, 55, 63] } },
-  { key: 'wallet', color: '#22c55e', icon: '$', label: { ar: 'المحفظة', en: 'Wallet' }, subtitle: { ar: 'ألف دولار', en: 'USD thousands' }, base: 87500, trend: -3.1, series: { day: [8, 9, 11, 10, 13, 14], week: [32, 44, 50, 61, 72, 80], month: [45, 58, 66, 72, 81, 87], year: [420, 510, 640, 720, 810, 875] } },
-  { key: 'reports', color: '#14b8a6', icon: '▤', label: { ar: 'التقارير', en: 'Reports' }, subtitle: { ar: 'تقارير تشغيلية', en: 'Operational reports' }, base: 38, trend: 6.8, series: { day: [2, 4, 4, 5, 6, 7], week: [12, 16, 21, 25, 31, 38], month: [18, 22, 26, 31, 34, 38], year: [120, 160, 210, 250, 310, 380] } },
-  { key: 'analytics', color: '#a855f7', icon: '⌁', label: { ar: 'التحليلات', en: 'Analytics' }, subtitle: { ar: 'مؤشرات نشطة', en: 'Active metrics' }, base: 74, trend: 9.4, series: { day: [10, 12, 16, 15, 18, 22], week: [40, 48, 52, 60, 68, 74], month: [46, 50, 58, 64, 70, 74], year: [300, 380, 460, 540, 650, 740] } },
-  { key: 'notifications', color: '#f97316', icon: '!', label: { ar: 'الإشعارات', en: 'Notifications' }, subtitle: { ar: 'تنبيهات مرسلة', en: 'Sent alerts' }, base: 512, trend: 4.6, series: { day: [30, 42, 50, 61, 58, 73], week: [120, 180, 240, 310, 420, 512], month: [260, 330, 380, 440, 490, 512], year: [2100, 2800, 3600, 4200, 5000, 6200] } },
-  { key: 'flags', color: '#ef4444', icon: '▲', label: { ar: 'البلاغات', en: 'Reports/Flags' }, subtitle: { ar: 'بلاغات مفتوحة', en: 'Open flags' }, base: 27, trend: -7.2, series: { day: [8, 7, 6, 5, 4, 3], week: [42, 39, 36, 32, 30, 27], month: [58, 51, 44, 39, 32, 27], year: [700, 620, 540, 460, 350, 270] } },
-  { key: 'support', color: '#0ea5e9', icon: '?', label: { ar: 'الدعم', en: 'Support' }, subtitle: { ar: 'تذاكر مفتوحة', en: 'Open tickets' }, base: 43, trend: -1.8, series: { day: [9, 8, 7, 8, 6, 5], week: [54, 50, 48, 46, 44, 43], month: [70, 63, 59, 52, 48, 43], year: [680, 640, 590, 530, 480, 430] } }
+  { key: 'users', color: '#10b981', icon: '●', label: { ar: 'المستخدمون', en: 'Users' }, subtitle: { ar: 'من API عند توفر الاتصال', en: 'API-backed when available' }, base: 0, trend: 0, series: { day: [0], week: [0], month: [0], year: [0] } },
+  { key: 'staff', color: '#06b6d4', icon: '◆', label: { ar: 'الفريق', en: 'Staff' }, subtitle: { ar: 'من API عند توفر الاتصال', en: 'API-backed when available' }, base: 0, trend: 0, series: { day: [0], week: [0], month: [0], year: [0] } },
+  { key: 'roles', color: '#8b5cf6', icon: '◈', label: { ar: 'الأدوار', en: 'Roles' }, subtitle: { ar: 'من API عند توفر الاتصال', en: 'API-backed when available' }, base: 0, trend: 0, series: { day: [0], week: [0], month: [0], year: [0] } },
+  { key: 'permissions', color: '#0ea5e9', icon: '◉', label: { ar: 'الصلاحيات', en: 'Permissions' }, subtitle: { ar: 'من API عند توفر الاتصال', en: 'API-backed when available' }, base: 0, trend: 0, series: { day: [0], week: [0], month: [0], year: [0] } },
+  { key: 'access', color: '#f97316', icon: '▣', label: { ar: 'إدارة الوصول', en: 'Access Management' }, subtitle: { ar: 'أدوار وصلاحيات من API', en: 'API roles and permissions' }, base: 0, trend: 0, series: { day: [0], week: [0], month: [0], year: [0] } },
+  { key: 'orders', color: '#6366f1', icon: '◈', label: { ar: 'الطلبات', en: 'Orders' }, subtitle: { ar: 'قيد البناء', en: 'Under construction' }, base: 0, trend: 0, series: { day: [0], week: [0], month: [0], year: [0] } },
+  { key: 'works', color: '#3b82f6', icon: '▰', label: { ar: 'الأعمال', en: 'Works' }, subtitle: { ar: 'قيد البناء', en: 'Under construction' }, base: 0, trend: 0, series: { day: [0], week: [0], month: [0], year: [0] } },
+  { key: 'contests', color: '#8b5cf6', icon: '★', label: { ar: 'المسابقات', en: 'Contests' }, subtitle: { ar: 'قيد البناء', en: 'Under construction' }, base: 0, trend: 0, series: { day: [0], week: [0], month: [0], year: [0] } },
+  { key: 'wallet', color: '#22c55e', icon: '$', label: { ar: 'المحفظة', en: 'Wallet' }, subtitle: { ar: 'قيد البناء', en: 'Under construction' }, base: 0, trend: 0, series: { day: [0], week: [0], month: [0], year: [0] } },
+  { key: 'reports', color: '#14b8a6', icon: '▤', label: { ar: 'التقارير', en: 'Reports' }, subtitle: { ar: 'قيد البناء', en: 'Under construction' }, base: 0, trend: 0, series: { day: [0], week: [0], month: [0], year: [0] } },
+  { key: 'activities_feed', color: '#0ea5e9', icon: '●', label: { ar: 'النشاطات', en: 'Activities' }, subtitle: { ar: 'قيد البناء', en: 'Under construction' }, base: 0, trend: 0, series: { day: [0], week: [0], month: [0], year: [0] } }
 ]
 
 const selectedSections = ref<string[]>(sectionModels.map(section => section.key))
@@ -453,7 +452,7 @@ const periodMultiplier = computed(() => ({ day: 0.12, week: 0.38, month: 1, year
 const visibleCards = computed(() => activeSectionModels.value.map(section => ({
   key: section.key,
   label: section.label[currentLocale.value],
-  value: Math.round(section.base * periodMultiplier.value),
+  value: section.apiPoints?.length ? section.base : Math.round(section.base * periodMultiplier.value),
   subtitle: section.subtitle[currentLocale.value],
   trend: section.trend,
   color: section.color,
@@ -492,7 +491,7 @@ function sectionBreakdown(section: DashboardSectionModel) {
   const total = source[source.length - 1]
   return periodLabels.value.map((label, index) => ({
     label,
-    value: Math.max(1, Math.round(total * periodBreakdownProfiles[period.value][index]))
+    value: Math.max(0, Math.round(total * periodBreakdownProfiles[period.value][index]))
   }))
 }
 
@@ -507,14 +506,10 @@ const combinedBars = computed(() => activeSectionModels.value.map(section => ({
 const fallbackLocalizedActivities = computed(() => {
   const items = {
     ar: [
-      { icon: '●', title: 'طلب هوية بصرية دخل مرحلة المراجعة', description: 'قسم الطلبات تأثر بالفلاتر الحالية', time: 'منذ 5 دقائق', type: 'info' as const },
-      { icon: '▲', title: 'انخفاض البلاغات المفتوحة', description: 'مؤشر جيد لفريق المراجعة', time: 'منذ 18 دقيقة', type: 'success' as const },
-      { icon: '$', title: 'عملية محفظة تنتظر الاعتماد', description: 'طلب سحب أرباح تجريبي', time: 'منذ ساعة', type: 'warning' as const }
+      { icon: '●', title: 'لا توجد أنشطة تشغيلية متاحة من API بعد.', description: 'سيظهر النشاط هنا عند توفر مصدره من API.', time: '', type: 'info' as const }
     ],
     en: [
-      { icon: '●', title: 'Branding order entered review', description: 'Orders section responds to current filters', time: '5 minutes ago', type: 'info' as const },
-      { icon: '▲', title: 'Open flags are trending down', description: 'A positive review-team signal', time: '18 minutes ago', type: 'success' as const },
-      { icon: '$', title: 'Wallet action awaiting approval', description: 'Sample payout request', time: '1 hour ago', type: 'warning' as const }
+      { icon: '●', title: 'No operational API activities are available yet.', description: 'Activity will appear here once its API source is available.', time: '', type: 'info' as const }
     ]
   }
   return items[currentLocale.value]
@@ -595,10 +590,13 @@ function normalizeSectionIcon(icon: string | undefined, fallback: string | undef
     'chart-bar': '▤',
     'clipboard-check': '✓',
     'flag': '▲',
+    'key': '◉',
     'rectangle-group': '●',
+    'shield-check': '◈',
     'shopping-cart': '◈',
     'trophy': '★',
     'user-group': '●',
+    'users': '◆',
     'wallet': '$'
   }
 
@@ -668,8 +666,8 @@ async function fetchDashboardOverview(): Promise<void> {
   } catch {
     dashboardOverview.value = null
     dashboardOverviewError.value = currentLocale.value === 'ar'
-      ? 'تعذر جلب بيانات لوحة التحكم، يتم عرض البيانات الاحتياطية.'
-      : 'Could not load dashboard data. Showing fallback data.'
+      ? 'تعذر تحميل بيانات Dashboard من API. يتم عرض بيانات احتياطية للواجهة فقط.'
+      : 'Could not load dashboard data from the API. Showing visual fallback data only.'
   } finally {
     dashboardOverviewLoading.value = false
   }
