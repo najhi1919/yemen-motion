@@ -171,8 +171,59 @@ class DashboardOverviewTest extends TestCase
             ->filter()
             ->values()
             ->all();
+        $activityKeys = collect($response->json('data.activities'))->pluck('key')->all();
 
         $this->assertNotContains('نشاط تجريبي', $activityLabels);
+        $this->assertNotContains('access-data-synced', $activityKeys);
+    }
+
+    public function test_admin_activity_feed_is_derived_from_existing_records(): void
+    {
+        $admin = User::factory()->create(['name' => 'Activity Admin']);
+        $admin->assignRole('admin');
+        User::factory()->create(['name' => 'Activity Client']);
+        Role::create(['name' => 'activity-reviewer', 'guard_name' => 'web']);
+        Permission::create(['name' => 'activity.reports.view', 'guard_name' => 'web']);
+
+        Sanctum::actingAs($admin, ['*']);
+
+        $response = $this->json('GET', '/api/dashboard/overview')
+            ->assertStatus(200);
+
+        $activities = collect($response->json('data.activities'));
+        $activityKeys = $activities->pluck('key')->all();
+        $activityLabels = $activities
+            ->map(fn(array $activity) => $activity['label']['ar'] ?? null)
+            ->filter()
+            ->values()
+            ->all();
+
+        $this->assertNotEmpty($activities);
+        $this->assertTrue($activities->contains(fn(array $activity) => str_starts_with($activity['key'], 'user-created-')));
+        $this->assertTrue($activities->contains(fn(array $activity) => str_starts_with($activity['key'], 'role-created-')));
+        $this->assertTrue($activities->contains(fn(array $activity) => str_starts_with($activity['key'], 'permission-created-')));
+        $this->assertNotContains('access-data-synced', $activityKeys);
+        $this->assertNotContains('نشاط تجريبي', $activityLabels);
+    }
+
+    public function test_staff_activity_feed_does_not_expose_access_management_activity(): void
+    {
+        $staff = User::factory()->create();
+        $staff->assignRole('staff');
+        Role::create(['name' => 'staff-hidden-reviewer', 'guard_name' => 'web']);
+        Permission::create(['name' => 'staff.hidden.permission', 'guard_name' => 'web']);
+
+        Sanctum::actingAs($staff, ['*']);
+
+        $response = $this->json('GET', '/api/dashboard/overview')
+            ->assertStatus(200)
+            ->assertJsonPath('data.role', 'staff');
+
+        $activityKeys = collect($response->json('data.activities'))->pluck('key');
+
+        $this->assertFalse($activityKeys->contains(fn(string $key) => str_starts_with($key, 'role-created-')));
+        $this->assertFalse($activityKeys->contains(fn(string $key) => str_starts_with($key, 'permission-created-')));
+        $this->assertFalse($activityKeys->contains('access-data-synced'));
     }
 
     public function test_period_is_reflected_in_response(): void

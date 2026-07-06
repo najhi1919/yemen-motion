@@ -284,6 +284,61 @@ frontend npm run build: Build complete
 
 هذه الخطوة تغلق بقايا static executive stats في `/admin`. المرحلة التالية المنطقية داخل Dashboard Core هي بناء أساس Activity Feed حقيقي بدل النشاط الواحد العام الحالي.
 
+
+### 0.10 Completed Dashboard Real Activity Feed Foundation — 2026-07-06
+
+تم إنجاز خطوة Backend محدودة ضمن:
+
+```text
+Phase 2 Completion — Dashboard Core APIs & Real Data Integration
+```
+
+#### YM-DASH-CORE-004 — Dashboard Real Activity Feed Foundation
+
+تم استبدال النشاط العام الثابت داخل:
+
+```text
+GET /api/dashboard/overview
+```
+
+بـ Activity Feed محدود مشتق من السجلات الموجودة فعليًا في قاعدة البيانات.
+
+#### المنجز الفعلي
+
+- إزالة activity العام الثابت:
+  - `access-data-synced`
+  - `تم تحديث مؤشرات مركز الوصول من قاعدة البيانات`
+- إضافة helper داخل `DashboardController` لبناء الأنشطة حسب الدور.
+- أصبح admin / super-admin يرى أنشطة مشتقة من:
+  - أحدث المستخدمين `users`
+  - أحدث الأدوار `roles`
+  - أحدث الصلاحيات `permissions`
+- لا يرى staff أنشطة roles أو permissions أو access management.
+- الأدوار الأخرى لا ترى Activity Feed تشغيلي في هذه المرحلة.
+- لم يتم تغيير API contract.
+- لم يتم تعديل Frontend.
+- لم تتم إضافة migrations أو models أو packages.
+
+#### الملفات المعدلة
+
+```text
+app/Http/Controllers/Api/DashboardController.php
+tests/Feature/DashboardOverviewTest.php
+```
+
+#### نتائج التحقق
+
+```text
+DashboardOverviewTest: 10 passed / 97 assertions
+DashboardLegacyAccessControlTest: 7 passed / 30 assertions
+AccessManagementApiTest: 19 passed / 58 assertions
+git diff --check: passed
+```
+
+#### ملاحظات
+
+هذه ليست منظومة Activity Log كاملة. هي Foundation آمنة ومحدودة تعتمد فقط على الجداول المبنية فعليًا حتى الآن. بناء Activity Feed تشغيلي كامل للأعمال والطلبات والبلاغات ينتظر اكتمال مصادرها: Works / Orders / Reports / Support.
+
 ---
 
 ## 1. TECH_STACK — المعمارية النهائية المعتمدة
