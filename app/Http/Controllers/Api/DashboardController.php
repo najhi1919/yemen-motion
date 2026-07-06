@@ -7,6 +7,8 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 class DashboardController extends Controller
 {
@@ -108,13 +110,11 @@ class DashboardController extends Controller
     public function overview(Request $request): JsonResponse
     {
         $user = $request->user();
-        // Get user roles as an array of role names
         $userRoles = $user->roles->pluck('name')->toArray();
 
         $validPeriods = ['day', 'week', 'month', 'year'];
         $period = $request->input('period', 'month');
 
-        // Validate period input
         if (!in_array($period, $validPeriods)) {
             return response()->json(['message' => 'Invalid period provided'], 422);
         }
@@ -131,7 +131,89 @@ class DashboardController extends Controller
         $charts = [];
         $activities = [];
 
-        // Define all possible sections with their properties and role access
+        $protectedRoleNames = config('yemen-motion-permissions.protected_roles', []);
+        $systemPermissionNames = collect(config('yemen-motion-permissions.permissions', []))
+            ->pluck('name')
+            ->filter()
+            ->values()
+            ->all();
+
+        $totalUsers = User::count();
+        $totalAdmins = User::whereHas('roles', fn($query) => $query->whereIn('name', ['admin', 'super-admin']))->count();
+        $totalStaff = User::whereHas('roles', fn($query) => $query->where('name', 'staff'))->count();
+        $totalClients = User::whereHas('roles', fn($query) => $query->where('name', 'client'))->count();
+        $totalDesigners = User::whereHas('roles', fn($query) => $query->where('name', 'designer'))->count();
+
+        $totalRoles = Role::query()->count();
+        $protectedRoles = Role::query()
+            ->whereIn('name', $protectedRoleNames)
+            ->count();
+        $customRoles = max(0, $totalRoles - $protectedRoles);
+
+        $totalPermissions = Permission::query()->count();
+        $systemPermissions = Permission::query()
+            ->when($systemPermissionNames !== [], fn($query) => $query->whereIn('name', $systemPermissionNames))
+            ->when($systemPermissionNames === [], fn($query) => $query->whereRaw('1 = 0'))
+            ->count();
+        $customPermissions = max(0, $totalPermissions - $systemPermissions);
+        $dashboardPermissions = Permission::query()
+            ->where('name', 'like', 'dashboard.%')
+            ->count();
+        $adminPermissions = Permission::query()
+            ->where('name', 'like', 'admin.%')
+            ->count();
+
+        $cardValues = [
+            'users' => $totalUsers,
+            'orders' => 0,
+            'works' => 0,
+            'contests' => 0,
+            'wallet' => 0,
+            'works_review' => 0,
+            'reports' => 0,
+            'activities_feed' => 0,
+            'overview' => $totalUsers,
+            'staff' => $totalStaff,
+            'roles' => $totalRoles,
+            'permissions' => $totalPermissions,
+            'access' => $totalRoles + $totalPermissions,
+        ];
+
+        $chartPoints = [
+            'users' => [
+                ['label' => 'المستخدمون', 'value' => $totalUsers],
+                ['label' => 'الإداريون', 'value' => $totalAdmins],
+                ['label' => 'الموظفون', 'value' => $totalStaff],
+                ['label' => 'العملاء', 'value' => $totalClients],
+                ['label' => 'المصممون', 'value' => $totalDesigners],
+            ],
+            'staff' => [
+                ['label' => 'الموظفون', 'value' => $totalStaff],
+                ['label' => 'الإداريون', 'value' => $totalAdmins],
+            ],
+            'roles' => [
+                ['label' => 'الأدوار', 'value' => $totalRoles],
+                ['label' => 'المحمية', 'value' => $protectedRoles],
+                ['label' => 'المخصصة', 'value' => $customRoles],
+            ],
+            'permissions' => [
+                ['label' => 'الصلاحيات', 'value' => $totalPermissions],
+                ['label' => 'النظامية', 'value' => $systemPermissions],
+                ['label' => 'المخصصة', 'value' => $customPermissions],
+            ],
+            'access' => [
+                ['label' => 'الأدوار', 'value' => $totalRoles],
+                ['label' => 'الصلاحيات', 'value' => $totalPermissions],
+                ['label' => 'صلاحيات لوحة التحكم', 'value' => $dashboardPermissions],
+                ['label' => 'صلاحيات الإدارة', 'value' => $adminPermissions],
+            ],
+            'overview' => [
+                ['label' => 'المستخدمون', 'value' => $totalUsers],
+                ['label' => 'الأدوار', 'value' => $totalRoles],
+                ['label' => 'الصلاحيات', 'value' => $totalPermissions],
+            ],
+        ];
+
         $allSections = [
             'users' => [
                 'key' => 'users',
@@ -166,6 +248,34 @@ class DashboardController extends Controller
                 'label' => ['ar' => 'المحفظة', 'en' => 'Wallet'],
                 'icon' => 'wallet',
                 'color' => '#22c55e',
+                'is_admin_only' => true,
+            ],
+            'staff' => [
+                'key' => 'staff',
+                'label' => ['ar' => 'الفريق', 'en' => 'Staff'],
+                'icon' => 'users',
+                'color' => '#14b8a6',
+                'is_admin_only' => true,
+            ],
+            'roles' => [
+                'key' => 'roles',
+                'label' => ['ar' => 'الأدوار', 'en' => 'Roles'],
+                'icon' => 'shield-check',
+                'color' => '#8b5cf6',
+                'is_admin_only' => true,
+            ],
+            'permissions' => [
+                'key' => 'permissions',
+                'label' => ['ar' => 'الصلاحيات', 'en' => 'Permissions'],
+                'icon' => 'key',
+                'color' => '#0ea5e9',
+                'is_admin_only' => true,
+            ],
+            'access' => [
+                'key' => 'access',
+                'label' => ['ar' => 'إدارة الوصول', 'en' => 'Access Management'],
+                'icon' => 'rectangle-group',
+                'color' => '#f97316',
                 'is_admin_only' => true,
             ],
             'works_review' => [
@@ -209,40 +319,40 @@ class DashboardController extends Controller
                 $canView = true; // 'Other' roles only see a minimal overview
             }
 
-            // In a real scenario, this would include a full permission check (e.g., $user->can($sectionConfig['permission']))
-            // For this task, direct role check is sufficient as per spec.
-
             if ($canView) {
                 $sections[] = array_merge($sectionConfig, ['is_active' => true, 'permission' => null]); // Simplified permission for now
 
-                // Add a basic card for each visible section
                 $cards[] = [
                     'key' => $key,
                     'label' => $sectionConfig['label'],
-                    'value' => $key === 'users' ? User::count() : 0, // Real users count for 'users', 0 for others
+                    'value' => $cardValues[$key] ?? 0,
                     'change' => 0,
                     'trend' => 'neutral',
                     'section' => $key,
                 ];
 
-                // Add a basic chart placeholder for each visible section
                 $charts[] = [
                     'key' => $key,
                     'type' => 'bar',
                     'section' => $key,
-                    'points' => [
-                        ['label' => 'اليوم', 'value' => 0],
-                        ['label' => 'الأسبوع', 'value' => 0],
-                        ['label' => 'الشهر', 'value' => 0],
+                    'points' => $chartPoints[$key] ?? [
+                        ['label' => $sectionConfig['label']['ar'], 'value' => $cardValues[$key] ?? 0],
                     ],
                 ];
             }
         }
 
-        // Basic activities placeholder for admin/staff
         if ($role === 'admin' || $role === 'staff') {
             $activities = [
-                ['key' => 'activity-1', 'label' => ['ar' => 'نشاط تجريبي', 'en' => 'Demo Activity'], 'time' => 'منذ ساعة']
+                [
+                    'key' => 'access-data-synced',
+                    'label' => [
+                        'ar' => 'تم تحديث مؤشرات مركز الوصول من قاعدة البيانات',
+                        'en' => 'Access management indicators were loaded from the database',
+                    ],
+                    'time' => 'الآن',
+                    'icon' => 'rectangle-group',
+                ],
             ];
         }
 

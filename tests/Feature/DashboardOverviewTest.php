@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -56,7 +57,8 @@ class DashboardOverviewTest extends TestCase
             ])
             ->assertJson(['success' => true])
             ->assertJsonPath('data.role', 'admin')
-            ->assertJsonPath('meta.selected_period', 'month');
+            ->assertJsonPath('meta.selected_period', 'month')
+            ->assertJsonPath('meta.periods', ['day', 'week', 'month', 'year']);
 
         $sectionKeys = collect($response->json('data.sections'))->pluck('key')->toArray();
         $this->assertContains('users', $sectionKeys);
@@ -64,6 +66,40 @@ class DashboardOverviewTest extends TestCase
         $this->assertContains('works', $sectionKeys);
         $this->assertContains('contests', $sectionKeys);
         $this->assertContains('wallet', $sectionKeys);
+        $this->assertContains('staff', $sectionKeys);
+        $this->assertContains('roles', $sectionKeys);
+        $this->assertContains('permissions', $sectionKeys);
+        $this->assertContains('access', $sectionKeys);
+    }
+
+    public function test_admin_sees_real_access_metrics(): void
+    {
+        Permission::firstOrCreate(['name' => 'dashboard.overview.view', 'guard_name' => 'web']);
+        Permission::firstOrCreate(['name' => 'admin.roles.view', 'guard_name' => 'web']);
+        Permission::firstOrCreate(['name' => 'custom.reports.export', 'guard_name' => 'web']);
+        Role::firstOrCreate(['name' => 'support-agent', 'guard_name' => 'web']);
+
+        $admin = User::factory()->create();
+        $admin->assignRole('admin');
+
+        User::factory()->count(2)->create()->each(fn(User $user) => $user->assignRole('staff'));
+        User::factory()->create()->assignRole('client');
+        User::factory()->create()->assignRole('designer');
+
+        Sanctum::actingAs($admin, ['*']);
+
+        $response = $this->json('GET', '/api/dashboard/overview')
+            ->assertStatus(200);
+
+        $cards = collect($response->json('data.cards'))->keyBy('key');
+
+        $this->assertSame(User::count(), $cards->get('users')['value']);
+        $this->assertSame(
+            User::whereHas('roles', fn($query) => $query->where('name', 'staff'))->count(),
+            $cards->get('staff')['value']
+        );
+        $this->assertSame(Role::count(), $cards->get('roles')['value']);
+        $this->assertSame(Permission::count(), $cards->get('permissions')['value']);
     }
 
     public function test_authenticated_staff_gets_valid_json_shape(): void
@@ -119,6 +155,24 @@ class DashboardOverviewTest extends TestCase
         $this->assertContains('works_review', $sectionKeys);
         $this->assertContains('reports', $sectionKeys);
         $this->assertContains('activities_feed', $sectionKeys);
+    }
+
+    public function test_overview_does_not_return_fake_demo_activity(): void
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole('admin');
+        Sanctum::actingAs($admin, ['*']);
+
+        $response = $this->json('GET', '/api/dashboard/overview')
+            ->assertStatus(200);
+
+        $activityLabels = collect($response->json('data.activities'))
+            ->map(fn(array $activity) => $activity['label']['ar'] ?? null)
+            ->filter()
+            ->values()
+            ->all();
+
+        $this->assertNotContains('نشاط تجريبي', $activityLabels);
     }
 
     public function test_period_is_reflected_in_response(): void

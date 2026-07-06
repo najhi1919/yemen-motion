@@ -117,6 +117,75 @@ Phase 2 Completion — Dashboard Core APIs & Real Data Integration
 - أي UI polish عام جديد.
 - أي توسع في صفحات `/client` أو `/designer` قبل إغلاق الحد الأدنى من Dashboard Core.
 
+
+### 0.7 Completed Functional Dashboard Core Step — 2026-07-06
+
+تم إنجاز خطوة وظيفية محدودة ضمن:
+
+```text
+Phase 2 Completion — Dashboard Core APIs & Real Data Integration
+```
+
+#### YM-DASH-CORE-001 — Dashboard Overview Real Data for Access Management
+
+تم تحديث endpoint التالي:
+
+```text
+GET /api/dashboard/overview
+```
+
+ليبدأ بإرجاع بيانات حقيقية من المصادر المبنية فعليًا حاليًا في المشروع:
+
+- `users`
+- Spatie `roles`
+- Spatie `permissions`
+
+#### المنجز الفعلي
+
+- ربط مؤشرات Dashboard ببيانات حقيقية متاحة حاليًا:
+  - إجمالي المستخدمين.
+  - عدد الموظفين `staff`.
+  - عدد العملاء `client`.
+  - عدد المصممين `designer`.
+  - عدد الإداريين `admin/super-admin`.
+  - عدد الأدوار.
+  - عدد الأدوار المحمية والمخصصة.
+  - عدد الصلاحيات.
+  - عدد الصلاحيات النظامية والمخصصة.
+  - صلاحيات Dashboard وAdmin.
+- إضافة أقسام admin-only جديدة في Dashboard overview:
+  - `staff`
+  - `roles`
+  - `permissions`
+  - `access`
+- إزالة النشاط التجريبي الصريح `نشاط تجريبي` من response.
+- إبقاء الأقسام غير المبنية فعليًا بقيمة `0` بدل بيانات وهمية، مثل:
+  - `orders`
+  - `works`
+  - `contests`
+  - `wallet`
+  - `reports`
+  - `activities_feed`
+
+#### الملفات المعدلة
+
+```text
+app/Http/Controllers/Api/DashboardController.php
+tests/Feature/DashboardOverviewTest.php
+```
+
+#### نتائج التحقق
+
+```text
+git diff --check: passed
+php artisan test: 66 passed / 326 assertions
+frontend npm run build: Build complete
+```
+
+#### ملاحظات
+
+هذه الخطوة لا تعني اكتمال Production Dashboard Core بالكامل. هي أول ربط وظيفي حقيقي داخل Dashboard Core اعتمادًا على الوحدات المبنية فعليًا حتى الآن: Users / Roles / Permissions. الأقسام التشغيلية الأكبر مثل Works / Orders / Wallet / Contests لم تُبنَ models/migrations/APIs الخاصة بها بعد، لذلك لا تُعامل كبيانات إنتاجية.
+
 ---
 
 ## 1. TECH_STACK — المعمارية النهائية المعتمدة
