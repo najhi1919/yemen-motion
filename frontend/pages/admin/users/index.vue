@@ -164,23 +164,42 @@
                 />
               </td>
               <td class="ym-users-cell-roles">
-                <span v-if="!user.roles.length" class="ym-users-chip is-muted">—</span>
+                <span v-if="!user.roles.length" class="ym-users-role-empty">—</span>
                 <span
                   v-for="role in user.roles"
                   :key="role"
-                  class="ym-users-chip"
-                  :class="`is-${role}`"
+                  class="ym-users-role-icon"
+                  :style="roleIconStyle(role)"
                   :title="role"
-                >{{ role }}</span>
+                  :aria-label="role"
+                  :data-tooltip="role"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      v-for="path in roleVisual(role).paths"
+                      :key="path"
+                      :d="path"
+                    />
+                  </svg>
+                </span>
               </td>
               <td class="ym-users-cell-created">{{ formatCreatedAt(user.created_at) }}</td>
               <td class="ym-users-cell-actions">
                 <button
                   type="button"
                   class="ym-users-action-btn"
+                  :title="copy.manageRoles"
+                  :aria-label="copy.manageRoles"
+                  :data-tooltip="copy.manageRoles"
                   @click="openRoleModal(user)"
                 >
-                  {{ copy.manageRoles }}
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      v-for="path in manageRolesIconPaths"
+                      :key="path"
+                      :d="path"
+                    />
+                  </svg>
                 </button>
               </td>
             </tr>
@@ -268,7 +287,15 @@
               :value="role"
               :disabled="savingRoles || isProtectedRole(role)"
             >
-            <span>{{ role }}</span>
+            <svg class="ym-role-option__icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                v-for="path in roleVisual(role).paths"
+                :key="path"
+                :d="path"
+              />
+            </svg>
+            <span class="ym-role-option__name">{{ role }}</span>
+            <span class="ym-role-option__check" aria-hidden="true">✓</span>
           </label>
         </div>
 
@@ -334,6 +361,11 @@ type AssignRolesResponse = {
   success: boolean
   data: AdminUser
   message?: string
+}
+
+type RoleVisual = {
+  color: string
+  paths: string[]
 }
 
 type UsersSortKey = 'id' | 'name' | 'email' | 'created_at'
@@ -508,6 +540,59 @@ const summaryCards = computed(() => [
 const selectedUserIsSuperAdmin = computed(() => {
   return selectedUser.value ? isSuperAdminUser(selectedUser.value) : false
 })
+const fallbackRoleVisual: RoleVisual = {
+  color: '#38bdf8',
+  paths: [
+    'M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82Z',
+    'M7 7h.01'
+  ]
+}
+const roleVisualMap: Record<string, RoleVisual> = {
+  'super-admin': {
+    color: '#f59e0b',
+    paths: [
+      'M3 7l4.5 4L12 4l4.5 7L21 7l-2 11H5L3 7Z',
+      'M5 21h14'
+    ]
+  },
+  admin: {
+    color: '#ef4444',
+    paths: [
+      'M12 22s8-3 8-10V5l-8-3-8 3v7c0 7 8 10 8 10Z',
+      'm9 12 2 2 4-4'
+    ]
+  },
+  staff: {
+    color: '#06b6d4',
+    paths: [
+      'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2',
+      'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z',
+      'M22 21v-2a4 4 0 0 0-3-3.87',
+      'M16 3.13a4 4 0 0 1 0 7.75'
+    ]
+  },
+  client: {
+    color: '#10b981',
+    paths: [
+      'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2',
+      'M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z'
+    ]
+  },
+  designer: {
+    color: '#8b5cf6',
+    paths: [
+      'M12 2l1.55 5.2L19 9l-5.45 1.8L12 16l-1.55-5.2L5 9l5.45-1.8L12 2Z',
+      'M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z',
+      'M5 15l.7 1.8L8 17.5l-2.3.7L5 20l-.7-1.8L2 17.5l2.3-.7L5 15Z'
+    ]
+  }
+}
+const manageRolesIconPaths = [
+  'M12 22s8-3 8-10V5l-8-3-8 3v7c0 7 8 10 8 10Z',
+  'M9 12l2 2 4-4',
+  'M18.5 18.5l2.5 2.5',
+  'M19 16.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z'
+]
 function summaryCardStyle(color: string): Record<string, string> {
   return {
     '--card-accent': color
@@ -531,15 +616,17 @@ function sortIndicator(key: UsersSortKey): string {
 }
 
 function roleColor(role: string): string {
-  const colors: Record<string, string> = {
-    admin: '#ef4444',
-    staff: '#06b6d4',
-    client: '#10b981',
-    designer: '#8b5cf6',
-    'super-admin': '#f59e0b'
-  }
+  return roleVisual(role).color
+}
 
-  return colors[role] || '#38bdf8'
+function roleVisual(role: string): RoleVisual {
+  return roleVisualMap[role] || fallbackRoleVisual
+}
+
+function roleIconStyle(role: string): Record<string, string> {
+  return {
+    '--role-color': roleColor(role)
+  }
 }
 
 function isSuperAdminUser(user: AdminUser): boolean {
@@ -2317,6 +2404,302 @@ onMounted(() => {
 
 .ym-users-th-actions .ym-table-th-content {
   justify-content: center;
+}
+
+/* YM-USERS-UI-001C: role icons and clearer role assignment modal */
+.ym-users-cell-roles,
+.ym-users-cell-actions {
+  overflow: visible !important;
+}
+
+.ym-users-cell-roles {
+  line-height: 1 !important;
+  white-space: normal !important;
+}
+
+.ym-users-role-empty {
+  display: inline-flex;
+  width: 2.25rem;
+  height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  color: var(--ym-muted);
+  font-size: 18px;
+  font-weight: 950;
+}
+
+.ym-users-role-icon {
+  --role-color: #38bdf8;
+  position: relative;
+  display: inline-flex;
+  width: 2.35rem;
+  height: 2.35rem;
+  align-items: center;
+  justify-content: center;
+  margin: 0.14rem;
+  border: 1px solid color-mix(in srgb, var(--role-color) 52%, var(--ym-soft-border));
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 30% 18%, rgba(255, 255, 255, 0.38), transparent 1.2rem),
+    color-mix(in srgb, var(--role-color) 18%, var(--ym-control-bg));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--role-color) 10%, transparent),
+    0 10px 22px color-mix(in srgb, var(--role-color) 20%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  color: var(--role-color);
+  vertical-align: middle;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.ym-users-role-icon:hover {
+  border-color: color-mix(in srgb, var(--role-color) 78%, transparent);
+  background:
+    radial-gradient(circle at 30% 18%, rgba(255, 255, 255, 0.48), transparent 1.2rem),
+    color-mix(in srgb, var(--role-color) 26%, var(--ym-control-bg));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--role-color) 18%, transparent),
+    0 14px 28px color-mix(in srgb, var(--role-color) 28%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  transform: translateY(-1px);
+}
+
+.ym-users-role-icon svg,
+.ym-users-action-btn svg,
+.ym-role-option__icon {
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.ym-users-role-icon svg {
+  width: 1.12rem;
+  height: 1.12rem;
+}
+
+.ym-users-role-icon::after,
+.ym-users-action-btn::after {
+  position: absolute;
+  inset-inline-start: 50%;
+  bottom: calc(100% + 0.5rem);
+  z-index: 40;
+  width: max-content;
+  max-width: 10rem;
+  padding: 0.34rem 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--ym-text) 16%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ym-card-bg) 92%, #020617);
+  box-shadow: 0 14px 32px rgba(2, 6, 23, 0.24);
+  color: var(--ym-text);
+  content: attr(data-tooltip);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.2;
+  opacity: 0;
+  pointer-events: none;
+  text-align: center;
+  transform: translateX(-50%) translateY(0.25rem);
+  transition: opacity 140ms ease, transform 140ms ease;
+  white-space: nowrap;
+}
+
+.ym-users-role-icon:hover::after,
+.ym-users-action-btn:hover::after,
+.ym-users-role-icon:focus-visible::after,
+.ym-users-action-btn:focus-visible::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.ym-users-action-btn {
+  position: relative;
+  width: 3rem;
+  height: 3rem;
+  min-height: 3rem;
+  padding: 0;
+  border-color: color-mix(in srgb, var(--ym-section-accent) 60%, var(--ym-soft-border));
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 28% 18%, rgba(255, 255, 255, 0.34), transparent 1.5rem),
+    color-mix(in srgb, var(--ym-section-accent) 18%, var(--ym-control-bg));
+  box-shadow:
+    0 12px 28px color-mix(in srgb, var(--ym-section-accent) 18%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  color: color-mix(in srgb, var(--ym-section-accent) 86%, var(--ym-text));
+}
+
+.ym-users-action-btn svg {
+  width: 1.35rem;
+  height: 1.35rem;
+}
+
+.ym-users-action-btn:hover {
+  border-color: color-mix(in srgb, var(--ym-section-accent) 78%, transparent);
+  background:
+    radial-gradient(circle at 28% 18%, rgba(255, 255, 255, 0.44), transparent 1.5rem),
+    color-mix(in srgb, var(--ym-section-accent) 26%, var(--ym-control-bg));
+  box-shadow:
+    0 16px 34px color-mix(in srgb, var(--ym-section-accent) 26%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.ym-role-modal {
+  width: min(100%, 640px);
+  border-color: color-mix(in srgb, var(--ym-section-accent) 48%, var(--ym-card-border));
+  border-radius: 26px;
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--ym-section-accent) 20%, transparent), transparent 14rem),
+    linear-gradient(180deg, color-mix(in srgb, var(--ym-card-bg) 96%, rgba(255, 255, 255, 0.14)), var(--ym-card-bg));
+  box-shadow:
+    0 38px 100px rgba(2, 6, 23, 0.42),
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  padding: clamp(1.25rem, 3vw, 1.75rem);
+}
+
+.ym-role-modal__head {
+  gap: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.ym-role-modal__head p {
+  margin-bottom: 0.35rem;
+  color: color-mix(in srgb, var(--ym-section-accent) 70%, var(--ym-muted));
+  font-size: 14px;
+  letter-spacing: 0;
+}
+
+.ym-role-modal__head h2 {
+  font-size: clamp(1.55rem, 2.6vw, 2rem);
+  line-height: 1.18;
+}
+
+.ym-role-modal__close {
+  width: 2.8rem;
+  height: 2.8rem;
+  border-color: color-mix(in srgb, var(--ym-soft-border) 82%, var(--ym-text));
+  border-radius: 16px;
+  font-size: 26px;
+}
+
+.ym-role-modal__user {
+  gap: 0.38rem;
+  border-color: color-mix(in srgb, var(--ym-section-accent) 26%, var(--ym-soft-border));
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--ym-control-bg) 88%, rgba(255, 255, 255, 0.1)), var(--ym-control-bg));
+  padding: 1rem 1.1rem;
+}
+
+.ym-role-modal__user strong {
+  font-size: 17px;
+}
+
+.ym-role-modal__user span {
+  font-size: 14.5px;
+}
+
+.ym-role-modal__warning,
+.ym-role-modal__error {
+  margin-top: 1rem;
+  border-radius: 18px;
+  padding: 0.9rem 1rem;
+  font-size: 15px;
+}
+
+.ym-role-modal__roles {
+  gap: 0.8rem;
+  margin-top: 1.15rem;
+}
+
+.ym-role-option {
+  min-height: 3.35rem;
+  gap: 0.55rem;
+  border-width: 1.5px;
+  border-color: color-mix(in srgb, var(--role-color) 40%, var(--ym-soft-border));
+  background: color-mix(in srgb, var(--role-color) 10%, var(--ym-control-bg));
+  color: var(--ym-text);
+  font-size: 15px;
+  padding: 0 0.95rem;
+}
+
+.ym-role-option:hover {
+  border-color: color-mix(in srgb, var(--role-color) 62%, transparent);
+  background: color-mix(in srgb, var(--role-color) 16%, var(--ym-control-bg));
+  transform: translateY(-1px);
+}
+
+.ym-role-option__icon {
+  width: 1.15rem;
+  height: 1.15rem;
+  color: var(--role-color);
+}
+
+.ym-role-option__name {
+  max-width: 9.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ym-role-option__check {
+  display: inline-flex;
+  width: 1.35rem;
+  height: 1.35rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--role-color) 44%, var(--ym-soft-border));
+  border-radius: 999px;
+  color: transparent;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.ym-role-option.is-selected {
+  border-color: color-mix(in srgb, var(--role-color) 76%, transparent);
+  background:
+    radial-gradient(circle at 92% 12%, color-mix(in srgb, var(--role-color) 30%, transparent), transparent 4.5rem),
+    color-mix(in srgb, var(--role-color) 20%, var(--ym-control-bg));
+  box-shadow:
+    0 14px 30px color-mix(in srgb, var(--role-color) 18%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.ym-role-option.is-selected .ym-role-option__check {
+  background: var(--role-color);
+  color: #fff;
+}
+
+.ym-role-option.is-protected {
+  border-style: dashed;
+  opacity: 0.92;
+}
+
+.ym-role-modal__actions {
+  gap: 0.85rem;
+  margin-top: 1.45rem;
+  padding-top: 1.2rem;
+}
+
+.ym-role-modal__btn {
+  min-height: 3.1rem;
+  min-width: 7.25rem;
+  border-radius: 16px;
+  font-size: 15.5px;
+  padding: 0 1.2rem;
+}
+
+.ym-role-modal__btn.is-secondary {
+  border-color: color-mix(in srgb, var(--ym-soft-border) 84%, var(--ym-text));
+}
+
+.ym-role-modal__btn.is-primary {
+  border-color: color-mix(in srgb, var(--ym-section-accent) 76%, transparent);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--ym-section-accent) 42%, var(--ym-control-bg)), color-mix(in srgb, var(--ym-section-accent) 30%, var(--ym-control-bg)));
+  box-shadow: 0 14px 28px color-mix(in srgb, var(--ym-section-accent) 24%, transparent);
 }
 
 </style>
