@@ -26,6 +26,7 @@ Route::middleware(['auth:sanctum'])->prefix('dashboard')->group(function () {
 
 Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
     Route::get('/users', [AdminUserController::class, 'index']);
+    Route::put('/users/{user}/roles', [AdminUserController::class, 'syncRoles']);
 
     Route::get('/permissions', [AdminPermissionController::class, 'index']);
     Route::post('/permissions', [AdminPermissionController::class, 'store']);
@@ -39,4 +40,3 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
     Route::delete('/roles/{role}', [AdminRoleController::class, 'destroy']);
     Route::put('/roles/{role}/permissions', [AdminRoleController::class, 'syncPermissions']);
 });
-

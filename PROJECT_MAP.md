@@ -339,6 +339,91 @@ git diff --check: passed
 
 هذه ليست منظومة Activity Log كاملة. هي Foundation آمنة ومحدودة تعتمد فقط على الجداول المبنية فعليًا حتى الآن. بناء Activity Feed تشغيلي كامل للأعمال والطلبات والبلاغات ينتظر اكتمال مصادرها: Works / Orders / Reports / Support.
 
+
+### 0.11 Completed User Role Assignment Backend Contract — 2026-07-06
+
+تم إنجاز خطوة Backend محدودة ضمن مرحلة إدارة المستخدمين:
+
+```text
+YM-USERS-UI-001A — User Role Assignment Backend Contract
+```
+
+#### المنجز الفعلي
+
+تم إضافة endpoint آمن لتحديث أدوار المستخدمين من لوحة الإدارة لاحقًا:
+
+```text
+PUT /api/admin/users/{user}/roles
+```
+
+#### الملفات المعدلة
+
+```text
+app/Http/Controllers/Api/Admin/UserController.php
+routes/api.php
+tests/Feature/Admin/AdminUsersApiTest.php
+```
+
+#### تفاصيل التنفيذ
+
+- إضافة method جديدة داخل `UserController` باسم `syncRoles`.
+- استخدام الصلاحية الرسمية الموجودة في config:
+
+```text
+admin.users.assign_roles
+```
+
+- إبقاء `GET /api/admin/users` كما هو بدون كسر.
+- إضافة route جديد داخل prefix admin:
+
+```text
+PUT /api/admin/users/{user}/roles
+```
+
+- تحديث أدوار المستخدم يتم عبر `syncRoles` من Spatie Permissions.
+- لا يتم تعديل الاسم أو البريد أو كلمة المرور أو أي بيانات أخرى.
+- لم يتم تعديل Frontend في هذه الخطوة.
+
+#### حماية super-admin
+
+تم تطبيق قواعد الحماية التالية:
+
+- لا يستطيع non-super-admin تعديل حساب يحمل دور `super-admin`.
+- لا يستطيع non-super-admin إسناد دور `super-admin` لأي مستخدم.
+- لا يمكن إزالة دور `super-admin` من حساب super-admin حتى بواسطة super-admin نفسه عبر هذا endpoint.
+- يتم رفض محاولة إرسال role غير موجودة.
+
+#### الاختبارات المضافة
+
+تم إنشاء:
+
+```text
+tests/Feature/Admin/AdminUsersApiTest.php
+```
+
+ويغطي:
+
+- عرض المستخدمين للأدمن المصرح.
+- رفض تعديل الأدوار بدون صلاحية `admin.users.assign_roles`.
+- قدرة super-admin على تحديث أدوار مستخدم عادي.
+- منع admin من إسناد `super-admin`.
+- منع admin من تعديل حساب super-admin.
+- منع إزالة `super-admin` من حساب super-admin.
+- رفض role غير موجود.
+
+#### نتائج التحقق المستهدفة
+
+```text
+AdminUsersApiTest: 7 passed / 17 assertions
+AccessManagementApiTest: 19 passed / 58 assertions
+DashboardOverviewTest: 10 passed / 97 assertions
+git diff --check: passed
+```
+
+#### ملاحظات
+
+هذه الخطوة تبني عقد Backend فقط. واجهة `/admin/users` ما زالت قراءة فقط، وسيتم فتح خطوة Frontend لاحقة لإضافة واجهة إسناد الأدوار للمستخدمين اعتمادًا على هذا endpoint.
+
 ---
 
 ## 1. TECH_STACK — المعمارية النهائية المعتمدة

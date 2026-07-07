@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class UserController extends Controller
 {
@@ -64,6 +65,67 @@ class UserController extends Controller
             'meta' => [
                 'available_roles' => ['super-admin', 'admin', 'staff', 'client', 'designer'],
             ],
+        ]);
+    }
+
+    public function syncRoles(Request $request, User $user): JsonResponse
+    {
+        $viewer = $request->user();
+
+        if (! $viewer || ! $viewer->can('admin.users.assign_roles')) {
+            abort(403, 'غير مصرح لك بتعديل أدوار المستخدمين.');
+        }
+
+        $targetIsSuperAdmin = $user->hasRole('super-admin');
+        $viewerIsSuperAdmin = $viewer->hasRole('super-admin');
+
+        if ($targetIsSuperAdmin && ! $viewerIsSuperAdmin) {
+            abort(403, 'لا يمكن تعديل أدوار حساب المدير الأعلى.');
+        }
+
+        $validated = $request->validate([
+            'roles' => ['required', 'array', 'min:1'],
+            'roles.*' => [
+                'required',
+                'string',
+                Rule::exists('roles', 'name')->where(fn ($query) => $query->where('guard_name', 'web')),
+            ],
+        ]);
+
+        $roles = collect($validated['roles'])
+            ->unique()
+            ->values()
+            ->all();
+
+        if (in_array('super-admin', $roles, true) && ! $viewerIsSuperAdmin) {
+            abort(403, 'لا يمكن إسناد دور المدير الأعلى.');
+        }
+
+        if ($targetIsSuperAdmin && ! in_array('super-admin', $roles, true)) {
+            return response()->json([
+                'success' => false,
+                'data' => null,
+                'message' => 'لا يمكن إزالة دور المدير الأعلى من حساب المدير الأعلى.',
+                'errors' => [
+                    'roles' => ['يجب أن يبقى دور المدير الأعلى مرتبطًا بهذا المستخدم.'],
+                ],
+            ], 422);
+        }
+
+        $user->syncRoles($roles);
+        $user->load('roles:id,name');
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'roles' => $user->roles->pluck('name')->values(),
+                'created_at' => $user->created_at?->toJSON(),
+            ],
+            'message' => 'تم تحديث أدوار المستخدم بنجاح',
+            'errors' => null,
         ]);
     }
 }
