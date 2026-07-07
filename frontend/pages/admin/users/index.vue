@@ -34,6 +34,10 @@
       <p>{{ copy.readonlyNotice }}</p>
     </aside>
 
+    <aside v-if="successMessage" class="ym-users-success" role="status">
+      <p>{{ successMessage }}</p>
+    </aside>
+
     <section class="ym-summary-grid">
       <article
         v-for="card in summaryCards"
@@ -133,6 +137,11 @@
                   </button>
                 </div>
               </th>
+              <th class="ym-users-th-actions">
+                <div class="ym-table-th-content">
+                  <span>{{ copy.colActions }}</span>
+                </div>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -165,6 +174,15 @@
                 >{{ role }}</span>
               </td>
               <td class="ym-users-cell-created">{{ formatCreatedAt(user.created_at) }}</td>
+              <td class="ym-users-cell-actions">
+                <button
+                  type="button"
+                  class="ym-users-action-btn"
+                  @click="openRoleModal(user)"
+                >
+                  {{ copy.manageRoles }}
+                </button>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -191,6 +209,90 @@
         </div>
       </footer>
     </section>
+
+    <div
+      v-if="roleModalOpen && selectedUser"
+      class="ym-role-modal-backdrop"
+      role="presentation"
+      @click.self="closeRoleModal"
+    >
+      <section
+        class="ym-role-modal"
+        role="dialog"
+        aria-modal="true"
+        :aria-labelledby="'ym-role-modal-title'"
+      >
+        <header class="ym-role-modal__head">
+          <div>
+            <p>{{ copy.roleModalKicker }}</p>
+            <h2 id="ym-role-modal-title">{{ copy.roleModalTitle }}</h2>
+          </div>
+          <button
+            type="button"
+            class="ym-role-modal__close"
+            :aria-label="copy.cancel"
+            :disabled="savingRoles"
+            @click="closeRoleModal"
+          >
+            ×
+          </button>
+        </header>
+
+        <div class="ym-role-modal__user">
+          <strong :dir="textDirection(selectedUser.name)">{{ selectedUser.name }}</strong>
+          <span dir="ltr">{{ selectedUser.email }}</span>
+        </div>
+
+        <p v-if="selectedUserIsSuperAdmin" class="ym-role-modal__warning">
+          {{ copy.superAdminWarning }}
+        </p>
+
+        <p v-if="roleModalError" class="ym-role-modal__error" role="alert">
+          {{ roleModalError }}
+        </p>
+
+        <div class="ym-role-modal__roles" :aria-label="copy.availableRoles">
+          <label
+            v-for="role in availableRoles"
+            :key="role"
+            class="ym-role-option"
+            :class="{
+              'is-selected': selectedUserRoles.includes(role),
+              'is-protected': isProtectedRole(role)
+            }"
+            :style="{ '--role-color': roleColor(role) }"
+          >
+            <input
+              v-model="selectedUserRoles"
+              type="checkbox"
+              :value="role"
+              :disabled="savingRoles || isProtectedRole(role)"
+            >
+            <span>{{ role }}</span>
+          </label>
+        </div>
+
+        <footer class="ym-role-modal__actions">
+          <button
+            type="button"
+            class="ym-role-modal__btn is-secondary"
+            :disabled="savingRoles"
+            @click="closeRoleModal"
+          >
+            {{ copy.cancel }}
+          </button>
+          <button
+            type="button"
+            class="ym-role-modal__btn is-primary"
+            :disabled="savingRoles"
+            @click="saveUserRoles"
+          >
+            <span v-if="savingRoles" class="ym-role-modal__spinner" aria-hidden="true" />
+            {{ savingRoles ? copy.saving : copy.save }}
+          </button>
+        </footer>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -228,6 +330,12 @@ type AdminUsersResponse = {
   }
 }
 
+type AssignRolesResponse = {
+  success: boolean
+  data: AdminUser
+  message?: string
+}
+
 type UsersSortKey = 'id' | 'name' | 'email' | 'created_at'
 type SortDirection = 'asc' | 'desc'
 const { apiFetch } = useApiClient()
@@ -236,11 +344,11 @@ const currentLocale = useState<Locale>('ym-dashboard-locale', () => 'ar')
 const copyMap = {
   ar: {
     brandChip: 'Yemen Motion',
-    readonlyBadge: 'قراءة فقط',
+    readonlyBadge: 'إدارة أدوار',
     kicker: 'إدارة المستخدمين',
     title: 'مركز المستخدمين',
-    copy: 'امتداد تشغيلي للوحة التحكم يعرض حسابات المنصة وأدوارها دون أي إجراءات إنشاء أو تعديل أو حذف.',
-    readonlyNotice: 'هذه الصفحة مخصصة للقراءة فقط وتعرض بيانات المستخدمين دون أي إجراءات تغيير.',
+    copy: 'تعرض المستخدمين وتتيح إدارة الأدوار للمصرح لهم فقط دون إنشاء أو حذف أو تعديل بيانات المستخدم.',
+    readonlyNotice: 'تعرض المستخدمين وتتيح إدارة الأدوار للمصرح لهم فقط.',
     activeFilter: 'فلتر الدور',
     pageScope: 'الصفحة',
     allRoles: 'كل الأدوار',
@@ -264,6 +372,20 @@ const copyMap = {
     colEmail: 'البريد الإلكتروني',
     colRoles: 'الأدوار',
     colCreated: 'تاريخ الإنشاء',
+    colActions: 'الإجراءات',
+    manageRoles: 'إدارة الأدوار',
+    roleModalKicker: 'تعيين محدود',
+    roleModalTitle: 'إدارة أدوار المستخدم',
+    availableRoles: 'الأدوار المتاحة',
+    save: 'حفظ',
+    saving: 'جار الحفظ...',
+    cancel: 'إلغاء',
+    successRoles: 'تم حفظ أدوار المستخدم بنجاح.',
+    selectOneRole: 'يجب اختيار دور واحد على الأقل.',
+    forbiddenRoles: 'لا تملك صلاحية تعديل أدوار هذا المستخدم.',
+    invalidRoles: 'تعذر حفظ الأدوار. تحقق من الاختيارات.',
+    genericRolesError: 'تعذر حفظ الأدوار. حاول مرة أخرى.',
+    superAdminWarning: 'هذا حساب مدير أعلى محمي. لا يمكن إزالة دور super-admin.',
     prev: 'السابق',
     next: 'التالي',
     pageInfo: (page: number, last: number, total: number) =>
@@ -271,11 +393,11 @@ const copyMap = {
   },
   en: {
     brandChip: 'Yemen Motion',
-    readonlyBadge: 'Read-only',
+    readonlyBadge: 'Role assignment',
     kicker: 'User management',
     title: 'Users Command Center',
-    copy: 'An operational dashboard extension for viewing platform accounts and roles without create, edit, or delete actions.',
-    readonlyNotice: 'This page is read-only and displays user data without any change actions.',
+    copy: 'Displays users and allows authorized role assignment only without user create, delete, or profile edit actions.',
+    readonlyNotice: 'Displays users and allows authorized role assignment only.',
     activeFilter: 'Role filter',
     pageScope: 'Page',
     allRoles: 'All roles',
@@ -299,6 +421,20 @@ const copyMap = {
     colEmail: 'Email',
     colRoles: 'Roles',
     colCreated: 'Created at',
+    colActions: 'Actions',
+    manageRoles: 'Manage roles',
+    roleModalKicker: 'Limited assignment',
+    roleModalTitle: 'Manage user roles',
+    availableRoles: 'Available roles',
+    save: 'Save',
+    saving: 'Saving...',
+    cancel: 'Cancel',
+    successRoles: 'User roles were saved successfully.',
+    selectOneRole: 'Select at least one role.',
+    forbiddenRoles: "You do not have permission to modify this user's roles.",
+    invalidRoles: 'Could not save roles. Check your selection.',
+    genericRolesError: 'Could not save roles. Try again.',
+    superAdminWarning: 'This is a protected super-admin account. The super-admin role cannot be removed.',
     prev: 'Prev',
     next: 'Next',
     pageInfo: (page: number, last: number, total: number) =>
@@ -316,6 +452,12 @@ const selectedRole = ref('')
 const page = ref(1)
 const sortBy = ref<UsersSortKey>('id')
 const sortDirection = ref<SortDirection>('asc')
+const roleModalOpen = ref(false)
+const selectedUser = ref<AdminUser | null>(null)
+const selectedUserRoles = ref<string[]>([])
+const savingRoles = ref(false)
+const roleModalError = ref<string | null>(null)
+const successMessage = ref<string | null>(null)
 const pagination = reactive({
   current_page: 1,
   last_page: 1,
@@ -363,6 +505,9 @@ const summaryCards = computed(() => [
     color: '#f59e0b'
   }
 ])
+const selectedUserIsSuperAdmin = computed(() => {
+  return selectedUser.value ? isSuperAdminUser(selectedUser.value) : false
+})
 function summaryCardStyle(color: string): Record<string, string> {
   return {
     '--card-accent': color
@@ -390,10 +535,113 @@ function roleColor(role: string): string {
     admin: '#ef4444',
     staff: '#06b6d4',
     client: '#10b981',
-    designer: '#8b5cf6'
+    designer: '#8b5cf6',
+    'super-admin': '#f59e0b'
   }
 
   return colors[role] || '#38bdf8'
+}
+
+function isSuperAdminUser(user: AdminUser): boolean {
+  return user.roles.includes('super-admin')
+}
+
+function isProtectedRole(role: string): boolean {
+  return role === 'super-admin' && selectedUser.value !== null && isSuperAdminUser(selectedUser.value)
+}
+
+function openRoleModal(user: AdminUser): void {
+  selectedUser.value = user
+  selectedUserRoles.value = [...user.roles]
+  roleModalError.value = null
+  successMessage.value = null
+  roleModalOpen.value = true
+}
+
+function closeRoleModal(): void {
+  if (savingRoles.value) return
+
+  roleModalOpen.value = false
+  selectedUser.value = null
+  selectedUserRoles.value = []
+  roleModalError.value = null
+}
+
+function errorStatus(error: unknown): number | null {
+  if (!error || typeof error !== 'object') {
+    return null
+  }
+
+  if ('response' in error && typeof (error as { response?: { status?: unknown } }).response?.status === 'number') {
+    return (error as { response: { status: number } }).response.status
+  }
+
+  if ('statusCode' in error && typeof (error as { statusCode?: unknown }).statusCode === 'number') {
+    return (error as { statusCode: number }).statusCode
+  }
+
+  if ('status' in error && typeof (error as { status?: unknown }).status === 'number') {
+    return (error as { status: number }).status
+  }
+
+  return null
+}
+
+function roleSaveErrorMessage(status: number | null): string {
+  if (status === 403) {
+    return copy.value.forbiddenRoles
+  }
+
+  if (status === 422) {
+    return copy.value.invalidRoles
+  }
+
+  return copy.value.genericRolesError
+}
+
+async function saveUserRoles(): Promise<void> {
+  if (!selectedUser.value) return
+
+  roleModalError.value = null
+  successMessage.value = null
+
+  if (isSuperAdminUser(selectedUser.value) && !selectedUserRoles.value.includes('super-admin')) {
+    selectedUserRoles.value = [...selectedUserRoles.value, 'super-admin']
+  }
+
+  const roles = Array.from(new Set(selectedUserRoles.value))
+
+  if (!roles.length) {
+    roleModalError.value = copy.value.selectOneRole
+    return
+  }
+
+  savingRoles.value = true
+
+  try {
+    const response = await apiFetch<AssignRolesResponse>(`/admin/users/${selectedUser.value.id}/roles`, {
+      method: 'PUT',
+      body: {
+        roles
+      }
+    })
+
+    const updatedUser = response.data
+    const userIndex = users.value.findIndex(user => user.id === updatedUser.id)
+
+    if (userIndex !== -1) {
+      users.value.splice(userIndex, 1, updatedUser)
+    }
+
+    roleModalOpen.value = false
+    selectedUser.value = null
+    selectedUserRoles.value = []
+    successMessage.value = copy.value.successRoles
+  } catch (caughtError) {
+    roleModalError.value = roleSaveErrorMessage(errorStatus(caughtError))
+  } finally {
+    savingRoles.value = false
+  }
 }
 
 
@@ -728,6 +976,22 @@ onMounted(() => {
   margin: 0;
   font-size: 14px;
   font-weight: 800;
+  line-height: 1.7;
+}
+
+.ym-users-success {
+  border: 1px solid rgba(16, 185, 129, 0.34);
+  border-radius: 20px;
+  background: rgba(16, 185, 129, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  padding: 0.9rem 1rem;
+  color: #10b981;
+}
+
+.ym-users-success p {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 900;
   line-height: 1.7;
 }
 
@@ -1186,6 +1450,264 @@ onMounted(() => {
 .ym-users-page-btn:disabled {
   cursor: not-allowed;
   opacity: 0.4;
+}
+
+.ym-users-action-btn {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--ym-section-accent) 42%, var(--ym-soft-border));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--ym-section-accent) 12%, var(--ym-control-bg));
+  color: var(--ym-text);
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 950;
+  line-height: 1.2;
+  padding: 0.45rem 0.7rem;
+  text-align: center;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.ym-users-action-btn:hover {
+  border-color: color-mix(in srgb, var(--ym-section-accent) 62%, transparent);
+  background: color-mix(in srgb, var(--ym-section-accent) 18%, var(--ym-control-bg));
+  box-shadow: 0 12px 26px color-mix(in srgb, var(--ym-section-accent) 18%, transparent);
+  transform: translateY(-1px);
+}
+
+.ym-users-action-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ym-section-accent) 24%, transparent);
+}
+
+.ym-role-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  background: rgba(2, 6, 23, 0.62);
+  padding: 1rem;
+  backdrop-filter: blur(10px);
+}
+
+.ym-role-modal {
+  width: min(100%, 560px);
+  max-height: min(92vh, 720px);
+  overflow-y: auto;
+  border: 1px solid color-mix(in srgb, var(--ym-section-accent) 34%, var(--ym-card-border));
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--ym-section-accent) 16%, transparent), transparent 13rem),
+    linear-gradient(180deg, color-mix(in srgb, var(--ym-card-bg) 94%, rgba(255, 255, 255, 0.08)), var(--ym-card-bg));
+  box-shadow:
+    0 34px 90px rgba(2, 6, 23, 0.36),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  color: var(--ym-text);
+  padding: clamp(1rem, 2vw, 1.35rem);
+}
+
+.ym-role-modal__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.ym-role-modal__head p {
+  margin: 0 0 0.25rem;
+  color: var(--ym-muted);
+  font-size: 12.5px;
+  font-weight: 900;
+}
+
+.ym-role-modal__head h2 {
+  margin: 0;
+  color: var(--ym-text);
+  font-size: 20px;
+  font-weight: 950;
+  line-height: 1.25;
+}
+
+.ym-role-modal__close {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ym-soft-border);
+  border-radius: 14px;
+  background: var(--ym-control-bg);
+  color: var(--ym-text);
+  cursor: pointer;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.ym-role-modal__close:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.ym-role-modal__user {
+  display: grid;
+  gap: 0.25rem;
+  border: 1px solid color-mix(in srgb, var(--ym-soft-border) 78%, transparent);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--ym-control-bg) 78%, transparent);
+  padding: 0.85rem 0.95rem;
+}
+
+.ym-role-modal__user strong,
+.ym-role-modal__user span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ym-role-modal__user strong {
+  color: var(--ym-text);
+  font-size: 15px;
+  font-weight: 950;
+  unicode-bidi: isolate;
+}
+
+.ym-role-modal__user span {
+  color: var(--ym-muted);
+  font-size: 13px;
+  font-weight: 800;
+  text-align: left;
+  unicode-bidi: isolate;
+}
+
+.ym-role-modal__warning,
+.ym-role-modal__error {
+  margin: 0.85rem 0 0;
+  border-radius: 16px;
+  padding: 0.75rem 0.85rem;
+  font-size: 13.5px;
+  font-weight: 900;
+  line-height: 1.65;
+}
+
+.ym-role-modal__warning {
+  border: 1px solid rgba(245, 158, 11, 0.34);
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+}
+
+.ym-role-modal__error {
+  border: 1px solid rgba(239, 68, 68, 0.34);
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.ym-role-modal__roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+.ym-role-option {
+  --role-color: var(--ym-section-accent);
+  position: relative;
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--role-color) 32%, var(--ym-soft-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--role-color) 8%, transparent);
+  color: var(--ym-muted);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 950;
+  line-height: 1.2;
+  padding: 0 0.95rem;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease, opacity 160ms ease, transform 160ms ease;
+}
+
+.ym-role-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+.ym-role-option.is-selected {
+  border-color: color-mix(in srgb, var(--role-color) 64%, transparent);
+  background: color-mix(in srgb, var(--role-color) 18%, transparent);
+  color: var(--ym-text);
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--role-color) 14%, transparent);
+}
+
+.ym-role-option.is-protected {
+  cursor: not-allowed;
+  opacity: 0.86;
+}
+
+.ym-role-modal__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.7rem;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid color-mix(in srgb, var(--ym-soft-border) 72%, transparent);
+}
+
+.ym-role-modal__btn {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border-radius: 14px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 950;
+  padding: 0 1rem;
+  transition: border-color 160ms ease, background 160ms ease, opacity 160ms ease, transform 160ms ease;
+}
+
+.ym-role-modal__btn.is-secondary {
+  border: 1px solid var(--ym-soft-border);
+  background: var(--ym-control-bg);
+  color: var(--ym-text);
+}
+
+.ym-role-modal__btn.is-primary {
+  border: 1px solid color-mix(in srgb, var(--ym-section-accent) 62%, transparent);
+  background: color-mix(in srgb, var(--ym-section-accent) 28%, var(--ym-control-bg));
+  color: var(--ym-text);
+}
+
+.ym-role-modal__btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.ym-role-modal__btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ym-role-modal__spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid color-mix(in srgb, #fff 36%, transparent);
+  border-top-color: #fff;
+  border-radius: 999px;
+  animation: ym-users-spin 0.8s linear infinite;
 }
 
 @media (min-width: 768px) {
@@ -1738,6 +2260,63 @@ onMounted(() => {
   direction: ltr !important;
   text-align: left !important;
   unicode-bidi: isolate !important;
+}
+
+/* YM-USERS-UI-001B: six-column role assignment table */
+.ym-users-table {
+  min-width: 1080px !important;
+}
+
+.ym-users-table th,
+.ym-users-table td,
+.ym-users-cell-id,
+.ym-users-cell-name,
+.ym-users-cell-email,
+.ym-users-cell-roles,
+.ym-users-cell-created,
+.ym-users-cell-actions {
+  display: table-cell !important;
+}
+
+.ym-users-table th:nth-child(1),
+.ym-users-table td:nth-child(1) {
+  width: 6% !important;
+}
+
+.ym-users-table th:nth-child(2),
+.ym-users-table td:nth-child(2) {
+  width: 20% !important;
+}
+
+.ym-users-table th:nth-child(3),
+.ym-users-table td:nth-child(3) {
+  width: 24% !important;
+}
+
+.ym-users-table th:nth-child(4),
+.ym-users-table td:nth-child(4) {
+  width: 18% !important;
+}
+
+.ym-users-table th:nth-child(5),
+.ym-users-table td:nth-child(5) {
+  width: 20% !important;
+}
+
+.ym-users-table th:nth-child(6),
+.ym-users-table td:nth-child(6) {
+  width: 12% !important;
+}
+
+.ym-users-th-actions,
+.ym-users-cell-actions {
+  direction: rtl !important;
+  text-align: center !important;
+  white-space: nowrap;
+}
+
+.ym-users-th-actions .ym-table-th-content {
+  justify-content: center;
 }
 
 </style>
