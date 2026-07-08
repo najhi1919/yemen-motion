@@ -184,6 +184,14 @@
                   :dir="textDirection(user.name)"
                   v-text="truncateText(user.name, 15)"
                 />
+                <button
+                  type="button"
+                  class="ym-user-details-trigger"
+                  :aria-label="copy.details"
+                  @click.stop="openUserDetails(user)"
+                >
+                  {{ copy.details }}
+                </button>
               </td>
               <td class="ym-users-cell-email" dir="ltr">
                 <span
@@ -221,7 +229,7 @@
                   :title="copy.manageRoles"
                   :aria-label="copy.manageRoles"
                   :data-tooltip="copy.manageRoles"
-                  @click="openRoleModal(user)"
+                  @click.stop="openRoleModal(user)"
                 >
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path
@@ -258,6 +266,94 @@
         </div>
       </footer>
     </section>
+
+    <div
+      v-if="detailsDrawerOpen && selectedDetailsUser"
+      class="ym-user-details-backdrop"
+      role="presentation"
+      @click.self="closeUserDetails"
+    >
+      <section
+        class="ym-user-details-drawer"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="copy.userDetailsTitle"
+      >
+        <header class="ym-user-details-drawer__head">
+          <div>
+            <h2>{{ copy.userDetailsTitle }}</h2>
+            <p>{{ copy.userDetailsCopy }}</p>
+          </div>
+          <button
+            type="button"
+            class="ym-user-details-drawer__close"
+            :aria-label="copy.close"
+            @click="closeUserDetails"
+          >
+            ×
+          </button>
+        </header>
+
+        <dl class="ym-user-details-list">
+          <div class="ym-user-details-list__item">
+            <dt>{{ copy.userId }}</dt>
+            <dd>{{ selectedDetailsUser.id }}</dd>
+          </div>
+          <div class="ym-user-details-list__item">
+            <dt>{{ copy.detailName }}</dt>
+            <dd :dir="textDirection(selectedDetailsUser.name)">{{ selectedDetailsUser.name }}</dd>
+          </div>
+          <div class="ym-user-details-list__item">
+            <dt>{{ copy.detailEmail }}</dt>
+            <dd dir="ltr">{{ selectedDetailsUser.email }}</dd>
+          </div>
+          <div class="ym-user-details-list__item">
+            <dt>{{ copy.detailRoles }}</dt>
+            <dd>
+              <span v-if="!selectedDetailsUser.roles.length" class="ym-user-details-empty">—</span>
+              <span v-else class="ym-user-details-roles">
+                <span
+                  v-for="role in selectedDetailsUser.roles"
+                  :key="role"
+                  class="ym-user-details-role"
+                  :style="roleIconStyle(role)"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      v-for="path in roleVisual(role).paths"
+                      :key="path"
+                      :d="path"
+                    />
+                  </svg>
+                  <span>{{ role }}</span>
+                </span>
+              </span>
+            </dd>
+          </div>
+          <div class="ym-user-details-list__item">
+            <dt>{{ copy.detailCreatedAt }}</dt>
+            <dd dir="ltr">{{ formatCreatedAt(selectedDetailsUser.created_at) }}</dd>
+          </div>
+        </dl>
+
+        <footer class="ym-user-details-drawer__actions">
+          <button
+            type="button"
+            class="ym-user-details-drawer__btn is-secondary"
+            @click="closeUserDetails"
+          >
+            {{ copy.close }}
+          </button>
+          <button
+            type="button"
+            class="ym-user-details-drawer__btn is-primary"
+            @click="selectedDetailsUser && openRolesFromDetails(selectedDetailsUser)"
+          >
+            {{ copy.manageRoles }}
+          </button>
+        </footer>
+      </section>
+    </div>
 
     <div
       v-if="roleModalOpen && selectedUser"
@@ -456,6 +552,15 @@ const copyMap = {
     colRoles: 'الأدوار',
     colCreated: 'تاريخ الإنشاء',
     colActions: 'الإجراءات',
+    details: 'التفاصيل',
+    userDetailsTitle: 'تفاصيل المستخدم',
+    userDetailsCopy: 'معلومات قراءة فقط من سجل المستخدم الحالي.',
+    userId: 'رقم المستخدم',
+    detailName: 'الاسم',
+    detailEmail: 'البريد الإلكتروني',
+    detailRoles: 'الأدوار',
+    detailCreatedAt: 'تاريخ الإنشاء',
+    close: 'إغلاق',
     manageRoles: 'إدارة الأدوار',
     roleModalKicker: 'تعيين محدود',
     roleModalTitle: 'إدارة أدوار المستخدم',
@@ -517,6 +622,15 @@ const copyMap = {
     colRoles: 'Roles',
     colCreated: 'Created at',
     colActions: 'Actions',
+    details: 'Details',
+    userDetailsTitle: 'User details',
+    userDetailsCopy: 'Read-only information from the current user record.',
+    userId: 'User ID',
+    detailName: 'Name',
+    detailEmail: 'Email',
+    detailRoles: 'Roles',
+    detailCreatedAt: 'Created at',
+    close: 'Close',
     manageRoles: 'Manage roles',
     roleModalKicker: 'Limited assignment',
     roleModalTitle: 'Manage user roles',
@@ -555,6 +669,7 @@ const selectedUserRoles = ref<string[]>([])
 const savingRoles = ref(false)
 const roleModalError = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
+const selectedDetailsUser = ref<AdminUser | null>(null)
 const pagination = reactive({
   current_page: 1,
   last_page: 1,
@@ -642,6 +757,7 @@ const summaryCards = computed(() => [
 const selectedUserIsSuperAdmin = computed(() => {
   return selectedUser.value ? isSuperAdminUser(selectedUser.value) : false
 })
+const detailsDrawerOpen = computed(() => selectedDetailsUser.value !== null)
 const fallbackRoleVisual: RoleVisual = {
   color: '#38bdf8',
   paths: [
@@ -765,6 +881,19 @@ function isSuperAdminUser(user: AdminUser): boolean {
 
 function isProtectedRole(role: string): boolean {
   return role === 'super-admin' && selectedUser.value !== null && isSuperAdminUser(selectedUser.value)
+}
+
+function openUserDetails(user: AdminUser): void {
+  selectedDetailsUser.value = user
+}
+
+function closeUserDetails(): void {
+  selectedDetailsUser.value = null
+}
+
+function openRolesFromDetails(user: AdminUser): void {
+  closeUserDetails()
+  openRoleModal(user)
 }
 
 function openRoleModal(user: AdminUser): void {
@@ -2869,6 +2998,33 @@ onBeforeUnmount(() => {
   height: 1.35rem;
 }
 
+.ym-user-details-trigger {
+  display: none;
+  margin-inline-start: 0.55rem;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, #38bdf8 42%, var(--ym-soft-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, #38bdf8 10%, var(--ym-control-bg));
+  color: var(--ym-text);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 950;
+  padding: 0 0.65rem;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.ym-user-details-trigger:hover,
+.ym-user-details-trigger:focus-visible {
+  border-color: color-mix(in srgb, #38bdf8 68%, transparent);
+  background: color-mix(in srgb, #38bdf8 18%, var(--ym-control-bg));
+  outline: none;
+  transform: translateY(-1px);
+}
+
 .ym-users-action-btn:hover {
   border-color: color-mix(in srgb, var(--ym-section-accent) 78%, transparent);
   background:
@@ -3034,6 +3190,506 @@ onBeforeUnmount(() => {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--ym-section-accent) 42%, var(--ym-control-bg)), color-mix(in srgb, var(--ym-section-accent) 30%, var(--ym-control-bg)));
   box-shadow: 0 14px 28px color-mix(in srgb, var(--ym-section-accent) 24%, transparent);
+}
+
+.ym-user-details-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 78;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(2, 6, 23, 0.58);
+  padding: 0.75rem;
+  backdrop-filter: blur(10px);
+}
+
+.ym-user-details-drawer {
+  width: min(100%, 34rem);
+  max-height: min(88vh, 42rem);
+  overflow-y: auto;
+  border: 1px solid color-mix(in srgb, var(--ym-section-accent) 42%, var(--ym-card-border));
+  border-radius: 24px 24px 18px 18px;
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--ym-section-accent) 20%, transparent), transparent 13rem),
+    linear-gradient(180deg, color-mix(in srgb, var(--ym-card-bg) 96%, rgba(255, 255, 255, 0.12)), var(--ym-card-bg));
+  box-shadow:
+    0 34px 90px rgba(2, 6, 23, 0.36),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  color: var(--ym-text);
+  padding: 1rem;
+}
+
+.ym-user-details-drawer__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.ym-user-details-drawer__head h2 {
+  margin: 0;
+  color: var(--ym-text);
+  font-size: 1.35rem;
+  font-weight: 950;
+  line-height: 1.2;
+}
+
+.ym-user-details-drawer__head p {
+  margin: 0.35rem 0 0;
+  color: var(--ym-muted);
+  font-size: 13.5px;
+  font-weight: 850;
+  line-height: 1.65;
+}
+
+.ym-user-details-drawer__close {
+  display: inline-flex;
+  width: 2.7rem;
+  height: 2.7rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ym-soft-border);
+  border-radius: 15px;
+  background: var(--ym-control-bg);
+  color: var(--ym-text);
+  cursor: pointer;
+  font-size: 26px;
+  font-weight: 850;
+  line-height: 1;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.ym-user-details-drawer__close:hover,
+.ym-user-details-drawer__close:focus-visible {
+  border-color: color-mix(in srgb, var(--ym-section-accent) 58%, transparent);
+  background: color-mix(in srgb, var(--ym-section-accent) 12%, var(--ym-control-bg));
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.ym-user-details-list {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0;
+}
+
+.ym-user-details-list__item {
+  display: grid;
+  gap: 0.35rem;
+  border: 1px solid color-mix(in srgb, var(--ym-soft-border) 78%, transparent);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--ym-control-bg) 72%, transparent);
+  padding: 0.8rem 0.9rem;
+}
+
+.ym-user-details-list__item dt {
+  color: var(--ym-muted);
+  font-size: 12.5px;
+  font-weight: 900;
+}
+
+.ym-user-details-list__item dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--ym-text);
+  font-size: 15px;
+  font-weight: 950;
+  line-height: 1.55;
+  unicode-bidi: isolate;
+}
+
+.ym-user-details-list__item dd[dir="ltr"] {
+  text-align: left;
+}
+
+.ym-user-details-empty {
+  color: var(--ym-muted);
+}
+
+.ym-user-details-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.ym-user-details-role {
+  --role-color: #38bdf8;
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid color-mix(in srgb, var(--role-color) 42%, var(--ym-soft-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--role-color) 12%, var(--ym-control-bg));
+  color: var(--ym-text);
+  padding: 0.38rem 0.65rem;
+}
+
+.ym-user-details-role svg {
+  display: block;
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+  color: var(--role-color);
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.ym-user-details-role span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ym-user-details-drawer__actions {
+  display: flex;
+  gap: 0.65rem;
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid color-mix(in srgb, var(--ym-soft-border) 72%, transparent);
+}
+
+.ym-user-details-drawer__btn {
+  display: inline-flex;
+  min-height: 2.85rem;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 15px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 950;
+  padding: 0 0.9rem;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.ym-user-details-drawer__btn.is-secondary {
+  border: 1px solid var(--ym-soft-border);
+  background: var(--ym-control-bg);
+  color: var(--ym-text);
+}
+
+.ym-user-details-drawer__btn.is-primary {
+  border: 1px solid color-mix(in srgb, var(--ym-section-accent) 68%, transparent);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--ym-section-accent) 38%, var(--ym-control-bg)), color-mix(in srgb, var(--ym-section-accent) 26%, var(--ym-control-bg)));
+  color: var(--ym-text);
+  box-shadow: 0 14px 28px color-mix(in srgb, var(--ym-section-accent) 20%, transparent);
+}
+
+.ym-user-details-drawer__btn:hover,
+.ym-user-details-drawer__btn:focus-visible {
+  outline: none;
+  transform: translateY(-1px);
+}
+
+@media (min-width: 761px) {
+  .ym-user-details-backdrop {
+    display: none;
+  }
+}
+
+/* YM-USERS-UI-003: table and filters responsive polish */
+.ym-filter-card {
+  grid-template-columns: minmax(16rem, 1fr) minmax(22rem, 1.15fr) minmax(18rem, auto) !important;
+  align-items: end;
+  gap: 1rem 1.1rem;
+}
+
+.ym-filter-card > div:first-child {
+  align-self: center;
+  min-width: 0;
+}
+
+.ym-role-filter,
+.ym-date-filter {
+  min-width: 0;
+}
+
+.ym-role-filter__pills {
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.4rem;
+}
+
+.ym-role-pill {
+  min-height: 40px;
+  max-width: 100%;
+  padding-inline: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ym-date-filter {
+  justify-content: end;
+}
+
+.ym-date-filter input {
+  min-height: 38px;
+  width: 9.75rem;
+}
+
+.ym-active-filters {
+  align-items: flex-start;
+  overflow: hidden;
+}
+
+.ym-active-filters__chips {
+  flex: 999 1 18rem;
+  overflow: hidden;
+}
+
+.ym-active-filter-chip {
+  max-width: min(100%, 22rem);
+}
+
+.ym-active-filter-chip span {
+  max-width: 100%;
+}
+
+.ym-active-filter-chip strong {
+  max-width: min(12rem, 42vw);
+}
+
+.ym-active-filters__clear {
+  margin-inline-start: auto;
+  min-height: 2.15rem;
+  white-space: nowrap;
+}
+
+.ym-table-card {
+  overflow: hidden;
+}
+
+.ym-users-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+  overscroll-behavior-inline: contain;
+  scrollbar-gutter: stable;
+}
+
+.ym-users-table {
+  min-width: 1120px !important;
+}
+
+.ym-users-table tbody td {
+  padding-block: 0.72rem;
+  padding-inline: 0.82rem;
+}
+
+.ym-users-table th:nth-child(1),
+.ym-users-table td:nth-child(1) {
+  width: 5% !important;
+}
+
+.ym-users-table th:nth-child(2),
+.ym-users-table td:nth-child(2) {
+  width: 19% !important;
+}
+
+.ym-users-table th:nth-child(3),
+.ym-users-table td:nth-child(3) {
+  width: 27% !important;
+}
+
+.ym-users-table th:nth-child(4),
+.ym-users-table td:nth-child(4) {
+  width: 18% !important;
+}
+
+.ym-users-table th:nth-child(5),
+.ym-users-table td:nth-child(5) {
+  width: 19% !important;
+}
+
+.ym-users-table th:nth-child(6),
+.ym-users-table td:nth-child(6) {
+  width: 12% !important;
+}
+
+.ym-users-cell-name .ym-name-preview,
+.ym-users-cell-email .ym-email-preview {
+  max-width: 100% !important;
+  text-overflow: ellipsis !important;
+}
+
+.ym-users-cell-roles {
+  line-height: 1.15 !important;
+}
+
+.ym-users-role-icon {
+  width: 2.12rem;
+  height: 2.12rem;
+  margin: 0.1rem;
+}
+
+.ym-users-role-icon svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.ym-users-action-btn {
+  width: 2.75rem;
+  height: 2.75rem;
+  min-height: 2.75rem;
+  border-radius: 15px;
+}
+
+.ym-users-action-btn svg {
+  width: 1.24rem;
+  height: 1.24rem;
+}
+
+.ym-users-state {
+  min-height: 12rem;
+  justify-content: center;
+  border: 1px dashed color-mix(in srgb, var(--ym-soft-border) 72%, transparent);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--ym-control-bg) 44%, transparent);
+}
+
+@media (max-width: 1180px) {
+  .ym-filter-card {
+    grid-template-columns: minmax(0, 1fr) minmax(18rem, auto) !important;
+    align-items: start;
+  }
+
+  .ym-filter-card > div:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .ym-date-filter {
+    justify-content: start;
+  }
+}
+
+@media (max-width: 760px) {
+  .ym-filter-card {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 0.9rem;
+    padding: 0.95rem;
+  }
+
+  .ym-role-filter__pills {
+    border-radius: 18px;
+  }
+
+  .ym-role-pill {
+    flex: 1 1 8.5rem;
+    justify-content: center;
+    min-width: 0;
+  }
+
+  .ym-date-filter {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .ym-date-filter input {
+    width: 100%;
+  }
+
+  .ym-active-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ym-active-filters__chips {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+
+  .ym-active-filter-chip {
+    max-width: 100%;
+  }
+
+  .ym-active-filter-chip strong {
+    max-width: min(12rem, 48vw);
+  }
+
+  .ym-active-filters__clear {
+    width: 100%;
+    margin-inline-start: 0;
+  }
+
+  .ym-table-card {
+    padding: 0.95rem;
+  }
+
+  .ym-table-card__head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ym-table-card__head span {
+    width: fit-content;
+    max-width: 100%;
+  }
+
+  .ym-users-table {
+    min-width: 980px !important;
+  }
+
+  .ym-users-table thead th,
+  .ym-users-table tbody td {
+    padding-inline: 0.7rem;
+  }
+
+  .ym-user-details-trigger {
+    display: inline-flex;
+  }
+
+  .ym-users-pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ym-users-pagination__actions {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .ym-users-page-btn {
+    min-height: 44px;
+    flex: 1 1 0;
+  }
+}
+
+@media (max-width: 420px) {
+  .ym-date-filter {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ym-active-filter-chip {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .ym-active-filter-chip strong {
+    max-width: 52vw;
+  }
+
+  .ym-users-pagination__actions {
+    flex-wrap: wrap;
+  }
+
+  .ym-users-pagination__current {
+    order: -1;
+    width: 100%;
+    text-align: center;
+  }
 }
 
 </style>
