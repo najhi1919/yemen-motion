@@ -23,6 +23,11 @@ class UserController extends Controller
 
         $search = trim((string) $request->query('search', ''));
         $role = trim((string) $request->query('role', ''));
+        $request->validate([
+            'created_from' => ['nullable', 'date'],
+            'created_to' => ['nullable', 'date', 'after_or_equal:created_from'],
+        ]);
+
         $allowedSortColumns = ['id', 'name', 'email', 'created_at'];
         $allowedSortDirections = ['asc', 'desc'];
         $sortBy = (string) $request->query('sort_by', 'id');
@@ -47,6 +52,12 @@ class UserController extends Controller
             })
             ->when($role !== '', function ($query) use ($role) {
                 $query->whereHas('roles', fn ($roleQuery) => $roleQuery->where('name', $role));
+            })
+            ->when($request->filled('created_from'), function ($query) use ($request) {
+                $query->whereDate('created_at', '>=', $request->date('created_from'));
+            })
+            ->when($request->filled('created_to'), function ($query) use ($request) {
+                $query->whereDate('created_at', '<=', $request->date('created_to'));
             })
             ->orderBy($sortBy, $sortDirection)
             ->paginate($perPage);

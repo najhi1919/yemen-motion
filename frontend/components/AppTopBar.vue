@@ -12,16 +12,29 @@
       <div class="ym-topbar-actions">
         <label
           class="ym-search"
-          :aria-label="copy.searchTooltip"
-          @mouseenter="showTopbarTooltip($event, copy.searchTooltip, 'search')"
+          :aria-label="topbarSearchTooltip"
+          @mouseenter="showTopbarTooltip($event, topbarSearchTooltip, 'search')"
           @mouseleave="hideTopbarTooltip"
-          @focusin="showTopbarTooltip($event, copy.searchTooltip, 'search')"
+          @focusin="showTopbarTooltip($event, topbarSearchTooltip, 'search')"
           @focusout="hideTopbarTooltip"
         >
           <svg class="h-7 w-7 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.2-5.2M18 10.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" />
           </svg>
-          <input v-model="searchQuery" type="text" :placeholder="copy.search" />
+          <input v-model="searchQuery" type="text" :placeholder="topbarSearchPlaceholder" />
+          <button
+            v-if="searchQuery"
+            type="button"
+            class="ym-search-clear"
+            :aria-label="copy.clearSearch"
+            @mouseenter.stop="showTopbarTooltip($event, copy.clearSearch)"
+            @mouseleave.stop="hideTopbarTooltip"
+            @focus.stop="showTopbarTooltip($event, copy.clearSearch)"
+            @blur.stop="hideTopbarTooltip"
+            @click.prevent.stop="clearTopbarSearch"
+          >
+            ×
+          </button>
         </label>
 
         <div ref="notificationsRoot" class="relative">
@@ -215,8 +228,12 @@ const dashboardTheme = useState<'dark' | 'light'>('ym-dashboard-theme', () => 'd
 const isNotificationsOpen = ref(false)
 const isAccountMenuOpen = ref(false)
 const activeNotificationFilter = ref<NotificationFilter>('all')
-const searchQuery = ref('')
 const activeTooltip = ref<{ label: string; top: number; left: number } | null>(null)
+const {
+  query: searchQuery,
+  config: topbarSearchConfig,
+  clearTopbarSearch
+} = useTopbarSearch()
 
 const notificationsRoot = ref<HTMLElement | null>(null)
 const accountRoot = ref<HTMLElement | null>(null)
@@ -231,6 +248,7 @@ const dictionary = {
   ar: {
     search: 'ابحث في الطلبات، المستخدمين، البلاغات، التذاكر...',
     searchTooltip: 'البحث في المنصة',
+    clearSearch: 'مسح البحث',
     notifications: 'الإشعارات',
     notificationsHint: 'تنبيهات تشغيلية مصنفة',
     viewAll: 'عرض جميع الإشعارات',
@@ -275,6 +293,7 @@ const dictionary = {
   en: {
     search: 'Search orders, users, reports, tickets...',
     searchTooltip: 'Search the platform',
+    clearSearch: 'Clear search',
     notifications: 'Notifications',
     notificationsHint: 'Filtered operational alerts',
     viewAll: 'View all notifications',
@@ -366,6 +385,8 @@ const notifications = [
 ]
 
 const copy = computed(() => dictionary[currentLocale.value])
+const topbarSearchPlaceholder = computed(() => topbarSearchConfig.value.placeholder[currentLocale.value])
+const topbarSearchTooltip = computed(() => topbarSearchConfig.value.tooltip[currentLocale.value])
 const pageTitle = computed(() => copy.value.titles[route.path as keyof typeof copy.value.titles] || copy.value.titles['/admin'])
 const unreadCount = computed(() => notifications.filter(item => !item.read).length)
 
@@ -739,6 +760,32 @@ onBeforeUnmount(() => {
 
 .ym-search input::placeholder {
   color: var(--ym-muted);
+}
+
+.ym-search-clear {
+  display: inline-grid;
+  width: 1.8rem;
+  height: 1.8rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--ym-control-border) 78%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ym-control-bg) 72%, rgba(129, 140, 248, 0.16));
+  color: var(--ym-muted);
+  cursor: pointer;
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.ym-search-clear:hover,
+.ym-search-clear:focus-visible {
+  border-color: rgba(129, 140, 248, 0.62);
+  background: color-mix(in srgb, var(--ym-control-bg) 72%, rgba(129, 140, 248, 0.24));
+  color: var(--ym-text);
+  outline: none;
+  transform: translateY(-1px);
 }
 
 .ym-action-button,

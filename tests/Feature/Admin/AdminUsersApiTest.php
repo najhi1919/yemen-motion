@@ -70,6 +70,84 @@ class AdminUsersApiTest extends TestCase
             ]);
     }
 
+    public function test_admin_can_filter_users_by_created_date_range(): void
+    {
+        $admin = $this->userWithRole('admin', [
+            'created_at' => '2026-06-01 10:00:00',
+        ]);
+        $olderUser = $this->userWithRole('client', [
+            'name' => 'Older User',
+            'created_at' => '2026-06-25 10:00:00',
+        ]);
+        $insideUser = $this->userWithRole('client', [
+            'name' => 'Inside User',
+            'created_at' => '2026-07-04 10:00:00',
+        ]);
+        $newerUser = $this->userWithRole('client', [
+            'name' => 'Newer User',
+            'created_at' => '2026-07-12 10:00:00',
+        ]);
+
+        Sanctum::actingAs($admin, ['*']);
+
+        $response = $this->getJson('/api/admin/users?created_from=2026-07-01&created_to=2026-07-08')
+            ->assertStatus(200)
+            ->assertJsonPath('success', true);
+
+        $returnedIds = collect($response->json('data.data'))->pluck('id');
+
+        $this->assertTrue($returnedIds->contains($insideUser->id));
+        $this->assertFalse($returnedIds->contains($olderUser->id));
+        $this->assertFalse($returnedIds->contains($newerUser->id));
+        $this->assertFalse($returnedIds->contains($admin->id));
+    }
+
+    public function test_admin_users_date_filter_rejects_invalid_range(): void
+    {
+        $admin = $this->userWithRole('admin');
+
+        Sanctum::actingAs($admin, ['*']);
+
+        $this->getJson('/api/admin/users?created_from=2026-07-08&created_to=2026-07-01')
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['created_to']);
+    }
+
+    public function test_admin_can_combine_search_role_and_created_date_filters(): void
+    {
+        $admin = $this->userWithRole('admin', [
+            'created_at' => '2026-06-01 10:00:00',
+        ]);
+        $matchingUser = $this->userWithRole('designer', [
+            'name' => 'Ahmed Designer',
+            'email' => 'ahmed.designer@example.com',
+            'created_at' => '2026-07-04 10:00:00',
+        ]);
+        $wrongRoleUser = $this->userWithRole('client', [
+            'name' => 'Ahmed Client',
+            'email' => 'ahmed.client@example.com',
+            'created_at' => '2026-07-04 10:00:00',
+        ]);
+        $wrongDateUser = $this->userWithRole('designer', [
+            'name' => 'Ahmed Old Designer',
+            'email' => 'ahmed.old@example.com',
+            'created_at' => '2026-06-20 10:00:00',
+        ]);
+
+        Sanctum::actingAs($admin, ['*']);
+
+        $response = $this->getJson('/api/admin/users?search=Ahmed&role=designer&created_from=2026-07-01&created_to=2026-07-08')
+            ->assertStatus(200)
+            ->assertJsonPath('success', true);
+
+        $returnedIds = collect($response->json('data.data'))->pluck('id');
+
+        $this->assertTrue($returnedIds->contains($matchingUser->id));
+        $this->assertFalse($returnedIds->contains($wrongRoleUser->id));
+        $this->assertFalse($returnedIds->contains($wrongDateUser->id));
+        $this->assertFalse($returnedIds->contains($admin->id));
+    }
+
     public function test_user_without_manage_permission_cannot_sync_user_roles(): void
     {
         $admin = $this->userWithRole('admin');
@@ -153,9 +231,9 @@ class AdminUsersApiTest extends TestCase
         ])->assertStatus(422);
     }
 
-    private function userWithRole(string $role): User
+    private function userWithRole(string $role, array $attributes = []): User
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create($attributes);
         $user->assignRole($role);
 
         return $user;

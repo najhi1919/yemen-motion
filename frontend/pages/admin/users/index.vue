@@ -72,6 +72,36 @@
           </button>
         </div>
       </div>
+      <div class="ym-date-filter">
+        <label>
+          <span>{{ copy.createdFrom }}</span>
+          <input v-model="createdFrom" type="date">
+        </label>
+        <label>
+          <span>{{ copy.createdTo }}</span>
+          <input v-model="createdTo" type="date">
+        </label>
+        <p v-if="dateFilterError" class="ym-date-filter__error" role="alert">
+          {{ dateFilterError }}
+        </p>
+      </div>
+      <aside v-if="hasAnyActiveFilter" class="ym-active-filters" role="status">
+        <div class="ym-active-filters__chips">
+          <span
+            v-for="filter in activeFilters"
+            :key="filter.key"
+            class="ym-active-filter-chip"
+          >
+            <span>{{ filter.label }}: <strong>{{ filter.value }}</strong></span>
+            <button type="button" :aria-label="copy.clearFilter(filter.label)" @click="clearActiveFilter(filter.key)">
+              ×
+            </button>
+          </span>
+        </div>
+        <button type="button" class="ym-active-filters__clear" @click="clearAllFilters">
+          {{ copy.clearAll }}
+        </button>
+      </aside>
     </section>
 
     <section class="ym-table-card">
@@ -93,7 +123,7 @@
       </div>
 
       <div v-else-if="!users.length" class="ym-users-state">
-        <p>{{ copy.empty }}</p>
+        <p>{{ emptyStateMessage }}</p>
       </div>
 
       <div v-else class="ym-users-table-wrap">
@@ -324,7 +354,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useApiClient } from '~/composables/useApiClient'
 
 definePageMeta({ layout: 'admin' })
@@ -371,7 +401,16 @@ type RoleVisual = {
 type UsersSortKey = 'id' | 'name' | 'email' | 'created_at'
 type SortDirection = 'asc' | 'desc'
 const { apiFetch } = useApiClient()
+const {
+  query: topbarSearchQuery,
+  setTopbarSearchConfig,
+  resetTopbarSearchConfig,
+  clearTopbarSearch
+} = useTopbarSearch()
 const currentLocale = useState<Locale>('ym-dashboard-locale', () => 'ar')
+let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
+let filtersDebounceTimer: ReturnType<typeof setTimeout> | null = null
+let leavingUsersPage = false
 
 const copyMap = {
   ar: {
@@ -387,6 +426,15 @@ const copyMap = {
     filterTitle: 'فلترة إدارية مباشرة',
     filterCopy: 'اختر الدور المطلوب لتضييق العرض دون إضافة بحث نصي داخل الصفحة.',
     roleFilter: 'الدور',
+    createdFrom: 'من تاريخ',
+    createdTo: 'إلى تاريخ',
+    invalidDateRange: 'يجب أن يكون تاريخ النهاية مساويًا لتاريخ البداية أو بعده.',
+    activeSearch: 'البحث',
+    activeRole: 'الدور',
+    activeFrom: 'من',
+    activeTo: 'إلى',
+    clearAll: 'مسح الكل',
+    clearFilter: (label: string) => `مسح ${label}`,
     tableTitle: 'سجل المستخدمين',
     tableCopy: 'جدول غني داخل بطاقة مراقبة متصل بنفس endpoint الحالي.',
     totalUsers: 'إجمالي المستخدمين',
@@ -399,6 +447,9 @@ const copyMap = {
     paginationScope: 'حالة التصفح',
     loading: 'يتم تحميل المستخدمين...',
     empty: 'لا يوجد مستخدمون مطابقون.',
+    emptySearch: 'لا توجد نتائج مطابقة للبحث الحالي. جرّب تغيير كلمة البحث أو مسح البحث.',
+    emptyFilters: 'لا توجد نتائج مطابقة للفلاتر الحالية. جرّب تعديل البحث أو الدور أو التاريخ.',
+    clearSearch: 'مسح البحث',
     colId: '#',
     colName: 'الاسم',
     colEmail: 'البريد الإلكتروني',
@@ -436,6 +487,15 @@ const copyMap = {
     filterTitle: 'Direct admin filtering',
     filterCopy: 'Select a role to narrow the view through direct administrative filtering.',
     roleFilter: 'Role',
+    createdFrom: 'From date',
+    createdTo: 'To date',
+    invalidDateRange: 'The end date must be the same as or after the start date.',
+    activeSearch: 'Search',
+    activeRole: 'Role',
+    activeFrom: 'From',
+    activeTo: 'To',
+    clearAll: 'Clear all',
+    clearFilter: (label: string) => `Clear ${label}`,
     tableTitle: 'Users register',
     tableCopy: 'A rich table card connected to the current endpoint.',
     totalUsers: 'Total users',
@@ -448,6 +508,9 @@ const copyMap = {
     paginationScope: 'Pagination state',
     loading: 'Loading users...',
     empty: 'No matching users.',
+    emptySearch: 'No users match the current search. Try changing the keyword or clearing the search.',
+    emptyFilters: 'No users match the current filters. Try changing the search, role, or date range.',
+    clearSearch: 'Clear search',
     colId: '#',
     colName: 'Name',
     colEmail: 'Email',
@@ -481,6 +544,8 @@ const availableRoles = ref<string[]>(['admin', 'staff', 'client', 'designer'])
 const loading = ref(false)
 const error = ref<string | null>(null)
 const selectedRole = ref('')
+const createdFrom = ref('')
+const createdTo = ref('')
 const page = ref(1)
 const sortBy = ref<UsersSortKey>('id')
 const sortDirection = ref<SortDirection>('asc')
@@ -497,6 +562,43 @@ const pagination = reactive({
   total: 0
 })
 const selectedRoleLabel = computed(() => selectedRole.value || copy.value.allRoles)
+const activeSearchQuery = computed(() => topbarSearchQuery.value.trim())
+const hasActiveSearch = computed(() => activeSearchQuery.value !== '')
+const hasActiveRoleFilter = computed(() => selectedRole.value !== '')
+const hasActiveDateFilter = computed(() => createdFrom.value !== '' || createdTo.value !== '')
+const hasAnyActiveFilter = computed(() => hasActiveSearch.value || hasActiveRoleFilter.value || hasActiveDateFilter.value)
+const dateFilterError = computed(() => {
+  if (createdFrom.value && createdTo.value && createdFrom.value > createdTo.value) {
+    return copy.value.invalidDateRange
+  }
+
+  return ''
+})
+const activeFilters = computed(() => {
+  const filters: Array<{ key: string; label: string; value: string }> = []
+
+  if (hasActiveSearch.value) {
+    filters.push({ key: 'search', label: copy.value.activeSearch, value: activeSearchQuery.value })
+  }
+
+  if (hasActiveRoleFilter.value) {
+    filters.push({ key: 'role', label: copy.value.activeRole, value: selectedRole.value })
+  }
+
+  if (createdFrom.value) {
+    filters.push({ key: 'created_from', label: copy.value.activeFrom, value: createdFrom.value })
+  }
+
+  if (createdTo.value) {
+    filters.push({ key: 'created_to', label: copy.value.activeTo, value: createdTo.value })
+  }
+
+  return filters
+})
+const emptyStateMessage = computed(() => {
+  if (hasAnyActiveFilter.value) return copy.value.emptyFilters
+  return copy.value.empty
+})
 const roleFilterOptions = computed(() => {
   const seen = new Set<string>()
   const roles = ['admin', 'staff', 'client', 'designer', ...availableRoles.value]
@@ -627,6 +729,34 @@ function roleIconStyle(role: string): Record<string, string> {
   return {
     '--role-color': roleColor(role)
   }
+}
+
+function clearActiveFilter(key: string): void {
+  if (key === 'search') {
+    clearTopbarSearch()
+    return
+  }
+
+  if (key === 'role') {
+    selectedRole.value = ''
+    return
+  }
+
+  if (key === 'created_from') {
+    createdFrom.value = ''
+    return
+  }
+
+  if (key === 'created_to') {
+    createdTo.value = ''
+  }
+}
+
+function clearAllFilters(): void {
+  clearTopbarSearch()
+  selectedRole.value = ''
+  createdFrom.value = ''
+  createdTo.value = ''
 }
 
 function isSuperAdminUser(user: AdminUser): boolean {
@@ -766,6 +896,8 @@ function padDatePart(value: number): string {
 }
 
 async function fetchUsers(): Promise<void> {
+  if (dateFilterError.value) return
+
   loading.value = true
   error.value = null
 
@@ -775,6 +907,9 @@ async function fetchUsers(): Promise<void> {
         page: page.value,
         per_page: pagination.per_page,
         role: selectedRole.value || undefined,
+        search: activeSearchQuery.value || undefined,
+        created_from: createdFrom.value || undefined,
+        created_to: createdTo.value || undefined,
         sort_by: sortBy.value,
         sort_direction: sortDirection.value
       }
@@ -807,8 +942,56 @@ watch(selectedRole, () => {
   void fetchUsers()
 })
 
+watch(topbarSearchQuery, () => {
+  if (leavingUsersPage) return
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+
+  searchDebounceTimer = setTimeout(() => {
+    page.value = 1
+    void fetchUsers()
+  }, 350)
+})
+
+watch([createdFrom, createdTo], () => {
+  if (leavingUsersPage) return
+  if (filtersDebounceTimer) clearTimeout(filtersDebounceTimer)
+
+  filtersDebounceTimer = setTimeout(() => {
+    page.value = 1
+    void fetchUsers()
+  }, 250)
+})
+
 onMounted(() => {
+  setTopbarSearchConfig({
+    scope: 'admin-users',
+    placeholder: {
+      ar: 'ابحث في المستخدمين بالاسم أو البريد الإلكتروني',
+      en: 'Search users by name or email'
+    },
+    tooltip: {
+      ar: 'البحث في المستخدمين',
+      en: 'Search users'
+    }
+  })
   void fetchUsers()
+})
+
+onBeforeUnmount(() => {
+  leavingUsersPage = true
+
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer)
+    searchDebounceTimer = null
+  }
+
+  if (filtersDebounceTimer) {
+    clearTimeout(filtersDebounceTimer)
+    filtersDebounceTimer = null
+  }
+
+  resetTopbarSearchConfig()
+  clearTopbarSearch()
 })
 </script>
 
@@ -1238,6 +1421,157 @@ onMounted(() => {
   outline: none;
   border-color: color-mix(in srgb, var(--role-color) 68%, transparent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--role-color) 22%, transparent), 0 14px 28px color-mix(in srgb, var(--role-color) 18%, transparent);
+}
+
+.ym-date-filter {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(8.75rem, 10.25rem));
+  align-items: end;
+  gap: 0.55rem;
+  justify-content: start;
+}
+
+.ym-date-filter label {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.ym-date-filter span {
+  color: var(--ym-text);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.ym-date-filter input {
+  min-height: 38px;
+  width: 10.25rem;
+  max-width: 100%;
+  border: 1px solid color-mix(in srgb, var(--ym-section-accent) 26%, var(--ym-card-border));
+  border-radius: 12px;
+  background: var(--ym-control-bg);
+  color: var(--ym-text);
+  font-size: 13.5px;
+  font-weight: 900;
+  padding: 0 0.65rem;
+  color-scheme: dark;
+  outline: none;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.ym-dashboard-light .ym-date-filter input {
+  color-scheme: light;
+}
+
+.ym-date-filter input:focus {
+  border-color: color-mix(in srgb, var(--ym-section-accent) 58%, transparent);
+  background: color-mix(in srgb, var(--ym-section-accent) 8%, var(--ym-control-bg));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ym-section-accent) 18%, transparent);
+}
+
+.ym-date-filter__error {
+  grid-column: 1 / -1;
+  margin: 0;
+  border: 1px solid rgba(239, 68, 68, 0.36);
+  border-radius: 14px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  font-size: 13px;
+  font-weight: 900;
+  padding: 0.65rem 0.75rem;
+}
+
+.ym-active-filters {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  border: 1px solid color-mix(in srgb, #38bdf8 34%, var(--ym-soft-border));
+  border-radius: 18px;
+  background: color-mix(in srgb, #38bdf8 10%, var(--ym-control-bg));
+  padding: 0.75rem 0.85rem;
+  color: var(--ym-text);
+}
+
+.ym-active-filters__chips {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.ym-active-filter-chip {
+  display: inline-flex;
+  min-width: 0;
+  max-width: min(100%, 24rem);
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid color-mix(in srgb, #38bdf8 34%, var(--ym-soft-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, #38bdf8 9%, var(--ym-control-bg));
+  padding: 0.38rem 0.45rem 0.38rem 0.7rem;
+  color: var(--ym-muted);
+  font-size: 13.5px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.ym-active-filter-chip span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ym-active-filter-chip strong {
+  display: inline-block;
+  max-width: 13rem;
+  overflow: hidden;
+  color: var(--ym-text);
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+.ym-active-filter-chip button,
+.ym-active-filters__clear {
+  flex: 0 0 auto;
+  border: 1px solid color-mix(in srgb, #38bdf8 42%, var(--ym-soft-border));
+  background: color-mix(in srgb, #38bdf8 12%, var(--ym-control-bg));
+  color: var(--ym-text);
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.ym-active-filter-chip button {
+  display: inline-grid;
+  width: 1.35rem;
+  height: 1.35rem;
+  place-items: center;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.ym-active-filters__clear {
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 950;
+  padding: 0.42rem 0.75rem;
+}
+
+.ym-active-filter-chip button:hover,
+.ym-active-filter-chip button:focus-visible,
+.ym-active-filters__clear:hover,
+.ym-active-filters__clear:focus-visible {
+  border-color: color-mix(in srgb, #38bdf8 64%, transparent);
+  background: color-mix(in srgb, #38bdf8 18%, var(--ym-control-bg));
+  outline: none;
+  transform: translateY(-1px);
 }
 
 .ym-table-card__head {
