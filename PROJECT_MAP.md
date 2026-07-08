@@ -571,6 +571,160 @@ frontend npm run build: Build complete
 
 هذه خطوة polish بصرية فقط. تم اعتمادها مبدئيًا لأنها تحقق الغرض الحالي من ناحية تجربة المستخدم، ويمكن لاحقًا فتح refactor صغير لتنظيف أسماء CSS التاريخية مثل readonly إذا أصبح ذلك ضروريًا.
 
+
+### 0.14 Completed Users Management Page Search, Filters, Responsive Table, and Mobile Details — 2026-07-08
+
+تم إغلاق صفحة إدارة المستخدمين كواجهة مكتملة للمرحلة الحالية بعد استكمال البحث السياقي، الفلاتر المنظمة، تحسينات الجدول، وتجربة التفاصيل على المقاسات الصغيرة.
+
+هذه الخطوة تجمع ما أصبح معتمدًا بعد الخطوات السابقة:
+
+```text
+YM-USERS-UI-002 — Users Contextual Topbar Search & Structured Filters
+YM-USERS-UI-003 — Users Table Columns & Responsive Polish
+YM-USERS-FINAL-REVIEW — Users Page Closure Review
+```
+
+#### الخلاصة
+
+صفحة المستخدمين أصبحت جاهزة للإغلاق والتوثيق النهائي لهذه المرحلة.
+
+لا توجد blockers معروفة.
+
+توجد ملاحظات later cleanup فقط، ولا تمنع الاعتماد.
+
+#### النطاق المكتمل
+
+- عرض المستخدمين من endpoint الحالي.
+- إدارة أدوار المستخدمين من الواجهة.
+- حماية super-admin في Backend وFrontend.
+- عرض الأدوار داخل الجدول كأيقونات ملوّنة مع tooltip.
+- بحث سياقي من الشريط العلوي عبر `useTopbarSearch`.
+- فلترة حسب الدور.
+- فلترة حسب تاريخ إنشاء المستخدم عبر `created_from` و `created_to`.
+- عرض active filters قابلة للمسح.
+- دعم `search + role + created_from + created_to` مع pagination و sorting.
+- تحسينات responsive لمنطقة الفلاتر والجدول.
+- إبقاء horizontal scroll مضبوطًا للجدول عند الحاجة.
+- إضافة درج تفاصيل المستخدم للمقاسات الصغيرة.
+- فتح modal إدارة الأدوار من داخل درج التفاصيل باستخدام نفس منطق إدارة الأدوار، دون تكرار منطق الحفظ.
+
+#### Backend
+
+يدعم endpoint الحالي:
+
+```text
+GET /api/admin/users
+```
+
+المعاملات التالية:
+
+```text
+search
+role
+created_from
+created_to
+page
+per_page
+sort_by
+sort_direction
+```
+
+#### Date filter validation
+
+تم اعتماد validation لتاريخ إنشاء المستخدم:
+
+```text
+created_from: nullable date
+created_to: nullable date after_or_equal:created_from
+```
+
+ويتم تطبيق الفلترة عبر تاريخ `created_at` دون تغيير contract الاستجابة.
+
+#### Role assignment API
+
+يبقى endpoint إدارة الأدوار هو:
+
+```text
+PUT /api/admin/users/{user}/roles
+```
+
+ولا يزال يعتمد حماية super-admin التالية:
+
+- لا يستطيع non-super-admin إسناد دور `super-admin`.
+- لا يستطيع non-super-admin تعديل مستخدم يحمل دور `super-admin`.
+- لا يمكن إزالة دور `super-admin` من مستخدم super-admin عبر endpoint.
+- يتم رفض الأدوار غير الموجودة.
+
+#### Frontend files
+
+الملفات المرتبطة بإغلاق صفحة المستخدمين:
+
+```text
+frontend/composables/useTopbarSearch.ts
+frontend/components/AppTopBar.vue
+frontend/pages/admin/users/index.vue
+```
+
+#### Frontend behavior
+
+- `useTopbarSearch` يوفر state مشتركًا لبحث الشريط العلوي.
+- `AppTopBar` يستخدم placeholder و tooltip سياقيين حسب الصفحة واللغة.
+- صفحة المستخدمين تضبط سياق البحث عند الدخول إلى `/admin/users`.
+- صفحة المستخدمين تعيد سياق البحث إلى الوضع العام عند الخروج.
+- صفحة المستخدمين ترسل `search`, `role`, `created_from`, و `created_to` إلى API.
+- صفحة المستخدمين تعرض active filters للبحث والدور وتاريخ البداية وتاريخ النهاية.
+- يمكن مسح كل فلتر منفردًا أو مسح كل الفلاتر دفعة واحدة.
+- لا يوجد حقل بحث نصي إضافي داخل صفحة المستخدمين.
+- صفحة المستخدمين تعرض drawer تفاصيل في المقاسات الصغيرة.
+- زر إدارة الأدوار داخل drawer يستخدم نفس دالة فتح modal إدارة الأدوار.
+
+#### UX and responsive
+
+- الفلاتر موزعة بشكل متوازن على الشاشات الكبيرة.
+- الفلاتر تتكدس بشكل طبيعي على الشاشات الصغيرة.
+- active filters تلتف داخل البطاقة ولا تخرج من الحاوية.
+- جدول المستخدمين يحافظ على وضوح أعمدة الاسم والبريد والأدوار والتاريخ والإجراءات.
+- البريد الإلكتروني يتم اختصاره بصريًا عند الحاجة دون كسر التخطيط.
+- أيقونات الأدوار تدعم تعدد الأدوار داخل الصف.
+- زر إدارة الأدوار يبقى واضحًا داخل الجدول.
+- drawer التفاصيل يعرض بيانات المستخدم read-only على الهواتف والأجهزة اللوحية.
+- modal إدارة الأدوار يبقى هو مسار التعديل الوحيد للأدوار.
+
+#### Tests and verification
+
+الاختبارات المرتبطة بصفحة المستخدمين تشمل:
+
+- list users.
+- filter users by created date range.
+- reject invalid date range.
+- combine search + role + created date filters.
+- sync roles permissions and super-admin protections.
+
+آخر نتيجة تحقق معروفة:
+
+```text
+AdminUsersApiTest: 10 passed (32 assertions)
+Frontend build: Build complete
+```
+
+#### Later cleanup, not blockers
+
+- CSS في صفحة المستخدمين أصبح كبيرًا ويمكن تنظيفه لاحقًا عند استقرار بقية صفحات الإدارة.
+- `clearAllFilters` قد يؤدي إلى أكثر من watcher request محدود. السلوك صحيح حاليًا، ويمكن تحسينه لاحقًا بتجميع تحديثات الفلاتر.
+
+#### حدود الإغلاق
+
+لم تتم إضافة:
+
+```text
+إنشاء مستخدم
+حذف مستخدم
+تعديل الاسم أو البريد
+تعديل كلمة المرور
+صفحة تفاصيل مستخدم مستقلة
+API جديد للتفاصيل
+```
+
 ---
 
 ## 1. TECH_STACK — المعمارية النهائية المعتمدة
