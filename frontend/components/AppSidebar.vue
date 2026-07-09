@@ -166,8 +166,10 @@ const t = {
 }
 
 const copy = computed(() => t[currentLocale.value])
+const isSuperAdmin = computed(() => auth.role === 'super-admin')
 const isAdmin = computed(() => ['super-admin', 'admin'].includes(auth.role || ''))
 const isStaff = computed(() => auth.role === 'staff')
+const hasPermission = (permission: string) => isSuperAdmin.value || auth.permissions.includes(permission)
 
 const roleLabel = computed(() => {
   if (isAdmin.value) return copy.value.adminRole
@@ -196,38 +198,46 @@ const icons = {
 const allItems = computed(() => {
   const c = copy.value
   const items: Array<{ path?: string; label?: string; icon?: string; badge?: string; separator?: string }> = []
+  const addSection = (
+    separator: string,
+    sectionItems: Array<{ path: string; label: string; icon: string; badge?: string }>
+  ) => {
+    if (sectionItems.length === 0) return
+
+    items.push({ separator }, ...sectionItems)
+  }
 
   if (isAdmin.value) {
-    items.push(
-      { separator: c.menu },
-      { path: '/admin', label: c.home, icon: icons.home },
-      { separator: c.admin },
-      { path: '/admin/users', label: c.users, icon: icons.users },
-      { path: '/admin/staff', label: c.staff, icon: icons.briefcase },
-      { path: '/admin/roles', label: c.roles, icon: icons.shield },
-      { path: '/admin/permissions', label: c.permissions, icon: icons.shield },
-      { separator: c.content },
+    addSection(c.menu, [
+      ...(hasPermission('dashboard.overview.view') ? [{ path: '/admin', label: c.home, icon: icons.home }] : [])
+    ])
+
+    addSection(c.admin, [
+      ...(hasPermission('admin.users.view') ? [{ path: '/admin/users', label: c.users, icon: icons.users }] : []),
+      ...(isSuperAdmin.value ? [{ path: '/admin/staff', label: c.staff, icon: icons.briefcase }] : []),
+      ...(hasPermission('admin.roles.view') ? [{ path: '/admin/roles', label: c.roles, icon: icons.shield }] : []),
+      ...(hasPermission('admin.permissions.view') ? [{ path: '/admin/permissions', label: c.permissions, icon: icons.shield }] : [])
+    ])
+
+    addSection(c.content, isSuperAdmin.value ? [
       { path: '/admin/works', label: c.works, icon: icons.folder },
       { path: '/admin/orders', label: c.orders, icon: icons.cart, badge: '3' },
       { path: '/admin/bookings', label: c.bookings, icon: icons.calendar },
-      { path: '/admin/contests', label: c.contests, icon: icons.trophy },
-      { separator: c.insights },
+      { path: '/admin/contests', label: c.contests, icon: icons.trophy }
+    ] : [])
+
+    addSection(c.insights, isSuperAdmin.value ? [
       { path: '/admin/wallet', label: c.wallet, icon: icons.wallet },
       { path: '/admin/reports', label: c.reports, icon: icons.chart },
       { path: '/admin/analytics', label: c.analytics, icon: icons.chart },
       { path: '/admin/notifications', label: c.notifications, icon: icons.bell },
       { path: '/admin/flags', label: c.flags, icon: icons.flag },
       { path: '/admin/support', label: c.support, icon: icons.support }
-    )
+    ] : [])
   } else if (isStaff.value) {
-    items.push(
-      { separator: c.menu },
-      { path: '/staff', label: c.home, icon: icons.home },
-      { separator: c.tasks },
-      { path: '/staff/content', label: c.review, icon: icons.eye },
-      { path: '/staff/reports', label: c.reports, icon: icons.chart },
-      { path: '/staff/support', label: c.support, icon: icons.support }
-    )
+    addSection(c.menu, [
+      ...(hasPermission('dashboard.overview.view') ? [{ path: '/staff', label: c.home, icon: icons.home }] : [])
+    ])
   }
 
   return items
