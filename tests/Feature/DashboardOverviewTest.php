@@ -26,11 +26,15 @@ class DashboardOverviewTest extends TestCase
         $overviewPermission = Permission::firstOrCreate(['name' => 'dashboard.overview.view', 'guard_name' => 'web']);
         $adminUsersPermission = Permission::firstOrCreate(['name' => 'admin.users.view', 'guard_name' => 'web']);
         $adminRolesPermission = Permission::firstOrCreate(['name' => 'admin.roles.view', 'guard_name' => 'web']);
+        $adminPermissionsPermission = Permission::firstOrCreate(['name' => 'admin.permissions.view', 'guard_name' => 'web']);
+        $adminAccessPermission = Permission::firstOrCreate(['name' => 'admin.access.view', 'guard_name' => 'web']);
 
         Role::where('name', 'super-admin')->firstOrFail()->givePermissionTo([
             $overviewPermission,
             $adminUsersPermission,
             $adminRolesPermission,
+            $adminPermissionsPermission,
+            $adminAccessPermission,
         ]);
 
         Role::where('name', 'admin')->firstOrFail()->givePermissionTo([
@@ -108,8 +112,8 @@ class DashboardOverviewTest extends TestCase
         $this->assertContains('wallet', $sectionKeys);
         $this->assertContains('staff', $sectionKeys);
         $this->assertContains('roles', $sectionKeys);
-        $this->assertContains('permissions', $sectionKeys);
-        $this->assertContains('access', $sectionKeys);
+        $this->assertNotContains('permissions', $sectionKeys);
+        $this->assertNotContains('access', $sectionKeys);
     }
 
     public function test_authenticated_super_admin_can_access_dashboard_overview(): void
@@ -118,10 +122,21 @@ class DashboardOverviewTest extends TestCase
         $superAdmin->assignRole('super-admin');
         Sanctum::actingAs($superAdmin, ['*']);
 
-        $this->json('GET', '/api/dashboard/overview')
+        $response = $this->json('GET', '/api/dashboard/overview')
             ->assertStatus(200)
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.role', 'admin');
+
+        $sectionKeys = collect($response->json('data.sections'))->pluck('key')->toArray();
+        $cardKeys = collect($response->json('data.cards'))->pluck('key')->toArray();
+        $chartKeys = collect($response->json('data.charts'))->pluck('key')->toArray();
+
+        $this->assertContains('permissions', $sectionKeys);
+        $this->assertContains('permissions', $cardKeys);
+        $this->assertContains('permissions', $chartKeys);
+        $this->assertContains('access', $sectionKeys);
+        $this->assertContains('access', $cardKeys);
+        $this->assertContains('access', $chartKeys);
     }
 
     public function test_overview_response_includes_permission_and_live_metadata(): void
@@ -164,6 +179,10 @@ class DashboardOverviewTest extends TestCase
 
         $admin = User::factory()->create();
         $admin->assignRole('admin');
+        $admin->givePermissionTo([
+            'admin.permissions.view',
+            'admin.access.view',
+        ]);
 
         User::factory()->count(2)->create()->each(fn(User $user) => $user->assignRole('staff'));
         User::factory()->create()->assignRole('client');
@@ -183,6 +202,73 @@ class DashboardOverviewTest extends TestCase
         );
         $this->assertSame(Role::count(), $cards->get('roles')['value']);
         $this->assertSame(Permission::count(), $cards->get('permissions')['value']);
+        $this->assertSame(Role::count() + Permission::count(), $cards->get('access')['value']);
+    }
+
+    public function test_admin_without_precise_permissions_does_not_see_permissions_or_access_surfaces(): void
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole('admin');
+        Sanctum::actingAs($admin, ['*']);
+
+        $response = $this->json('GET', '/api/dashboard/overview')
+            ->assertStatus(200);
+
+        $sectionKeys = collect($response->json('data.sections'))->pluck('key')->toArray();
+        $cardKeys = collect($response->json('data.cards'))->pluck('key')->toArray();
+        $chartKeys = collect($response->json('data.charts'))->pluck('key')->toArray();
+
+        foreach (['permissions', 'access'] as $key) {
+            $this->assertNotContains($key, $sectionKeys);
+            $this->assertNotContains($key, $cardKeys);
+            $this->assertNotContains($key, $chartKeys);
+        }
+    }
+
+    public function test_admin_with_permissions_view_sees_permissions_surfaces(): void
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole('admin');
+        $admin->givePermissionTo('admin.permissions.view');
+        Sanctum::actingAs($admin, ['*']);
+
+        $response = $this->json('GET', '/api/dashboard/overview')
+            ->assertStatus(200);
+
+        $sections = collect($response->json('data.sections'))->keyBy('key');
+        $cards = collect($response->json('data.cards'))->keyBy('key');
+        $charts = collect($response->json('data.charts'))->keyBy('key');
+
+        $this->assertSame('admin.permissions.view', $sections->get('permissions')['permission']);
+        $this->assertTrue($sections->get('permissions')['can_view']);
+        $this->assertSame('admin.permissions.view', $cards->get('permissions')['permission']);
+        $this->assertSame('admin.permissions.view', $charts->get('permissions')['permission']);
+        $this->assertFalse($sections->has('access'));
+        $this->assertFalse($cards->has('access'));
+        $this->assertFalse($charts->has('access'));
+    }
+
+    public function test_admin_with_access_view_sees_access_surfaces(): void
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole('admin');
+        $admin->givePermissionTo('admin.access.view');
+        Sanctum::actingAs($admin, ['*']);
+
+        $response = $this->json('GET', '/api/dashboard/overview')
+            ->assertStatus(200);
+
+        $sections = collect($response->json('data.sections'))->keyBy('key');
+        $cards = collect($response->json('data.cards'))->keyBy('key');
+        $charts = collect($response->json('data.charts'))->keyBy('key');
+
+        $this->assertSame('admin.access.view', $sections->get('access')['permission']);
+        $this->assertTrue($sections->get('access')['can_view']);
+        $this->assertSame('admin.access.view', $cards->get('access')['permission']);
+        $this->assertSame('admin.access.view', $charts->get('access')['permission']);
+        $this->assertFalse($sections->has('permissions'));
+        $this->assertFalse($cards->has('permissions'));
+        $this->assertFalse($charts->has('permissions'));
     }
 
     public function test_authenticated_staff_gets_valid_json_shape(): void
