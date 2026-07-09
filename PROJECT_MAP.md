@@ -725,6 +725,131 @@ Frontend build: Build complete
 API جديد للتفاصيل
 ```
 
+
+### 0.15 Completed Dashboard Permission Scope and Minimal Staff Creation — 2026-07-09
+
+تم توثيق واعتماد سلسلة Dashboard permissions و minimal staff creation الحالية بعد الخطوات التالية:
+
+```text
+a125aa5 fix: restrict internal dashboard access to staff roles
+bce651c fix: use precise dashboard overview permissions
+7d4e189 fix: scope sidebar links by permissions
+912854b feat: add minimal staff creation flow
+```
+
+#### Internal Dashboard access scope
+
+لوحة التحكم الداخلية في Yemen Motion مخصصة حاليًا للأدوار الداخلية فقط:
+
+```text
+super-admin
+admin
+staff
+```
+
+ولا تُعامل كواجهة داخلية للعملاء أو المصممين أو الزوار.
+
+ضمن baseline الصلاحيات الحالي:
+
+- `client` لا يحصل افتراضيًا على `dashboard.overview.view`.
+- `designer` لا يحصل افتراضيًا على `dashboard.overview.view`.
+- `staff` يحصل على `dashboard.overview.view` للوصول إلى `/staff`.
+- `admin` يحصل على صلاحيات Dashboard و Admin الأساسية حسب baseline الحالي.
+- `super-admin` يحصل على كل الصلاحيات المسجلة وفق آلية المشروع.
+
+#### Staff behavior
+
+سلوك `staff` الحالي:
+
+- يدخل إلى `/staff` فقط داخل لوحة التحكم الداخلية.
+- تجربة الاختبار اليدوي أكدت أن محاولة فتح روابط `/admin/*` بواسطة staff تعيده إلى `/staff`.
+- لا تظهر له روابط admin في Sidebar.
+- لا يملك مسار إنشاء موظفين أو إدارة صلاحيات الإدارة.
+
+#### Admin behavior
+
+سلوك `admin` الحالي:
+
+- يرى Dashboard إداريًا محدودًا.
+- يرى في Sidebar العناصر المرتبطة بصلاحياته الحالية، ومنها:
+  - `/admin`
+  - `/admin/users`
+  - `/admin/roles`
+- لا يرى `/admin/staff` في Sidebar لأن صلاحيات `admin.staff.*` غير موجودة بعد.
+- لا يرى `/admin/permissions` في Sidebar لأنه لا يملك `admin.permissions.view` ضمن baseline الحالي.
+- فتح `/admin/staff` يدويًا بواسطة admin يعرض صفحة الموظفين بدون زر إنشاء موظف جديد.
+- فتح `/admin/permissions` يدويًا بواسطة admin يعرض منع صلاحية عرض الصلاحيات.
+
+#### Super Admin behavior
+
+سلوك `super-admin` الحالي:
+
+- يعامل كصلاحية شاملة داخل Sidebar.
+- يستطيع رؤية روابط الإدارة التي لا تظهر لـ admin محدود الصلاحيات.
+- يستطيع فتح `/admin/staff`.
+- يستطيع إنشاء حساب داخلي بدور `staff` أو `admin` من `/admin/staff` عبر modal.
+
+#### Minimal Staff Creation
+
+تمت إضافة إنشاء موظف محدود ومؤقت، وليس Staff Management كاملًا.
+
+الـ endpoint المعتمد لهذه الخطوة:
+
+```text
+POST /api/admin/staff
+```
+
+الملفات المرتبطة:
+
+```text
+app/Http/Controllers/Api/Admin/StaffController.php
+app/Http/Requests/Admin/StoreStaffRequest.php
+tests/Feature/Admin/AdminStaffApiTest.php
+frontend/pages/admin/staff/index.vue
+```
+
+سلوك الإنشاء الحالي:
+
+- الإنشاء مسموح لـ `super-admin` فقط.
+- التفويض النهائي يتم في `StoreStaffRequest::authorize()` عبر `hasRole('super-admin')`.
+- يسمح بإنشاء مستخدم داخلي بدور `staff` أو `admin` فقط.
+- يمنع إنشاء أو إسناد `super-admin` من هذا المسار.
+- يمنع إنشاء أو إسناد `client` و `designer` من هذا المسار.
+- يستخدم `password_confirmation`.
+- يخزن كلمة المرور مشفرة.
+- لا يعيد كلمة المرور في response.
+- يتم من الواجهة عبر modal بدون reload.
+- بعد النجاح يغلق modal وتظهر رسالة نجاح وتُعاد قراءة قائمة الموظفين داخل الصفحة.
+- زر إنشاء الموظف يظهر في الواجهة فقط عندما يكون `auth.role === 'super-admin'`.
+
+#### Current Dashboard permission mapping status
+
+الحالة الحالية لـ `/api/dashboard/overview`:
+
+- محمي بصلاحية `dashboard.overview.view`.
+- `permissions` section يستخدم `admin.permissions.view`.
+- `access` section يستخدم `admin.access.view`.
+- `users` section يستخدم `admin.users.view`.
+- `roles` section يستخدم `admin.roles.view`.
+- ما زالت بعض الأقسام التشغيلية غير المبنية تستخدم fallback مؤقتًا إلى `dashboard.overview.view`.
+
+#### Deferred work
+
+البنود التالية مؤجلة وليست جزءًا من minimal staff creation الحالي:
+
+```text
+Staff Management الكامل
+تعديل بيانات الموظف
+إزالة/تعطيل موظف
+صلاحيات admin.staff.view/create/update/remove
+Permission-scoped global search
+ربط كل أقسام Dashboard التشغيلية بصلاحيات دقيقة بدل fallback dashboard.overview.view
+```
+
+#### Notes
+
+هذه الحالة الحالية مقصودة كخطوة انتقالية صغيرة وآمنة. لا تعني اكتمال صفحة إدارة الموظفين، ولا تعني اكتمال Permission Map لكل أقسام Dashboard التشغيلية.
+
 ---
 
 ## 1. TECH_STACK — المعمارية النهائية المعتمدة
