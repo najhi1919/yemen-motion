@@ -34,6 +34,10 @@
       <p>{{ copy.readonlyNotice }}</p>
     </aside>
 
+    <aside v-if="successMessage" class="ym-staff-feedback is-success" role="status">
+      <p>{{ successMessage }}</p>
+    </aside>
+
     <section class="ym-summary-grid">
       <article
         v-for="card in summaryCards"
@@ -53,7 +57,17 @@
           <h2>{{ copy.tableTitle }}</h2>
           <p>{{ copy.tableCopy }}</p>
         </div>
-        <span>{{ copy.pageInfo(pagination.current_page, pagination.last_page, pagination.total) }}</span>
+        <div class="ym-table-card__actions">
+          <span>{{ copy.pageInfo(pagination.current_page, pagination.last_page, pagination.total) }}</span>
+          <button
+            v-if="canCreateStaff"
+            type="button"
+            class="ym-create-staff-button"
+            @click="openCreateStaffModal"
+          >
+            {{ copy.createStaff }}
+          </button>
+        </div>
       </div>
 
       <div v-if="loading" class="ym-staff-state">
@@ -168,12 +182,96 @@
         </div>
       </footer>
     </section>
+
+    <div
+      v-if="createModalOpen"
+      class="ym-staff-modal-backdrop"
+      role="presentation"
+      @click.self="closeCreateStaffModal"
+    >
+      <section
+        class="ym-staff-modal"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="copy.createStaff"
+      >
+        <header class="ym-staff-modal__head">
+          <div>
+            <h2>{{ copy.createStaff }}</h2>
+            <p>{{ copy.createStaffCopy }}</p>
+          </div>
+          <button
+            type="button"
+            class="ym-staff-modal__close"
+            :aria-label="copy.cancel"
+            :disabled="savingStaff"
+            @click="closeCreateStaffModal"
+          >
+            ×
+          </button>
+        </header>
+
+        <form class="ym-staff-form" @submit.prevent="submitCreateStaff">
+          <div v-if="createError" class="ym-staff-feedback is-error" role="alert">
+            <p>{{ createError }}</p>
+          </div>
+
+          <label class="ym-staff-field">
+            <span>{{ copy.formName }}</span>
+            <input v-model.trim="createForm.name" type="text" autocomplete="name" />
+            <small v-if="fieldError('name')">{{ fieldError('name') }}</small>
+          </label>
+
+          <label class="ym-staff-field">
+            <span>{{ copy.formEmail }}</span>
+            <input v-model.trim="createForm.email" type="email" dir="ltr" autocomplete="email" />
+            <small v-if="fieldError('email')">{{ fieldError('email') }}</small>
+          </label>
+
+          <label class="ym-staff-field">
+            <span>{{ copy.formPassword }}</span>
+            <input v-model="createForm.password" type="password" autocomplete="new-password" />
+            <small v-if="fieldError('password')">{{ fieldError('password') }}</small>
+          </label>
+
+          <label class="ym-staff-field">
+            <span>{{ copy.formPasswordConfirmation }}</span>
+            <input v-model="createForm.password_confirmation" type="password" autocomplete="new-password" />
+            <small v-if="fieldError('password_confirmation')">{{ fieldError('password_confirmation') }}</small>
+          </label>
+
+          <label class="ym-staff-field">
+            <span>{{ copy.formRole }}</span>
+            <select v-model="createForm.role">
+              <option value="staff">staff</option>
+              <option value="admin">admin</option>
+            </select>
+            <small v-if="fieldError('role')">{{ fieldError('role') }}</small>
+          </label>
+
+          <footer class="ym-staff-form__actions">
+            <button
+              type="button"
+              class="ym-staff-form__secondary"
+              :disabled="savingStaff"
+              @click="closeCreateStaffModal"
+            >
+              {{ copy.cancel }}
+            </button>
+            <button type="submit" class="ym-staff-form__primary" :disabled="savingStaff">
+              {{ savingStaff ? copy.saving : copy.saveStaff }}
+            </button>
+          </footer>
+        </form>
+      </section>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useApiClient } from '~/composables/useApiClient'
+import { useAuthStore } from '~/stores/authStore'
 
 definePageMeta({ layout: 'admin' })
 
@@ -202,24 +300,49 @@ type AdminStaffResponse = {
   errors?: Record<string, string[]> | null
 }
 
+type StoreStaffResponse = {
+  success: boolean
+  message?: string
+  data: {
+    user: AdminStaffUser & {
+      role: 'staff' | 'admin'
+    }
+  }
+  errors?: Record<string, string[]> | null
+}
+
 type StaffSortKey = 'id' | 'name' | 'email' | 'created_at'
 type SortDirection = 'asc' | 'desc'
+type StaffCreateRole = 'staff' | 'admin'
 
 const { apiFetch } = useApiClient()
+const auth = useAuthStore()
 const currentLocale = useState<Locale>('ym-dashboard-locale', () => 'ar')
 
 const copyMap = {
   ar: {
     brandChip: 'Yemen Motion',
-    readonlyBadge: 'قراءة فقط',
+    readonlyBadge: 'إدارة محدودة',
     kicker: 'إدارة الموظفين',
     title: 'مركز فريق العمل',
-    copy: 'عرض تشغيلي لأعضاء الفريق مرتبط بفلتر الدور الثابت staff دون أي إجراءات إنشاء أو تعديل أو حذف.',
-    readonlyNotice: 'هذه الصفحة مخصصة للقراءة فقط وتعرض مستخدمي الدور staff فقط دون أي إجراءات تغيير.',
+    copy: 'عرض تشغيلي لأعضاء الفريق مرتبط بفلتر الدور الثابت staff مع إنشاء محدود للحسابات الداخلية.',
+    readonlyNotice: 'إنشاء الموظفين متاح مؤقتًا للمدير الأعلى فقط، مع إبقاء التعديل والحذف مؤجلين لمرحلة إدارة الموظفين الكاملة.',
     fixedRole: 'الدور الثابت',
     pageScope: 'الصفحة',
     tableTitle: 'سجل الموظفين',
     tableCopy: 'جدول متابعة غني يعرض بيانات الفريق من endpoint المستخدمين الحالي مع role ثابت.',
+    createStaff: 'إنشاء موظف جديد',
+    createStaffCopy: 'أدخل بيانات الحساب واختر الدور الداخلي المسموح لهذه المرحلة.',
+    formName: 'الاسم',
+    formEmail: 'البريد الإلكتروني',
+    formPassword: 'كلمة المرور',
+    formPasswordConfirmation: 'تأكيد كلمة المرور',
+    formRole: 'الدور',
+    saveStaff: 'حفظ الموظف',
+    saving: 'جار الحفظ...',
+    cancel: 'إلغاء',
+    createSuccess: 'تم إنشاء الموظف بنجاح.',
+    createError: 'تعذر إنشاء الموظف. راجع الحقول وحاول مرة أخرى.',
     totalStaff: 'إجمالي الموظفين',
     currentPageStaff: 'في الصفحة الحالية',
     roleLabel: 'الدور',
@@ -242,15 +365,27 @@ const copyMap = {
   },
   en: {
     brandChip: 'Yemen Motion',
-    readonlyBadge: 'Read-only',
+    readonlyBadge: 'Limited management',
     kicker: 'Staff management',
     title: 'Staff Command Center',
-    copy: 'An operational view of team members using the fixed staff role filter without create, edit, or delete actions.',
-    readonlyNotice: 'This page is read-only and only lists staff-role users without any change actions.',
+    copy: 'An operational view of team members using the fixed staff role filter with limited internal account creation.',
+    readonlyNotice: 'Staff creation is temporarily limited to the super admin, while edit and delete actions remain deferred.',
     fixedRole: 'Fixed role',
     pageScope: 'Page',
     tableTitle: 'Staff register',
     tableCopy: 'A rich monitoring table served by the current users endpoint with a fixed role.',
+    createStaff: 'Create new staff',
+    createStaffCopy: 'Enter account details and choose the internal role allowed in this step.',
+    formName: 'Name',
+    formEmail: 'Email',
+    formPassword: 'Password',
+    formPasswordConfirmation: 'Confirm password',
+    formRole: 'Role',
+    saveStaff: 'Save staff',
+    saving: 'Saving...',
+    cancel: 'Cancel',
+    createSuccess: 'Staff member created successfully.',
+    createError: 'Could not create staff. Check the fields and try again.',
     totalStaff: 'Total staff',
     currentPageStaff: 'Current page staff',
     roleLabel: 'Role',
@@ -274,10 +409,23 @@ const copyMap = {
 }
 
 const copy = computed(() => copyMap[currentLocale.value])
+const canCreateStaff = computed(() => auth.role === 'super-admin')
 
 const staffUsers = ref<AdminStaffUser[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
+const successMessage = ref<string | null>(null)
+const createModalOpen = ref(false)
+const savingStaff = ref(false)
+const createError = ref<string | null>(null)
+const createFieldErrors = ref<Record<string, string[]>>({})
+const createForm = reactive({
+  name: '',
+  email: '',
+  password: '',
+  password_confirmation: '',
+  role: 'staff' as StaffCreateRole
+})
 const page = ref(1)
 const sortBy = ref<StaffSortKey>('id')
 const sortDirection = ref<SortDirection>('asc')
@@ -344,6 +492,66 @@ function formatCreatedAt(value: string | null): string {
 
 function padDatePart(value: number): string {
   return String(value).padStart(2, '0')
+}
+
+function resetCreateForm(): void {
+  createForm.name = ''
+  createForm.email = ''
+  createForm.password = ''
+  createForm.password_confirmation = ''
+  createForm.role = 'staff'
+  createError.value = null
+  createFieldErrors.value = {}
+}
+
+function openCreateStaffModal(): void {
+  if (!canCreateStaff.value) return
+
+  successMessage.value = null
+  resetCreateForm()
+  createModalOpen.value = true
+}
+
+function closeCreateStaffModal(): void {
+  if (savingStaff.value) return
+  createModalOpen.value = false
+  createError.value = null
+  createFieldErrors.value = {}
+}
+
+function fieldError(field: string): string {
+  return createFieldErrors.value[field]?.[0] ?? ''
+}
+
+async function submitCreateStaff(): Promise<void> {
+  savingStaff.value = true
+  createError.value = null
+  createFieldErrors.value = {}
+  successMessage.value = null
+
+  try {
+    const response = await apiFetch<StoreStaffResponse>('/admin/staff', {
+      method: 'POST',
+      body: {
+        name: createForm.name,
+        email: createForm.email,
+        password: createForm.password,
+        password_confirmation: createForm.password_confirmation,
+        role: createForm.role
+      }
+    })
+
+    createModalOpen.value = false
+    resetCreateForm()
+    successMessage.value = response.message || copy.value.createSuccess
+    await fetchStaff()
+  } catch (caughtError: unknown) {
+    const err = caughtError as any
+    createFieldErrors.value = err?.data?.errors ?? err?.response?._data?.errors ?? {}
+    createError.value = err?.data?.message || err?.response?._data?.message || copy.value.createError
+  } finally {
+    savingStaff.value = false
+  }
 }
 
 async function fetchStaff(): Promise<void> {
@@ -753,6 +961,198 @@ onMounted(() => {
   background: color-mix(in srgb, var(--ym-control-bg) 80%, transparent);
   padding: 0.4rem 0.75rem;
   color: var(--ym-text);
+}
+
+.ym-table-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.65rem;
+}
+
+.ym-create-staff-button,
+.ym-staff-form__primary,
+.ym-staff-form__secondary,
+.ym-staff-modal__close {
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease, opacity 160ms ease, transform 160ms ease;
+}
+
+.ym-create-staff-button,
+.ym-staff-form__primary {
+  border: 1px solid color-mix(in srgb, #06b6d4 48%, transparent);
+  border-radius: 999px;
+  background: linear-gradient(135deg, #0891b2, #06b6d4);
+  color: #fff;
+  cursor: pointer;
+  font-size: 13.5px;
+  font-weight: 950;
+  padding: 0.55rem 0.95rem;
+  box-shadow: 0 16px 34px rgba(6, 182, 212, 0.2);
+}
+
+.ym-create-staff-button:hover,
+.ym-staff-form__primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.ym-staff-feedback {
+  border: 1px solid color-mix(in srgb, #06b6d4 36%, transparent);
+  border-radius: 18px;
+  background: color-mix(in srgb, #06b6d4 12%, transparent);
+  color: var(--ym-text);
+  padding: 0.75rem 0.9rem;
+}
+
+.ym-staff-feedback p {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1.7;
+}
+
+.ym-staff-feedback.is-success {
+  border-color: color-mix(in srgb, #10b981 36%, transparent);
+  background: color-mix(in srgb, #10b981 12%, transparent);
+}
+
+.ym-staff-feedback.is-error {
+  border-color: color-mix(in srgb, #ef4444 42%, transparent);
+  background: color-mix(in srgb, #ef4444 10%, transparent);
+  color: #ef4444;
+}
+
+.ym-staff-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  background: rgba(2, 6, 23, 0.62);
+  padding: 1rem;
+  backdrop-filter: blur(10px);
+}
+
+.ym-staff-modal {
+  width: min(100%, 560px);
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  border: 1px solid var(--ym-card-border);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 90% 0%, rgba(6, 182, 212, 0.18), transparent 14rem),
+    var(--ym-card-bg);
+  box-shadow:
+    0 28px 80px rgba(2, 6, 23, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  padding: clamp(1rem, 2vw, 1.25rem);
+}
+
+.ym-staff-modal__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.ym-staff-modal__head h2 {
+  margin: 0;
+  color: var(--ym-text);
+  font-size: 20px;
+  font-weight: 950;
+}
+
+.ym-staff-modal__head p {
+  margin: 0.35rem 0 0;
+  color: var(--ym-muted);
+  font-size: 13.5px;
+  font-weight: 800;
+  line-height: 1.7;
+}
+
+.ym-staff-modal__close {
+  display: grid;
+  flex: 0 0 auto;
+  height: 2.3rem;
+  width: 2.3rem;
+  place-items: center;
+  border: 1px solid var(--ym-soft-border);
+  border-radius: 14px;
+  background: var(--ym-control-bg);
+  color: var(--ym-text);
+  cursor: pointer;
+  font-size: 1.4rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.ym-staff-form {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.ym-staff-field {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.ym-staff-field span {
+  color: var(--ym-text);
+  font-size: 13.5px;
+  font-weight: 900;
+}
+
+.ym-staff-field input,
+.ym-staff-field select {
+  width: 100%;
+  border: 1px solid var(--ym-soft-border);
+  border-radius: 16px;
+  background: var(--ym-control-bg);
+  color: var(--ym-text);
+  font-size: 14.5px;
+  font-weight: 800;
+  outline: none;
+  padding: 0.72rem 0.85rem;
+}
+
+.ym-staff-field input:focus,
+.ym-staff-field select:focus {
+  border-color: color-mix(in srgb, #06b6d4 56%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, #06b6d4 14%, transparent);
+}
+
+.ym-staff-field small {
+  color: #ef4444;
+  font-size: 12.5px;
+  font-weight: 850;
+  line-height: 1.5;
+}
+
+.ym-staff-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  margin-top: 0.25rem;
+}
+
+.ym-staff-form__secondary {
+  border: 1px solid var(--ym-soft-border);
+  border-radius: 999px;
+  background: var(--ym-control-bg);
+  color: var(--ym-text);
+  cursor: pointer;
+  font-size: 13.5px;
+  font-weight: 950;
+  padding: 0.55rem 0.95rem;
+}
+
+.ym-staff-form__primary:disabled,
+.ym-staff-form__secondary:disabled,
+.ym-staff-modal__close:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .ym-staff-state {

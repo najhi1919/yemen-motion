@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Api\Admin\RoleController as AdminRoleController;
 use App\Http\Controllers\Api\Admin\PermissionController as AdminPermissionController;
+use App\Http\Controllers\Api\Admin\StaffController as AdminStaffController;
 use App\Http\Controllers\Api\AuthApiController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -27,6 +28,7 @@ Route::middleware(['auth:sanctum'])->prefix('dashboard')->group(function () {
 Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
     Route::get('/users', [AdminUserController::class, 'index']);
     Route::put('/users/{user}/roles', [AdminUserController::class, 'syncRoles']);
+    Route::post('/staff', [AdminStaffController::class, 'store']);
 
     Route::get('/permissions', [AdminPermissionController::class, 'index']);
     Route::post('/permissions', [AdminPermissionController::class, 'store']);
