@@ -10,32 +10,82 @@
       </div>
 
       <div class="ym-topbar-actions">
-        <label
-          class="ym-search"
-          :aria-label="topbarSearchTooltip"
-          @mouseenter="showTopbarTooltip($event, topbarSearchTooltip, 'search')"
-          @mouseleave="hideTopbarTooltip"
-          @focusin="showTopbarTooltip($event, topbarSearchTooltip, 'search')"
-          @focusout="hideTopbarTooltip"
+        <div
+          ref="searchRoot"
+          class="ym-search-wrap"
+          @focusin="handleDashboardSearchFocus"
+          @focusout="handleDashboardSearchBlur"
         >
-          <svg class="h-7 w-7 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.2-5.2M18 10.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" />
-          </svg>
-          <input v-model="searchQuery" type="text" :placeholder="topbarSearchPlaceholder" />
-          <button
-            v-if="searchQuery"
-            type="button"
-            class="ym-search-clear"
-            :aria-label="copy.clearSearch"
-            @mouseenter.stop="showTopbarTooltip($event, copy.clearSearch)"
-            @mouseleave.stop="hideTopbarTooltip"
-            @focus.stop="showTopbarTooltip($event, copy.clearSearch)"
-            @blur.stop="hideTopbarTooltip"
-            @click.prevent.stop="clearTopbarSearch"
+          <label
+            class="ym-search"
+            :aria-label="topbarSearchTooltip"
+            @mouseenter="showTopbarTooltip($event, topbarSearchTooltip, 'search')"
+            @mouseleave="hideTopbarTooltip"
+            @focusin="showTopbarTooltip($event, topbarSearchTooltip, 'search')"
+            @focusout="hideTopbarTooltip"
           >
-            ×
-          </button>
-        </label>
+            <svg class="h-7 w-7 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.2-5.2M18 10.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" />
+            </svg>
+            <input
+              v-model="searchQuery"
+              type="text"
+              :placeholder="topbarSearchPlaceholder"
+              @keydown.escape.stop="closeDashboardSearchDropdown"
+            />
+            <button
+              v-if="searchQuery"
+              type="button"
+              class="ym-search-clear"
+              :aria-label="copy.clearSearch"
+              @mouseenter.stop="showTopbarTooltip($event, copy.clearSearch)"
+              @mouseleave.stop="hideTopbarTooltip"
+              @focus.stop="showTopbarTooltip($event, copy.clearSearch)"
+              @blur.stop="hideTopbarTooltip"
+              @click.prevent.stop="handleTopbarSearchClear"
+            >
+              ×
+            </button>
+          </label>
+
+          <transition
+            enter-active-class="transition ease-out duration-150"
+            enter-from-class="opacity-0 translate-y-2 scale-95"
+            enter-to-class="opacity-100 translate-y-0 scale-100"
+            leave-active-class="transition ease-in duration-100"
+            leave-from-class="opacity-100 translate-y-0 scale-100"
+            leave-to-class="opacity-0 translate-y-2 scale-95"
+          >
+            <section v-if="shouldShowDashboardSearchDropdown" class="ym-search-dropdown">
+              <div v-if="dashboardSearchLoading" class="ym-search-state">
+                <span class="ym-search-spinner" aria-hidden="true" />
+                <p>{{ copy.searching }}</p>
+              </div>
+
+              <div v-else-if="dashboardSearchError" class="ym-search-state is-error">
+                <p>{{ copy.searchFailed }}</p>
+              </div>
+
+              <div v-else-if="!dashboardSearchResults.length" class="ym-search-state">
+                <p>{{ copy.noSearchResults }}</p>
+              </div>
+
+              <div v-else class="ym-search-results">
+                <button
+                  v-for="result in dashboardSearchResults"
+                  :key="result.key"
+                  type="button"
+                  class="ym-search-result"
+                  @pointerdown.prevent="selectDashboardSearchResult(result)"
+                >
+                  <span class="ym-search-result__type">{{ dashboardSearchTypeLabel(result.type) }}</span>
+                  <strong>{{ result.title }}</strong>
+                  <small>{{ result.subtitle }}</small>
+                </button>
+              </div>
+            </section>
+          </transition>
+        </div>
 
         <div ref="notificationsRoot" class="relative">
           <button
@@ -220,21 +270,54 @@ defineProps<{ subtitle?: string }>()
 type Locale = 'ar' | 'en'
 type NotificationFilter = 'all' | 'important' | 'latest' | 'unread' | 'read'
 type TooltipAnchor = 'center' | 'search'
+type DashboardSearchResultType = 'user' | 'staff' | 'role' | 'permission' | string
+
+type DashboardSearchResult = {
+  type: DashboardSearchResultType
+  key: string
+  title: string
+  subtitle: string
+  route: string
+  permission: string
+  meta?: Record<string, unknown>
+}
+
+type DashboardSearchResponse = {
+  success: boolean
+  data: {
+    query: string
+    results: DashboardSearchResult[]
+    grouped: Record<string, DashboardSearchResult[]>
+  }
+  message?: string
+  errors?: Record<string, string[]> | null
+}
 
 const route = useRoute()
 const auth = useAuthStore()
+const { apiFetch } = useApiClient()
 const currentLocale = useState<Locale>('ym-dashboard-locale', () => 'ar')
 const dashboardTheme = useState<'dark' | 'light'>('ym-dashboard-theme', () => 'dark')
 const isNotificationsOpen = ref(false)
 const isAccountMenuOpen = ref(false)
 const activeNotificationFilter = ref<NotificationFilter>('all')
 const activeTooltip = ref<{ label: string; top: number; left: number } | null>(null)
+const dashboardSearchResults = ref<DashboardSearchResult[]>([])
+const dashboardSearchLoading = ref(false)
+const dashboardSearchError = ref(false)
+const dashboardSearchOpen = ref(false)
+const dashboardSearchHasSearched = ref(false)
+const dashboardSearchDebounceMs = 320
+let dashboardSearchTimer: ReturnType<typeof setTimeout> | null = null
+let dashboardSearchBlurTimer: ReturnType<typeof setTimeout> | null = null
+let dashboardSearchRequestId = 0
 const {
   query: searchQuery,
   config: topbarSearchConfig,
   clearTopbarSearch
 } = useTopbarSearch()
 
+const searchRoot = ref<HTMLElement | null>(null)
 const notificationsRoot = ref<HTMLElement | null>(null)
 const accountRoot = ref<HTMLElement | null>(null)
 const notificationsButton = ref<HTMLElement | null>(null)
@@ -249,6 +332,15 @@ const dictionary = {
     search: 'ابحث في الطلبات، المستخدمين، البلاغات، التذاكر...',
     searchTooltip: 'البحث في المنصة',
     clearSearch: 'مسح البحث',
+    searching: 'جاري البحث...',
+    noSearchResults: 'لا توجد نتائج متاحة',
+    searchFailed: 'تعذر تنفيذ البحث',
+    searchTypes: {
+      user: 'مستخدم',
+      staff: 'موظف',
+      role: 'دور',
+      permission: 'صلاحية'
+    },
     notifications: 'الإشعارات',
     notificationsHint: 'تنبيهات تشغيلية مصنفة',
     viewAll: 'عرض جميع الإشعارات',
@@ -294,6 +386,15 @@ const dictionary = {
     search: 'Search orders, users, reports, tickets...',
     searchTooltip: 'Search the platform',
     clearSearch: 'Clear search',
+    searching: 'Searching...',
+    noSearchResults: 'No available results',
+    searchFailed: 'Search failed',
+    searchTypes: {
+      user: 'User',
+      staff: 'Staff',
+      role: 'Role',
+      permission: 'Permission'
+    },
     notifications: 'Notifications',
     notificationsHint: 'Filtered operational alerts',
     viewAll: 'View all notifications',
@@ -389,6 +490,23 @@ const topbarSearchPlaceholder = computed(() => topbarSearchConfig.value.placehol
 const topbarSearchTooltip = computed(() => topbarSearchConfig.value.tooltip[currentLocale.value])
 const pageTitle = computed(() => copy.value.titles[route.path as keyof typeof copy.value.titles] || copy.value.titles['/admin'])
 const unreadCount = computed(() => notifications.filter(item => !item.read).length)
+const isContextualTopbarSearch = computed(() => topbarSearchConfig.value.scope !== 'platform')
+const canUseDashboardSearch = computed(() => (
+  !isContextualTopbarSearch.value
+  && (route.path.startsWith('/admin') || route.path.startsWith('/staff'))
+))
+const normalizedDashboardSearchQuery = computed(() => searchQuery.value.trim())
+const shouldShowDashboardSearchDropdown = computed(() => (
+  dashboardSearchOpen.value
+  && canUseDashboardSearch.value
+  && normalizedDashboardSearchQuery.value.length >= 2
+  && (
+    dashboardSearchLoading.value
+    || dashboardSearchError.value
+    || dashboardSearchHasSearched.value
+    || dashboardSearchResults.value.length > 0
+  )
+))
 
 const notificationFilters = computed(() => (Object.keys(copy.value.filters) as NotificationFilter[]).map(key => ({
   key,
@@ -453,6 +571,88 @@ function toggleAccountMenu() {
   void nextTick(updatePopoverPositions)
 }
 
+function resetDashboardSearchState(): void {
+  dashboardSearchResults.value = []
+  dashboardSearchLoading.value = false
+  dashboardSearchError.value = false
+  dashboardSearchHasSearched.value = false
+}
+
+function clearDashboardSearchTimer(): void {
+  if (!dashboardSearchTimer) return
+  clearTimeout(dashboardSearchTimer)
+  dashboardSearchTimer = null
+}
+
+function handleDashboardSearchFocus(): void {
+  if (dashboardSearchBlurTimer) {
+    clearTimeout(dashboardSearchBlurTimer)
+    dashboardSearchBlurTimer = null
+  }
+
+  if (canUseDashboardSearch.value && normalizedDashboardSearchQuery.value.length >= 2) {
+    dashboardSearchOpen.value = true
+  }
+}
+
+function handleDashboardSearchBlur(): void {
+  if (dashboardSearchBlurTimer) {
+    clearTimeout(dashboardSearchBlurTimer)
+  }
+
+  dashboardSearchBlurTimer = setTimeout(() => {
+    dashboardSearchOpen.value = false
+  }, 140)
+}
+
+function closeDashboardSearchDropdown(): void {
+  dashboardSearchOpen.value = false
+}
+
+function handleTopbarSearchClear(): void {
+  clearTopbarSearch()
+  closeDashboardSearchDropdown()
+  resetDashboardSearchState()
+}
+
+async function fetchDashboardSearchResults(query: string, requestId: number): Promise<void> {
+  try {
+    const response = await apiFetch<DashboardSearchResponse>('/dashboard/search', {
+      query: {
+        q: query,
+        limit: 5
+      }
+    })
+
+    if (requestId !== dashboardSearchRequestId) return
+
+    dashboardSearchResults.value = response.data.results
+    dashboardSearchError.value = false
+    dashboardSearchHasSearched.value = true
+  } catch {
+    if (requestId !== dashboardSearchRequestId) return
+
+    dashboardSearchResults.value = []
+    dashboardSearchError.value = true
+    dashboardSearchHasSearched.value = true
+  } finally {
+    if (requestId === dashboardSearchRequestId) {
+      dashboardSearchLoading.value = false
+    }
+  }
+}
+
+function dashboardSearchTypeLabel(type: DashboardSearchResultType): string {
+  const labels = copy.value.searchTypes as Record<string, string>
+  return labels[type] ?? type
+}
+
+async function selectDashboardSearchResult(result: DashboardSearchResult): Promise<void> {
+  closeDashboardSearchDropdown()
+  resetDashboardSearchState()
+  await navigateTo(result.route)
+}
+
 function buildPopoverStyle(button: HTMLElement | null, preferredWidth: number): Record<string, string> {
   if (!button || typeof window === 'undefined') return {}
 
@@ -508,8 +708,10 @@ function closeMenusForTarget(target: EventTarget | null) {
   if (!(target instanceof Node)) return
   const insideNotifications = notificationsRoot.value?.contains(target)
   const insideAccount = accountRoot.value?.contains(target)
+  const insideSearch = searchRoot.value?.contains(target)
   if (!insideNotifications) isNotificationsOpen.value = false
   if (!insideAccount) isAccountMenuOpen.value = false
+  if (!insideSearch) dashboardSearchOpen.value = false
 }
 
 function closeMenusForEscape(event: KeyboardEvent) {
@@ -517,6 +719,7 @@ function closeMenusForEscape(event: KeyboardEvent) {
     hideTopbarTooltip()
     isNotificationsOpen.value = false
     isAccountMenuOpen.value = false
+    dashboardSearchOpen.value = false
   }
 }
 
@@ -540,6 +743,36 @@ const handlePointerDown = (event: PointerEvent) => closeMenusForTarget(event.tar
 const handleKeyDown = (event: KeyboardEvent) => closeMenusForEscape(event)
 const handleViewportChange = () => updatePopoverPositions()
 
+watch(
+  () => [normalizedDashboardSearchQuery.value, canUseDashboardSearch.value] as const,
+  ([query, canSearch]) => {
+    clearDashboardSearchTimer()
+    dashboardSearchRequestId += 1
+
+    if (!canSearch || query.length < 2) {
+      resetDashboardSearchState()
+      return
+    }
+
+    dashboardSearchOpen.value = true
+    dashboardSearchLoading.value = true
+    dashboardSearchError.value = false
+    dashboardSearchHasSearched.value = false
+
+    const requestId = dashboardSearchRequestId
+    dashboardSearchTimer = setTimeout(() => {
+      void fetchDashboardSearchResults(query, requestId)
+    }, dashboardSearchDebounceMs)
+  }
+)
+
+watch(
+  () => route.fullPath,
+  () => {
+    closeDashboardSearchDropdown()
+  }
+)
+
 onMounted(() => {
   document.addEventListener('pointerdown', handlePointerDown)
   document.addEventListener('keydown', handleKeyDown)
@@ -548,6 +781,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  clearDashboardSearchTimer()
+  if (dashboardSearchBlurTimer) clearTimeout(dashboardSearchBlurTimer)
   document.removeEventListener('pointerdown', handlePointerDown)
   document.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('resize', handleViewportChange)
@@ -713,6 +948,10 @@ onBeforeUnmount(() => {
   gap: 0.6rem;
 }
 
+.ym-search-wrap {
+  position: relative;
+}
+
 .ym-search {
   display: flex;
   align-items: center;
@@ -786,6 +1025,126 @@ onBeforeUnmount(() => {
   color: var(--ym-text);
   outline: none;
   transform: translateY(-1px);
+}
+
+.ym-search-dropdown {
+  position: absolute;
+  inset-block-start: calc(100% + 0.65rem);
+  inset-inline: 0;
+  z-index: 120;
+  overflow: hidden;
+  border: 1px solid var(--ym-shell-border);
+  border-radius: 20px;
+  background: var(--ym-dropdown-bg);
+  box-shadow: 0 24px 70px rgba(2, 6, 23, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.13);
+  color: var(--ym-text);
+  transform-origin: top center;
+  backdrop-filter: blur(24px) saturate(145%);
+}
+
+.ym-search-state {
+  display: flex;
+  min-height: 5.5rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  padding: 1rem;
+  color: var(--ym-muted);
+  text-align: center;
+}
+
+.ym-search-state p {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 850;
+  line-height: 1.5;
+}
+
+.ym-search-state.is-error {
+  color: #ef4444;
+}
+
+.ym-search-spinner {
+  height: 1.25rem;
+  width: 1.25rem;
+  flex: 0 0 auto;
+  border: 2px solid color-mix(in srgb, var(--ym-muted) 30%, transparent);
+  border-top-color: #818cf8;
+  border-radius: 999px;
+  animation: ym-search-spin 0.78s linear infinite;
+}
+
+@keyframes ym-search-spin {
+  to { transform: rotate(360deg); }
+}
+
+.ym-search-results {
+  display: grid;
+  max-height: min(24rem, calc(100vh - 9rem));
+  overflow-y: auto;
+  padding: 0.45rem;
+}
+
+.ym-search-result {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.18rem 0.7rem;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  color: var(--ym-text);
+  cursor: pointer;
+  padding: 0.72rem 0.8rem;
+  text-align: start;
+  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+}
+
+.ym-search-result:hover,
+.ym-search-result:focus-visible {
+  border-color: color-mix(in srgb, #818cf8 42%, transparent);
+  background: color-mix(in srgb, #818cf8 12%, transparent);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.ym-search-result__type {
+  grid-row: span 2;
+  align-self: center;
+  min-width: 4.3rem;
+  border: 1px solid color-mix(in srgb, #818cf8 36%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, #818cf8 14%, transparent);
+  color: #a5b4fc;
+  font-size: 12px;
+  font-weight: 950;
+  line-height: 1.2;
+  padding: 0.26rem 0.55rem;
+  text-align: center;
+}
+
+.ym-search-result strong,
+.ym-search-result small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ym-search-result strong {
+  font-size: 14px;
+  font-weight: 950;
+  line-height: 1.35;
+}
+
+.ym-search-result small {
+  color: var(--ym-muted);
+  direction: ltr;
+  font-size: 12.5px;
+  font-weight: 800;
+  line-height: 1.4;
+  text-align: start;
+  unicode-bidi: isolate;
 }
 
 .ym-action-button,
