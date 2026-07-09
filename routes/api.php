@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\Admin\RoleController as AdminRoleController;
 use App\Http\Controllers\Api\Admin\PermissionController as AdminPermissionController;
 use App\Http\Controllers\Api\Admin\StaffController as AdminStaffController;
 use App\Http\Controllers\Api\AuthApiController;
+use App\Http\Controllers\Api\DashboardSearchController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -23,6 +24,7 @@ Route::middleware(['auth:sanctum'])->prefix('dashboard')->group(function () {
     Route::get('/activity', [\App\Http\Controllers\Api\DashboardController::class, 'activity']);
     Route::get('/chart', [\App\Http\Controllers\Api\DashboardController::class, 'chart']);
     Route::get('/overview', [\App\Http\Controllers\Api\DashboardController::class, 'overview']);
+    Route::get('/search', DashboardSearchController::class);
 });
 
 Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
