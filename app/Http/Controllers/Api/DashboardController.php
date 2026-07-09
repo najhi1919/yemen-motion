@@ -109,6 +109,8 @@ class DashboardController extends Controller
 
     public function overview(Request $request): JsonResponse
     {
+        $this->authorizeDashboardPermission($request, 'dashboard.overview.view');
+
         $user = $request->user();
         $userRoles = $user->roles->pluck('name')->toArray();
 
@@ -214,6 +216,7 @@ class DashboardController extends Controller
             ],
         ];
 
+        // Fallback to dashboard.overview.view until module-specific dashboard permissions exist.
         $allSections = [
             'users' => [
                 'key' => 'users',
@@ -221,6 +224,9 @@ class DashboardController extends Controller
                 'icon' => 'user-group',
                 'color' => '#10b981',
                 'is_admin_only' => true,
+                'permission' => 'admin.users.view',
+                'is_live' => true,
+                'is_placeholder' => false,
             ],
             'orders' => [
                 'key' => 'orders',
@@ -228,6 +234,9 @@ class DashboardController extends Controller
                 'icon' => 'shopping-cart',
                 'color' => '#6366f1',
                 'is_admin_only' => true,
+                'permission' => 'dashboard.overview.view',
+                'is_live' => false,
+                'is_placeholder' => true,
             ],
             'works' => [
                 'key' => 'works',
@@ -235,6 +244,9 @@ class DashboardController extends Controller
                 'icon' => 'briefcase',
                 'color' => '#3b82f6',
                 'is_admin_only' => true,
+                'permission' => 'dashboard.overview.view',
+                'is_live' => false,
+                'is_placeholder' => true,
             ],
             'contests' => [
                 'key' => 'contests',
@@ -242,6 +254,9 @@ class DashboardController extends Controller
                 'icon' => 'trophy',
                 'color' => '#8b5cf6',
                 'is_admin_only' => true,
+                'permission' => 'dashboard.overview.view',
+                'is_live' => false,
+                'is_placeholder' => true,
             ],
             'wallet' => [
                 'key' => 'wallet',
@@ -249,6 +264,9 @@ class DashboardController extends Controller
                 'icon' => 'wallet',
                 'color' => '#22c55e',
                 'is_admin_only' => true,
+                'permission' => 'dashboard.overview.view',
+                'is_live' => false,
+                'is_placeholder' => true,
             ],
             'staff' => [
                 'key' => 'staff',
@@ -256,6 +274,9 @@ class DashboardController extends Controller
                 'icon' => 'users',
                 'color' => '#14b8a6',
                 'is_admin_only' => true,
+                'permission' => 'dashboard.overview.view',
+                'is_live' => true,
+                'is_placeholder' => false,
             ],
             'roles' => [
                 'key' => 'roles',
@@ -263,6 +284,9 @@ class DashboardController extends Controller
                 'icon' => 'shield-check',
                 'color' => '#8b5cf6',
                 'is_admin_only' => true,
+                'permission' => 'admin.roles.view',
+                'is_live' => true,
+                'is_placeholder' => false,
             ],
             'permissions' => [
                 'key' => 'permissions',
@@ -270,6 +294,9 @@ class DashboardController extends Controller
                 'icon' => 'key',
                 'color' => '#0ea5e9',
                 'is_admin_only' => true,
+                'permission' => 'dashboard.overview.view',
+                'is_live' => true,
+                'is_placeholder' => false,
             ],
             'access' => [
                 'key' => 'access',
@@ -277,6 +304,9 @@ class DashboardController extends Controller
                 'icon' => 'rectangle-group',
                 'color' => '#f97316',
                 'is_admin_only' => true,
+                'permission' => 'dashboard.overview.view',
+                'is_live' => true,
+                'is_placeholder' => false,
             ],
             'works_review' => [
                 'key' => 'works_review',
@@ -284,6 +314,9 @@ class DashboardController extends Controller
                 'icon' => 'clipboard-check',
                 'color' => '#f59e0b',
                 'is_admin_only' => false,
+                'permission' => 'dashboard.overview.view',
+                'is_live' => false,
+                'is_placeholder' => true,
             ],
             'reports' => [
                 'key' => 'reports',
@@ -291,6 +324,9 @@ class DashboardController extends Controller
                 'icon' => 'flag',
                 'color' => '#ef4444',
                 'is_admin_only' => false,
+                'permission' => 'dashboard.overview.view',
+                'is_live' => false,
+                'is_placeholder' => true,
             ],
             'activities_feed' => [
                 'key' => 'activities_feed',
@@ -298,6 +334,9 @@ class DashboardController extends Controller
                 'icon' => 'rectangle-group',
                 'color' => '#0ea5e9',
                 'is_admin_only' => false,
+                'permission' => 'dashboard.overview.view',
+                'is_live' => false,
+                'is_placeholder' => true,
             ],
             // Minimal section for 'other' roles
             'overview' => [
@@ -306,21 +345,29 @@ class DashboardController extends Controller
                 'icon' => 'chart-bar',
                 'color' => '#94a3b8',
                 'is_admin_only' => false, // Accessible by all
+                'permission' => 'dashboard.overview.view',
+                'is_live' => true,
+                'is_placeholder' => false,
             ],
         ];
 
         foreach ($allSections as $key => $sectionConfig) {
-            $canView = false;
+            $roleAllowsSection = false;
             if ($role === 'admin') {
-                $canView = true; // Admin sees all sections
+                $roleAllowsSection = true; // Admin sees all sections
             } elseif ($role === 'staff' && !$sectionConfig['is_admin_only']) {
-                $canView = true; // Staff sees staff-safe sections
+                $roleAllowsSection = true; // Staff sees staff-safe sections
             } elseif ($role === 'other' && $key === 'overview') {
-                $canView = true; // 'Other' roles only see a minimal overview
+                $roleAllowsSection = true; // 'Other' roles only see a minimal overview
             }
 
+            $canView = $roleAllowsSection && $user->can($sectionConfig['permission']);
+
             if ($canView) {
-                $sections[] = array_merge($sectionConfig, ['is_active' => true, 'permission' => null]); // Simplified permission for now
+                $sections[] = array_merge($sectionConfig, [
+                    'can_view' => true,
+                    'is_active' => true,
+                ]);
 
                 $cards[] = [
                     'key' => $key,
@@ -329,12 +376,22 @@ class DashboardController extends Controller
                     'change' => 0,
                     'trend' => 'neutral',
                     'section' => $key,
+                    'permission' => $sectionConfig['permission'],
+                    'can_view' => true,
+                    'is_admin_only' => $sectionConfig['is_admin_only'],
+                    'is_live' => $sectionConfig['is_live'],
+                    'is_placeholder' => $sectionConfig['is_placeholder'],
                 ];
 
                 $charts[] = [
                     'key' => $key,
                     'type' => 'bar',
                     'section' => $key,
+                    'permission' => $sectionConfig['permission'],
+                    'can_view' => true,
+                    'is_admin_only' => $sectionConfig['is_admin_only'],
+                    'is_live' => $sectionConfig['is_live'],
+                    'is_placeholder' => $sectionConfig['is_placeholder'],
                     'points' => $chartPoints[$key] ?? [
                         ['label' => $sectionConfig['label']['ar'], 'value' => $cardValues[$key] ?? 0],
                     ],

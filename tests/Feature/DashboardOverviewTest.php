@@ -21,12 +21,47 @@ class DashboardOverviewTest extends TestCase
         Role::firstOrCreate(['name' => 'staff', 'guard_name' => 'web']);
         Role::firstOrCreate(['name' => 'client', 'guard_name' => 'web']);
         Role::firstOrCreate(['name' => 'designer', 'guard_name' => 'web']);
+
+        $overviewPermission = Permission::firstOrCreate(['name' => 'dashboard.overview.view', 'guard_name' => 'web']);
+        $adminUsersPermission = Permission::firstOrCreate(['name' => 'admin.users.view', 'guard_name' => 'web']);
+        $adminRolesPermission = Permission::firstOrCreate(['name' => 'admin.roles.view', 'guard_name' => 'web']);
+
+        Role::where('name', 'admin')->firstOrFail()->givePermissionTo([
+            $overviewPermission,
+            $adminUsersPermission,
+            $adminRolesPermission,
+        ]);
+
+        foreach (['staff', 'client', 'designer'] as $roleName) {
+            Role::where('name', $roleName)->firstOrFail()->givePermissionTo($overviewPermission);
+        }
     }
 
     public function test_unauthenticated_request_returns_401(): void
     {
         $this->json('GET', '/api/dashboard/overview')
             ->assertStatus(401);
+    }
+
+    public function test_authenticated_user_without_overview_permission_returns_403(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user, ['*']);
+
+        $this->json('GET', '/api/dashboard/overview')
+            ->assertStatus(403);
+    }
+
+    public function test_user_with_overview_permission_can_access_dashboard_overview(): void
+    {
+        $user = User::factory()->create();
+        $user->givePermissionTo('dashboard.overview.view');
+        Sanctum::actingAs($user, ['*']);
+
+        $this->json('GET', '/api/dashboard/overview')
+            ->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.role', 'other');
     }
 
     public function test_authenticated_admin_gets_valid_json_shape(): void
@@ -70,6 +105,37 @@ class DashboardOverviewTest extends TestCase
         $this->assertContains('roles', $sectionKeys);
         $this->assertContains('permissions', $sectionKeys);
         $this->assertContains('access', $sectionKeys);
+    }
+
+    public function test_overview_response_includes_permission_and_live_metadata(): void
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole('admin');
+        Sanctum::actingAs($admin, ['*']);
+
+        $response = $this->json('GET', '/api/dashboard/overview')
+            ->assertStatus(200);
+
+        $sections = collect($response->json('data.sections'))->keyBy('key');
+        $cards = collect($response->json('data.cards'))->keyBy('key');
+        $charts = collect($response->json('data.charts'))->keyBy('key');
+
+        $this->assertSame('admin.users.view', $sections->get('users')['permission']);
+        $this->assertTrue($sections->get('users')['can_view']);
+        $this->assertTrue($sections->get('users')['is_admin_only']);
+        $this->assertTrue($sections->get('users')['is_live']);
+        $this->assertFalse($sections->get('users')['is_placeholder']);
+
+        $this->assertSame('dashboard.overview.view', $sections->get('orders')['permission']);
+        $this->assertTrue($sections->get('orders')['can_view']);
+        $this->assertTrue($sections->get('orders')['is_admin_only']);
+        $this->assertFalse($sections->get('orders')['is_live']);
+        $this->assertTrue($sections->get('orders')['is_placeholder']);
+
+        foreach (['permission', 'can_view', 'is_admin_only', 'is_live', 'is_placeholder'] as $field) {
+            $this->assertArrayHasKey($field, $cards->get('users'));
+            $this->assertArrayHasKey($field, $charts->get('users'));
+        }
     }
 
     public function test_admin_sees_real_access_metrics(): void
@@ -145,7 +211,7 @@ class DashboardOverviewTest extends TestCase
         $cardKeys = collect($response->json('data.cards'))->pluck('key')->toArray();
         $chartKeys = collect($response->json('data.charts'))->pluck('key')->toArray();
 
-        $adminOnlyKeys = ['users', 'orders', 'works', 'contests', 'wallet'];
+        $adminOnlyKeys = ['users', 'orders', 'works', 'contests', 'wallet', 'staff', 'roles', 'permissions', 'access'];
         foreach ($adminOnlyKeys as $key) {
             $this->assertNotContains($key, $sectionKeys, "Staff should not see section: $key");
             $this->assertNotContains($key, $cardKeys, "Staff should not see card: $key");
@@ -155,6 +221,11 @@ class DashboardOverviewTest extends TestCase
         $this->assertContains('works_review', $sectionKeys);
         $this->assertContains('reports', $sectionKeys);
         $this->assertContains('activities_feed', $sectionKeys);
+
+        foreach ($response->json('data.sections') as $section) {
+            $this->assertTrue($section['can_view']);
+            $this->assertFalse($section['is_admin_only']);
+        }
     }
 
     public function test_overview_does_not_return_fake_demo_activity(): void
