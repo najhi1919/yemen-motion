@@ -21,6 +21,7 @@ class AuthRolesSeeder extends Seeder
             ->filter()
             ->unique()
             ->values();
+        $registeredPermissions = $permissions->all();
 
         foreach ($permissions as $permissionName) {
             Permission::firstOrCreate([
@@ -59,12 +60,17 @@ class AuthRolesSeeder extends Seeder
             }
 
             $validPermissions = array_values(array_intersect($permissionNames, $availablePermissions));
+            $customPermissions = $role->permissions()
+                ->whereNotIn('name', $registeredPermissions)
+                ->pluck('name')
+                ->all();
 
-            if ($validPermissions !== []) {
-                // Do not sync here, because future UI-managed permissions must not
-                // be removed by rerunning this seeder.
-                $role->givePermissionTo($validPermissions);
-            }
+            // Keep UI-managed custom permissions, but remove registered baseline
+            // permissions that are no longer configured for this role.
+            $role->syncPermissions(array_values(array_unique([
+                ...$customPermissions,
+                ...$validPermissions,
+            ])));
         }
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();

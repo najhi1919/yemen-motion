@@ -140,12 +140,8 @@ return [
             'dashboard.overview.view',
         ],
 
-        'client' => [
-            'dashboard.overview.view',
-        ],
+        'client' => [],
 
-        'designer' => [
-            'dashboard.overview.view',
-        ],
+        'designer' => [],
     ],
 ];

@@ -17,6 +17,7 @@ class DashboardOverviewTest extends TestCase
     {
         parent::setUp();
 
+        Role::firstOrCreate(['name' => 'super-admin', 'guard_name' => 'web']);
         Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
         Role::firstOrCreate(['name' => 'staff', 'guard_name' => 'web']);
         Role::firstOrCreate(['name' => 'client', 'guard_name' => 'web']);
@@ -26,15 +27,19 @@ class DashboardOverviewTest extends TestCase
         $adminUsersPermission = Permission::firstOrCreate(['name' => 'admin.users.view', 'guard_name' => 'web']);
         $adminRolesPermission = Permission::firstOrCreate(['name' => 'admin.roles.view', 'guard_name' => 'web']);
 
+        Role::where('name', 'super-admin')->firstOrFail()->givePermissionTo([
+            $overviewPermission,
+            $adminUsersPermission,
+            $adminRolesPermission,
+        ]);
+
         Role::where('name', 'admin')->firstOrFail()->givePermissionTo([
             $overviewPermission,
             $adminUsersPermission,
             $adminRolesPermission,
         ]);
 
-        foreach (['staff', 'client', 'designer'] as $roleName) {
-            Role::where('name', $roleName)->firstOrFail()->givePermissionTo($overviewPermission);
-        }
+        Role::where('name', 'staff')->firstOrFail()->givePermissionTo($overviewPermission);
     }
 
     public function test_unauthenticated_request_returns_401(): void
@@ -105,6 +110,18 @@ class DashboardOverviewTest extends TestCase
         $this->assertContains('roles', $sectionKeys);
         $this->assertContains('permissions', $sectionKeys);
         $this->assertContains('access', $sectionKeys);
+    }
+
+    public function test_authenticated_super_admin_can_access_dashboard_overview(): void
+    {
+        $superAdmin = User::factory()->create();
+        $superAdmin->assignRole('super-admin');
+        Sanctum::actingAs($superAdmin, ['*']);
+
+        $this->json('GET', '/api/dashboard/overview')
+            ->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.role', 'admin');
     }
 
     public function test_overview_response_includes_permission_and_live_metadata(): void
@@ -197,6 +214,26 @@ class DashboardOverviewTest extends TestCase
             ->assertJson(['success' => true])
             ->assertJsonPath('data.role', 'staff')
             ->assertJsonPath('meta.selected_period', 'month');
+    }
+
+    public function test_authenticated_client_without_overview_permission_returns_403(): void
+    {
+        $client = User::factory()->create();
+        $client->assignRole('client');
+        Sanctum::actingAs($client, ['*']);
+
+        $this->json('GET', '/api/dashboard/overview')
+            ->assertStatus(403);
+    }
+
+    public function test_authenticated_designer_without_overview_permission_returns_403(): void
+    {
+        $designer = User::factory()->create();
+        $designer->assignRole('designer');
+        Sanctum::actingAs($designer, ['*']);
+
+        $this->json('GET', '/api/dashboard/overview')
+            ->assertStatus(403);
     }
 
     public function test_staff_does_not_see_admin_only_sections(): void

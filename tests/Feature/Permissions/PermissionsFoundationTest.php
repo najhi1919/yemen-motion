@@ -64,6 +64,44 @@ class PermissionsFoundationTest extends TestCase
         }
     }
 
+    public function test_internal_dashboard_overview_baseline_is_limited_to_admin_and_staff_roles(): void
+    {
+        $this->seed(AuthRolesSeeder::class);
+
+        $this->assertTrue(Role::where('name', 'admin')->firstOrFail()->hasPermissionTo('dashboard.overview.view'));
+        $this->assertTrue(Role::where('name', 'staff')->firstOrFail()->hasPermissionTo('dashboard.overview.view'));
+        $this->assertFalse(Role::where('name', 'client')->firstOrFail()->hasPermissionTo('dashboard.overview.view'));
+        $this->assertFalse(Role::where('name', 'designer')->firstOrFail()->hasPermissionTo('dashboard.overview.view'));
+    }
+
+    public function test_auth_roles_seeder_removes_obsolete_registered_baseline_permissions(): void
+    {
+        $this->seed(AuthRolesSeeder::class);
+
+        $customPermission = Permission::create([
+            'name' => 'client.custom.view',
+            'guard_name' => 'web',
+        ]);
+
+        $client = Role::where('name', 'client')->firstOrFail();
+        $designer = Role::where('name', 'designer')->firstOrFail();
+
+        $client->givePermissionTo([
+            'dashboard.overview.view',
+            $customPermission,
+        ]);
+        $designer->givePermissionTo('dashboard.overview.view');
+
+        $this->seed(AuthRolesSeeder::class);
+
+        $client->refresh();
+        $designer->refresh();
+
+        $this->assertFalse($client->hasPermissionTo('dashboard.overview.view'));
+        $this->assertTrue($client->hasPermissionTo('client.custom.view'));
+        $this->assertFalse($designer->hasPermissionTo('dashboard.overview.view'));
+    }
+
     public function test_database_seeder_creates_super_admin_user(): void
     {
         $this->seed(DatabaseSeeder::class);
