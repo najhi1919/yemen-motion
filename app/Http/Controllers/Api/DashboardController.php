@@ -137,7 +137,7 @@ class DashboardController extends Controller
         $sections = [];
         $cards = [];
         $charts = [];
-        $activities = $this->dashboardActivitiesForRole($role);
+        $activities = $this->dashboardActivitiesForUser($user);
 
         $protectedRoleNames = config('yemen-motion-permissions.protected_roles', []);
         $systemPermissionNames = collect(config('yemen-motion-permissions.permissions', []))
@@ -419,56 +419,63 @@ class DashboardController extends Controller
         ]);
     }
 
-    private function dashboardActivitiesForRole(string $role): array
+    private function dashboardActivitiesForUser(User $user): array
     {
-        if ($role !== 'admin') {
-            return [];
+        $isSuperAdmin = $user->hasRole('super-admin');
+
+        $userActivities = collect();
+        if ($isSuperAdmin || $user->can('admin.users.view')) {
+            $userActivities = User::query()
+                ->latest('created_at')
+                ->take(4)
+                ->get()
+                ->map(fn(User $user) => [
+                    'key' => "user-created-{$user->id}",
+                    'label' => [
+                        'ar' => "تم إنشاء مستخدم جديد: {$user->name}",
+                        'en' => "New user created: {$user->name}",
+                    ],
+                    'time' => optional($user->created_at)->format('Y-m-d H:i'),
+                    'icon' => 'user-group',
+                    'sort_at' => optional($user->created_at)->getTimestamp() ?? 0,
+                ]);
         }
 
-        $userActivities = User::query()
-            ->latest('created_at')
-            ->take(4)
-            ->get()
-            ->map(fn(User $user) => [
-                'key' => "user-created-{$user->id}",
-                'label' => [
-                    'ar' => "تم إنشاء مستخدم جديد: {$user->name}",
-                    'en' => "New user created: {$user->name}",
-                ],
-                'time' => optional($user->created_at)->format('Y-m-d H:i'),
-                'icon' => 'user-group',
-                'sort_at' => optional($user->created_at)->getTimestamp() ?? 0,
-            ]);
+        $roleActivities = collect();
+        if ($isSuperAdmin || $user->can('admin.roles.view')) {
+            $roleActivities = Role::query()
+                ->latest('created_at')
+                ->take(3)
+                ->get()
+                ->map(fn(Role $role) => [
+                    'key' => "role-created-{$role->id}",
+                    'label' => [
+                        'ar' => "تم إنشاء دور: {$role->name}",
+                        'en' => "Role created: {$role->name}",
+                    ],
+                    'time' => optional($role->created_at)->format('Y-m-d H:i'),
+                    'icon' => 'shield-check',
+                    'sort_at' => optional($role->created_at)->getTimestamp() ?? 0,
+                ]);
+        }
 
-        $roleActivities = Role::query()
-            ->latest('created_at')
-            ->take(3)
-            ->get()
-            ->map(fn(Role $role) => [
-                'key' => "role-created-{$role->id}",
-                'label' => [
-                    'ar' => "تم إنشاء دور: {$role->name}",
-                    'en' => "Role created: {$role->name}",
-                ],
-                'time' => optional($role->created_at)->format('Y-m-d H:i'),
-                'icon' => 'shield-check',
-                'sort_at' => optional($role->created_at)->getTimestamp() ?? 0,
-            ]);
-
-        $permissionActivities = Permission::query()
-            ->latest('created_at')
-            ->take(3)
-            ->get()
-            ->map(fn(Permission $permission) => [
-                'key' => "permission-created-{$permission->id}",
-                'label' => [
-                    'ar' => "تم إنشاء صلاحية: {$permission->name}",
-                    'en' => "Permission created: {$permission->name}",
-                ],
-                'time' => optional($permission->created_at)->format('Y-m-d H:i'),
-                'icon' => 'key',
-                'sort_at' => optional($permission->created_at)->getTimestamp() ?? 0,
-            ]);
+        $permissionActivities = collect();
+        if ($isSuperAdmin || $user->can('admin.permissions.view')) {
+            $permissionActivities = Permission::query()
+                ->latest('created_at')
+                ->take(3)
+                ->get()
+                ->map(fn(Permission $permission) => [
+                    'key' => "permission-created-{$permission->id}",
+                    'label' => [
+                        'ar' => "تم إنشاء صلاحية: {$permission->name}",
+                        'en' => "Permission created: {$permission->name}",
+                    ],
+                    'time' => optional($permission->created_at)->format('Y-m-d H:i'),
+                    'icon' => 'key',
+                    'sort_at' => optional($permission->created_at)->getTimestamp() ?? 0,
+                ]);
+        }
 
         return $userActivities
             ->concat($roleActivities)
