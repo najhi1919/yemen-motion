@@ -121,6 +121,12 @@
         :icon="card.icon"
         :locale="currentLocale"
         :trend-label="copy.trendLabel"
+        :period-label="periodLabel"
+        :tooltip-description="card.tooltipDescription"
+        :tooltip-labels="{
+          value: copy.tooltipValue,
+          period: copy.tooltipPeriod
+        }"
       />
     </section>
 
@@ -138,8 +144,10 @@
         :bars="combinedBars"
         :height="310"
         :period-label="periodLabel"
-        :total-label="copy.tooltipTotal"
-        :detail-label="copy.tooltipDemo"
+        :period-title="copy.tooltipPeriod"
+        :time-point-label="copy.tooltipTimePoint"
+        :bucket-value-label="bucketValueLabel"
+        :cumulative-value-label="copy.tooltipCumulativeToPoint"
       />
 
       <div v-else class="grid grid-cols-1 gap-5 xl:grid-cols-2">
@@ -153,8 +161,10 @@
           :line-color="section.color"
           :height="260"
           :period-label="periodLabel"
-          :total-label="copy.tooltipTotal"
-          :detail-label="copy.tooltipDemo"
+          :period-title="copy.tooltipPeriod"
+          :time-point-label="copy.tooltipTimePoint"
+          :bucket-value-label="bucketValueLabel"
+          :cumulative-value-label="copy.tooltipCumulativeToPoint"
         />
       </div>
     </section>
@@ -327,8 +337,17 @@ const copyMap = {
     emptyActivity: 'لا يوجد نشاط حديث',
     quickTitle: 'ملخص تنفيذي',
     trendLabel: 'مقارنة بالفترة السابقة',
-    tooltipTotal: 'الإجمالي',
-    tooltipDemo: 'تفصيل المؤشر حسب القسم الحالي',
+    tooltipValue: 'القيمة',
+    tooltipPeriod: 'الفترة',
+    tooltipTimePoint: 'النقطة الزمنية',
+    tooltipCumulativeToPoint: 'الإجمالي حتى هذه النقطة',
+    tooltipMetricDescription: 'يعرض هذا المؤشر عدد {section} ضمن الفترة المختارة.',
+    tooltipBucketByPeriod: {
+      day: 'في هذه الساعة',
+      week: 'في هذا اليوم',
+      month: 'في هذا اليوم',
+      year: 'في هذا الشهر'
+    },
     allSections: 'كل الأقسام',
     periodNames: { day: 'اليوم', week: 'الأسبوع', month: 'الشهر', year: 'السنة' }
   },
@@ -360,8 +379,17 @@ const copyMap = {
     emptyActivity: 'No recent activity',
     quickTitle: 'Executive summary',
     trendLabel: 'vs previous period',
-    tooltipTotal: 'Total',
-    tooltipDemo: 'Current section metric breakdown',
+    tooltipValue: 'Value',
+    tooltipPeriod: 'Period',
+    tooltipTimePoint: 'Time point',
+    tooltipCumulativeToPoint: 'Total through this point',
+    tooltipMetricDescription: 'This metric shows the number of {section} within the selected period.',
+    tooltipBucketByPeriod: {
+      day: 'This hour',
+      week: 'This day',
+      month: 'This day',
+      year: 'This month'
+    },
     allSections: 'All sections',
     periodNames: { day: 'Day', week: 'Week', month: 'Month', year: 'Year' }
   }
@@ -386,6 +414,37 @@ const quickMetricLabels: Record<Locale, Record<QuickMetricKey, string>> = {
   }
 }
 
+const metricTooltipSubjects: Record<Locale, Record<string, string>> = {
+  ar: {
+    overview: 'المستخدمين والأدوار والصلاحيات',
+    users: 'المستخدمين',
+    staff: 'أعضاء الفريق',
+    roles: 'الأدوار',
+    permissions: 'الصلاحيات',
+    access: 'الأدوار والصلاحيات',
+    orders: 'الطلبات',
+    works: 'الأعمال',
+    contests: 'المسابقات',
+    wallet: 'معاملات المحفظة',
+    reports: 'التقارير',
+    activities_feed: 'النشاطات'
+  },
+  en: {
+    overview: 'users, roles, and permissions',
+    users: 'users',
+    staff: 'staff members',
+    roles: 'roles',
+    permissions: 'permissions',
+    access: 'roles and permissions',
+    orders: 'orders',
+    works: 'works',
+    contests: 'contests',
+    wallet: 'wallet transactions',
+    reports: 'reports',
+    activities_feed: 'activities'
+  }
+}
+
 const sectionModels: DashboardSectionModel[] = [
   { key: 'users', color: '#10b981', icon: '●', label: { ar: 'المستخدمون', en: 'Users' }, subtitle: { ar: 'من API عند توفر الاتصال', en: 'API-backed when available' }, base: 0, trend: 0, series: { day: [0], week: [0], month: [0], year: [0] } },
   { key: 'staff', color: '#06b6d4', icon: '◆', label: { ar: 'الفريق', en: 'Staff' }, subtitle: { ar: 'من API عند توفر الاتصال', en: 'API-backed when available' }, base: 0, trend: 0, series: { day: [0], week: [0], month: [0], year: [0] } },
@@ -404,6 +463,7 @@ const selectedSections = ref<string[]>(sectionModels.map(section => section.key)
 
 const copy = computed(() => copyMap[currentLocale.value])
 const periodLabel = computed(() => copy.value.periodNames[period.value])
+const bucketValueLabel = computed(() => copy.value.tooltipBucketByPeriod[period.value])
 const overviewStatusMessage = computed(() => {
   if (dashboardOverviewLoading.value) {
     return currentLocale.value === 'ar' ? 'يتم تحديث بيانات لوحة التحكم من API...' : 'Updating dashboard data from the API...'
@@ -464,7 +524,11 @@ const visibleCards = computed(() => activeSectionModels.value.map(section => ({
   subtitle: section.subtitle[currentLocale.value],
   trend: section.trend,
   color: section.color,
-  icon: section.icon
+  icon: section.icon,
+  tooltipDescription: copy.value.tooltipMetricDescription.replace(
+    '{section}',
+    metricTooltipSubjects[currentLocale.value][section.key] || section.label[currentLocale.value]
+  )
 })))
 
 const periodLabels = computed(() => {

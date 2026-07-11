@@ -24,8 +24,14 @@
 
           <div
             class="ym-chart-bar-container"
-            @mouseenter="showBarTooltip($event, item, 0)"
-            @mousemove="showBarTooltip($event, item, 0)"
+            tabindex="0"
+            role="img"
+            :aria-label="barAriaLabel(item)"
+            @mouseenter="showBarTooltip($event, item)"
+            @mousemove="showBarTooltip($event, item)"
+            @focus="showBarTooltip($event, item)"
+            @blur="hideTooltip"
+            @keydown.esc="hideTooltip"
           >
             <div class="ym-bar-pill-svg" :style="{ height: item.percentage + '%' }" />
           </div>
@@ -68,7 +74,22 @@
             class="ym-chart-line"
           />
           <g v-for="(dot, i) in dataPoints" :key="i">
-            <circle :cx="dot.x" :cy="dot.y" r="10" fill="transparent" @mouseenter="showPointTooltip($event, i)" @mousemove="showPointTooltip($event, i)" />
+            <circle
+              :cx="dot.x"
+              :cy="dot.y"
+              r="10"
+              fill="transparent"
+              class="ym-chart-hit-area"
+              tabindex="0"
+              focusable="true"
+              role="img"
+              :aria-label="pointAriaLabel(i)"
+              @mouseenter="showPointTooltip($event, i)"
+              @mousemove="showPointTooltip($event, i)"
+              @focus="showPointTooltip($event, i)"
+              @blur="hideTooltip"
+              @keydown.esc="hideTooltip"
+            />
             <circle :cx="dot.x" :cy="dot.y" r="5.5" :fill="lineColor" stroke="white" stroke-width="2.2" class="ym-chart-dot" />
           </g>
           <text
@@ -91,14 +112,16 @@
           v-if="tooltip.visible"
           class="ym-chart-tooltip"
           :style="{ left: tooltip.x + 'px', top: tooltip.y + 'px', '--tooltip-color': tooltip.color }"
+          role="tooltip"
         >
           <span class="ym-chart-tooltip__eyebrow">
             <i />
             {{ tooltip.section }}
           </span>
-          <strong>{{ tooltip.detail }}</strong>
-          <span>{{ periodLabel }} · {{ totalLabel }}: {{ formatValue(tooltip.total) }}</span>
-          <small>{{ detailLabel }}</small>
+          <strong>{{ timePointLabel }}: {{ tooltip.pointLabel }}</strong>
+          <span>{{ bucketValueLabel }}: {{ formatValue(tooltip.bucketValue) }}</span>
+          <span>{{ cumulativeValueLabel }}: {{ formatValue(tooltip.cumulativeValue) }}</span>
+          <small>{{ periodTitle }}: {{ periodLabel }}</small>
         </div>
       </transition>
     </div>
@@ -141,8 +164,10 @@ const props = withDefaults(defineProps<{
   height?: number
   width?: number
   periodLabel?: string
-  totalLabel?: string
-  detailLabel?: string
+  periodTitle?: string
+  timePointLabel?: string
+  bucketValueLabel?: string
+  cumulativeValueLabel?: string
 }>(), {
   labels: () => [],
   data: () => [],
@@ -152,8 +177,10 @@ const props = withDefaults(defineProps<{
   height: 250,
   width: 680,
   periodLabel: 'Period',
-  totalLabel: 'Total',
-  detailLabel: 'Metric breakdown'
+  periodTitle: 'Period',
+  timePointLabel: 'Time point',
+  bucketValueLabel: 'This period',
+  cumulativeValueLabel: 'Total through this point'
 })
 
 const chartPadding = 28
@@ -162,8 +189,9 @@ const tooltip = reactive({
   x: 0,
   y: 0,
   section: '',
-  detail: '',
-  total: 0,
+  pointLabel: '',
+  bucketValue: 0,
+  cumulativeValue: 0,
   color: '#6366f1'
 })
 
@@ -225,39 +253,109 @@ function safeId(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9\u0600-\u06FF]/g, '-').replace(/-+/g, '-')
 }
 
-function positionTooltip(event: MouseEvent): void {
+function positionTooltip(event: MouseEvent | FocusEvent): void {
   const target = event.currentTarget as Element
   const stage = target.closest('.ym-chart-stage')
   const bounds = (stage || target).getBoundingClientRect()
-  const tooltipWidth = 224
-  const tooltipHeight = 108
-  const rawX = event.clientX - bounds.left + 14
-  const rawY = event.clientY - bounds.top - 34
+  const targetBounds = target.getBoundingClientRect()
+  const tooltipWidth = Math.min(268, Math.max(180, bounds.width - 24))
+  const tooltipHeight = 172
+  const isPointerEvent = event instanceof MouseEvent
+  const anchorX = isPointerEvent ? event.clientX : targetBounds.left + targetBounds.width / 2
+  const anchorY = isPointerEvent ? event.clientY : targetBounds.top
+  const rawX = anchorX - bounds.left + 14
+  const rawY = anchorY - bounds.top - (isPointerEvent ? 34 : tooltipHeight + 8)
   tooltip.x = Math.max(12, Math.min(rawX, bounds.width - tooltipWidth - 12))
   tooltip.y = Math.max(12, Math.min(rawY, bounds.height - tooltipHeight - 12))
 }
 
-function showBarTooltip(event: MouseEvent, bar: ActiveSection, zoneIndex: number): void {
-  const detail = bar.breakdown?.[zoneIndex] || { label: bar.label, value: bar.value }
-  positionTooltip(event)
+function showBarTooltip(event: MouseEvent | FocusEvent, bar: ActiveSection): void {
+  const breakdown = bar.breakdown?.length
+    ? bar.breakdown
+    : [{ label: bar.label, value: bar.value }]
+  const selectedIndex = event instanceof MouseEvent
+    ? breakdownIndexFromPointer(event, breakdown.length)
+    : breakdown.length - 1
+  const selectedPoint = breakdown[selectedIndex]
+
   tooltip.visible = true
   tooltip.section = bar.label
-  tooltip.detail = `${detail.label} — ${formatValue(detail.value)}`
-  tooltip.total = bar.value
+  tooltip.pointLabel = selectedPoint.label
+  tooltip.bucketValue = bucketValueAt(breakdown.map(point => point.value), selectedIndex)
+  tooltip.cumulativeValue = selectedPoint.value
   tooltip.color = bar.color
+  positionTooltip(event)
 }
 
-function showPointTooltip(event: MouseEvent, index: number): void {
-  positionTooltip(event)
+function showPointTooltip(event: MouseEvent | FocusEvent, index: number): void {
   tooltip.visible = true
   tooltip.section = props.title
-  tooltip.detail = `${props.labels[index] || props.title} — ${formatValue(props.data[index] || 0)}`
-  tooltip.total = props.data[index] || 0
+  tooltip.pointLabel = props.labels[index] || props.title
+  tooltip.bucketValue = bucketValueAt(props.data, index)
+  tooltip.cumulativeValue = props.data[index] ?? 0
   tooltip.color = props.lineColor
+  positionTooltip(event)
 }
 
 function hideTooltip(): void {
   tooltip.visible = false
+}
+
+function pointAriaLabel(index: number): string {
+  return tooltipAriaLabel(
+    props.title,
+    props.labels[index] || props.title,
+    bucketValueAt(props.data, index),
+    props.data[index] ?? 0
+  )
+}
+
+function barAriaLabel(bar: ActiveSection): string {
+  const breakdown = bar.breakdown?.length
+    ? bar.breakdown
+    : [{ label: bar.label, value: bar.value }]
+  const index = breakdown.length - 1
+  const point = breakdown[index]
+
+  return tooltipAriaLabel(
+    bar.label,
+    point.label,
+    bucketValueAt(breakdown.map(item => item.value), index),
+    point.value
+  )
+}
+
+function breakdownIndexFromPointer(event: MouseEvent, pointCount: number): number {
+  if (pointCount <= 1) return 0
+
+  const target = event.currentTarget as Element
+  const bounds = target.getBoundingClientRect()
+  if (!bounds.height) return pointCount - 1
+
+  // يبدأ التسلسل الزمني من أسفل العمود وينتهي في أعلاه.
+  // نحسب الفهرس من الأعلى أولًا، ثم نعكسه ليقابل أسفل العمود النقطة الأولى.
+  const offsetFromTop = Math.max(0, Math.min(event.clientY - bounds.top, bounds.height))
+  const indexFromTop = Math.floor((offsetFromTop / bounds.height) * pointCount)
+  const reversedIndex = pointCount - 1 - indexFromTop
+
+  return Math.max(0, Math.min(reversedIndex, pointCount - 1))
+}
+
+function bucketValueAt(values: readonly number[], index: number): number {
+  const currentValue = Number(values[index] ?? 0)
+  const previousValue = index > 0 ? Number(values[index - 1] ?? 0) : 0
+
+  return currentValue - previousValue
+}
+
+function tooltipAriaLabel(section: string, pointLabel: string, bucketValue: number, cumulativeValue: number): string {
+  return [
+    section,
+    `${props.timePointLabel}: ${pointLabel}`,
+    `${props.bucketValueLabel}: ${formatValue(bucketValue)}`,
+    `${props.cumulativeValueLabel}: ${formatValue(cumulativeValue)}`,
+    `${props.periodTitle}: ${props.periodLabel}`
+  ].join('. ')
 }
 
 function formatValue(value: number): string {
@@ -439,6 +537,12 @@ function formatValue(value: number): string {
   cursor: crosshair;
 }
 
+.ym-chart-bar-container:focus-visible {
+  border-radius: 14px;
+  outline: 3px solid color-mix(in srgb, var(--ym-bar-color) 58%, transparent);
+  outline-offset: 3px;
+}
+
 .ym-bar-pill-svg {
   position: relative;
   width: min(48px, 80%) !important;
@@ -507,11 +611,23 @@ function formatValue(value: number): string {
     drop-shadow(0 5px 8px rgba(15, 23, 42, 0.22));
 }
 
+.ym-chart-hit-area {
+  cursor: help;
+  outline: none;
+}
+
+.ym-chart-hit-area:focus-visible {
+  stroke: var(--ym-line-color);
+  stroke-width: 2.5px;
+}
+
+/* يجب أن يبقى محور الزمن في SVG من اليسار إلى اليمين حتى داخل الواجهة العربية RTL. */
 .ym-chart-labels {
   position: absolute;
   inset-inline: 1.2rem;
   bottom: 0.5rem;
   display: flex;
+  direction: ltr;
   justify-content: space-between;
   gap: 0.45rem;
 }
@@ -532,8 +648,8 @@ function formatValue(value: number): string {
   position: absolute;
   z-index: 12;
   display: grid;
-  width: 212px;
-  gap: 0.28rem;
+  width: min(268px, calc(100% - 24px));
+  gap: 0.38rem;
   border: 1px solid color-mix(in srgb, var(--tooltip-color) 52%, var(--ym-shell-border));
   border-radius: 17px;
   background:
@@ -544,6 +660,7 @@ function formatValue(value: number): string {
     0 0 24px color-mix(in srgb, var(--tooltip-color) 16%, transparent),
     inset 0 1px 0 rgba(255, 255, 255, 0.16);
   color: var(--ym-text);
+  box-sizing: border-box;
   padding: 0.75rem 0.85rem;
   pointer-events: none;
   backdrop-filter: blur(20px) saturate(150%);
@@ -576,6 +693,7 @@ function formatValue(value: number): string {
   color: var(--ym-muted);
   font-size: 13.5px;
   font-weight: 820;
+  line-height: 1.45;
 }
 
 .ym-chart-tooltip small {
