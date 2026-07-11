@@ -141,46 +141,40 @@ class DashboardController extends Controller
         $charts = [];
         $activities = $this->dashboardActivitiesForUser($user);
 
-        $protectedRoleNames = config('yemen-motion-permissions.protected_roles', []);
-        $systemPermissionNames = collect(config('yemen-motion-permissions.permissions', []))
-            ->pluck('name')
-            ->filter()
-            ->values()
+        $timeBuckets = $this->dashboardTimeBuckets($period, $periodRange);
+        $userCreatedAt = User::query()
+            ->whereBetween('created_at', [$periodRange['start'], $periodRange['end']])
+            ->get(['created_at'])
+            ->map(fn(User $user) => $user->created_at)
+            ->all();
+        $roleCreatedAt = Role::query()
+            ->whereBetween('created_at', [$periodRange['start'], $periodRange['end']])
+            ->get(['created_at'])
+            ->map(fn(Role $role) => $role->created_at)
+            ->all();
+        $permissionCreatedAt = Permission::query()
+            ->whereBetween('created_at', [$periodRange['start'], $periodRange['end']])
+            ->get(['created_at'])
+            ->map(fn(Permission $permission) => $permission->created_at)
             ->all();
 
-        $totalUsers = User::count();
-        $periodUsers = User::query()
-            ->whereBetween('created_at', [$periodRange['start'], $periodRange['end']])
-            ->count();
+        $periodUsers = count($userCreatedAt);
+        $periodRoles = count($roleCreatedAt);
+        $periodPermissions = count($permissionCreatedAt);
         $totalAdmins = User::whereHas('roles', fn($query) => $query->whereIn('name', ['admin', 'super-admin']))->count();
         $totalStaff = User::whereHas('roles', fn($query) => $query->where('name', 'staff'))->count();
-        $totalClients = User::whereHas('roles', fn($query) => $query->where('name', 'client'))->count();
-        $totalDesigners = User::whereHas('roles', fn($query) => $query->where('name', 'designer'))->count();
 
-        $totalRoles = Role::query()->count();
-        $periodRoles = Role::query()
-            ->whereBetween('created_at', [$periodRange['start'], $periodRange['end']])
-            ->count();
-        $protectedRoles = Role::query()
-            ->whereIn('name', $protectedRoleNames)
-            ->count();
-        $customRoles = max(0, $totalRoles - $protectedRoles);
-
-        $totalPermissions = Permission::query()->count();
-        $periodPermissions = Permission::query()
-            ->whereBetween('created_at', [$periodRange['start'], $periodRange['end']])
-            ->count();
-        $systemPermissions = Permission::query()
-            ->when($systemPermissionNames !== [], fn($query) => $query->whereIn('name', $systemPermissionNames))
-            ->when($systemPermissionNames === [], fn($query) => $query->whereRaw('1 = 0'))
-            ->count();
-        $customPermissions = max(0, $totalPermissions - $systemPermissions);
-        $dashboardPermissions = Permission::query()
-            ->where('name', 'like', 'dashboard.%')
-            ->count();
-        $adminPermissions = Permission::query()
-            ->where('name', 'like', 'admin.%')
-            ->count();
+        $userTimeSeriesPoints = $this->cumulativeTimeSeriesPoints($userCreatedAt, $timeBuckets);
+        $roleTimeSeriesPoints = $this->cumulativeTimeSeriesPoints($roleCreatedAt, $timeBuckets);
+        $permissionTimeSeriesPoints = $this->cumulativeTimeSeriesPoints($permissionCreatedAt, $timeBuckets);
+        $accessTimeSeriesPoints = array_map(
+            fn(array $rolePoint, array $permissionPoint) => [
+                'label' => $rolePoint['label'],
+                'value' => $rolePoint['value'] + $permissionPoint['value'],
+            ],
+            $roleTimeSeriesPoints,
+            $permissionTimeSeriesPoints,
+        );
 
         $cardValues = [
             'users' => $periodUsers,
@@ -200,38 +194,16 @@ class DashboardController extends Controller
         ];
 
         $chartPoints = [
-            'users' => [
-                ['label' => 'المستخدمون', 'value' => $totalUsers],
-                ['label' => 'الإداريون', 'value' => $totalAdmins],
-                ['label' => 'الموظفون', 'value' => $totalStaff],
-                ['label' => 'العملاء', 'value' => $totalClients],
-                ['label' => 'المصممون', 'value' => $totalDesigners],
-            ],
+            'users' => $userTimeSeriesPoints,
             'staff' => [
                 ['label' => 'الموظفون', 'value' => $totalStaff],
                 ['label' => 'الإداريون', 'value' => $totalAdmins],
             ],
-            'roles' => [
-                ['label' => 'الأدوار', 'value' => $totalRoles],
-                ['label' => 'المحمية', 'value' => $protectedRoles],
-                ['label' => 'المخصصة', 'value' => $customRoles],
-            ],
-            'permissions' => [
-                ['label' => 'الصلاحيات', 'value' => $totalPermissions],
-                ['label' => 'النظامية', 'value' => $systemPermissions],
-                ['label' => 'المخصصة', 'value' => $customPermissions],
-            ],
-            'access' => [
-                ['label' => 'الأدوار', 'value' => $totalRoles],
-                ['label' => 'الصلاحيات', 'value' => $totalPermissions],
-                ['label' => 'صلاحيات لوحة التحكم', 'value' => $dashboardPermissions],
-                ['label' => 'صلاحيات الإدارة', 'value' => $adminPermissions],
-            ],
-            'overview' => [
-                ['label' => 'المستخدمون', 'value' => $totalUsers],
-                ['label' => 'الأدوار', 'value' => $totalRoles],
-                ['label' => 'الصلاحيات', 'value' => $totalPermissions],
-            ],
+            'roles' => $roleTimeSeriesPoints,
+            'permissions' => $permissionTimeSeriesPoints,
+            'access' => $accessTimeSeriesPoints,
+            // Overview continues to mirror users, now as the same cumulative series.
+            'overview' => $userTimeSeriesPoints,
         ];
 
         // Placeholder modules remain super-admin only until their precise permissions exist.
@@ -453,6 +425,64 @@ class DashboardController extends Controller
                 'end' => $current->copy()->endOfYear(),
             ],
         };
+    }
+
+    private function dashboardTimeBuckets(string $period, array $periodRange): array
+    {
+        $buckets = [];
+        $cursor = $periodRange['start']->copy();
+
+        while ($cursor->lte($periodRange['end'])) {
+            $start = $cursor->copy();
+            $end = match ($period) {
+                'day' => $start->copy()->endOfHour(),
+                'week', 'month' => $start->copy()->endOfDay(),
+                'year' => $start->copy()->endOfMonth(),
+            };
+
+            if ($end->gt($periodRange['end'])) {
+                $end = $periodRange['end']->copy();
+            }
+
+            $buckets[] = [
+                'label' => match ($period) {
+                    'day' => $start->format('H:00'),
+                    'week', 'month' => $start->format('Y-m-d'),
+                    'year' => $start->format('Y-m'),
+                },
+                'start' => $start,
+                'end' => $end,
+            ];
+
+            $cursor = match ($period) {
+                'day' => $start->copy()->addHour()->startOfHour(),
+                'week', 'month' => $start->copy()->addDay()->startOfDay(),
+                'year' => $start->copy()->addMonth()->startOfMonth(),
+            };
+        }
+
+        return $buckets;
+    }
+
+    private function cumulativeTimeSeriesPoints(array $createdAtValues, array $buckets): array
+    {
+        $cumulative = 0;
+        $points = [];
+
+        foreach ($buckets as $bucket) {
+            foreach ($createdAtValues as $createdAt) {
+                if ($createdAt->gte($bucket['start']) && $createdAt->lte($bucket['end'])) {
+                    $cumulative++;
+                }
+            }
+
+            $points[] = [
+                'label' => $bucket['label'],
+                'value' => $cumulative,
+            ];
+        }
+
+        return $points;
     }
 
     private function dashboardActivitiesForUser(User $user): array

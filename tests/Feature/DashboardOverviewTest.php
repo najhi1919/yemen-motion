@@ -644,6 +644,77 @@ class DashboardOverviewTest extends TestCase
         }
     }
 
+    public function test_chart_bucket_labels_change_with_selected_period(): void
+    {
+        $current = now();
+        $admin = User::factory()->create(['created_at' => $current->copy()->subYears(2)]);
+        $admin->assignRole('admin');
+        Sanctum::actingAs($admin, ['*']);
+
+        $expectations = [
+            'day' => [24, '00:00', '23:00'],
+            'week' => [
+                7,
+                $current->copy()->startOfWeek()->format('Y-m-d'),
+                $current->copy()->endOfWeek()->format('Y-m-d'),
+            ],
+            'month' => [
+                $current->daysInMonth,
+                $current->copy()->startOfMonth()->format('Y-m-d'),
+                $current->copy()->endOfMonth()->format('Y-m-d'),
+            ],
+            'year' => [
+                12,
+                $current->copy()->startOfYear()->format('Y-m'),
+                $current->copy()->endOfYear()->format('Y-m'),
+            ],
+        ];
+
+        foreach ($expectations as $period => [$count, $firstLabel, $lastLabel]) {
+            $charts = collect(
+                $this->json('GET', "/api/dashboard/overview?period={$period}")
+                    ->assertStatus(200)
+                    ->json('data.charts')
+            )->keyBy('key');
+            $points = $charts->get('users')['points'];
+
+            $this->assertCount($count, $points);
+            $this->assertSame($firstLabel, $points[0]['label']);
+            $this->assertSame($lastLabel, $points[array_key_last($points)]['label']);
+        }
+    }
+
+    public function test_day_users_chart_is_cumulative_and_matches_period_cards(): void
+    {
+        $dayStart = now()->startOfDay();
+        $admin = User::factory()->create(['created_at' => $dayStart->copy()->subYears(2)]);
+        $admin->assignRole('admin');
+        User::factory()->create(['created_at' => $dayStart->copy()->addHour()->addMinutes(15)]);
+        User::factory()->create(['created_at' => $dayStart->copy()->addHours(5)->addMinutes(45)]);
+        User::factory()->create(['created_at' => $dayStart->copy()->subSecond()]);
+
+        Sanctum::actingAs($admin, ['*']);
+
+        $response = $this->json('GET', '/api/dashboard/overview?period=day')
+            ->assertStatus(200);
+        $cards = collect($response->json('data.cards'))->keyBy('key');
+        $charts = collect($response->json('data.charts'))->keyBy('key');
+        $userPoints = collect($charts->get('users')['points'])->keyBy('label');
+        $userValues = $userPoints->pluck('value')->values();
+
+        $this->assertCount(24, $userPoints);
+        $this->assertSame(0, $userPoints->get('00:00')['value']);
+        $this->assertSame(1, $userPoints->get('01:00')['value']);
+        $this->assertSame(2, $userPoints->get('05:00')['value']);
+        $this->assertSame($userValues->sort()->values()->all(), $userValues->all());
+        $this->assertSame($cards->get('users')['value'], $userPoints->last()['value']);
+        $this->assertSame($charts->get('users')['points'], $charts->get('overview')['points']);
+        $this->assertSame(
+            $cards->get('overview')['value'],
+            collect($charts->get('overview')['points'])->last()['value']
+        );
+    }
+
     public function test_day_period_counts_only_users_created_today(): void
     {
         $current = now();
@@ -724,7 +795,7 @@ class DashboardOverviewTest extends TestCase
         $this->assertSame(1, $cards->get('users')['value']);
     }
 
-    public function test_day_period_scopes_roles_permissions_and_access_card_values(): void
+    public function test_day_period_scopes_roles_permissions_and_access_cards_and_charts(): void
     {
         $current = now();
         $outsidePeriod = $current->copy()->subDay();
@@ -758,15 +829,28 @@ class DashboardOverviewTest extends TestCase
 
         Sanctum::actingAs($superAdmin, ['*']);
 
-        $cards = collect(
-            $this->json('GET', '/api/dashboard/overview?period=day')
-                ->assertStatus(200)
-                ->json('data.cards')
-        )->keyBy('key');
+        $response = $this->json('GET', '/api/dashboard/overview?period=day')
+            ->assertStatus(200);
+        $cards = collect($response->json('data.cards'))->keyBy('key');
+        $charts = collect($response->json('data.charts'))->keyBy('key');
 
         $this->assertSame(1, $cards->get('roles')['value']);
         $this->assertSame(1, $cards->get('permissions')['value']);
         $this->assertSame(2, $cards->get('access')['value']);
+        $this->assertSame($cards->get('roles')['value'], collect($charts->get('roles')['points'])->last()['value']);
+        $this->assertSame(
+            $cards->get('permissions')['value'],
+            collect($charts->get('permissions')['points'])->last()['value']
+        );
+        $this->assertSame($cards->get('access')['value'], collect($charts->get('access')['points'])->last()['value']);
+
+        foreach ($charts->get('access')['points'] as $index => $accessPoint) {
+            $this->assertSame(
+                $charts->get('roles')['points'][$index]['value']
+                    + $charts->get('permissions')['points'][$index]['value'],
+                $accessPoint['value']
+            );
+        }
     }
 
     public function test_invalid_period_returns_422(): void
