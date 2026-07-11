@@ -395,6 +395,7 @@ const copyMap = {
   }
 }
 
+// يحدد هذا الترتيب شكل العرض فقط، ولا يضيف أي مؤشر لم تُعِده البطاقات المصرح بها.
 const quickMetricKeys: QuickMetricKey[] = ['users', 'staff', 'roles', 'permissions', 'access']
 
 const quickMetricLabels: Record<Locale, Record<QuickMetricKey, string>> = {
@@ -474,9 +475,20 @@ const overviewStatusMessage = computed(() => {
   return ''
 })
 
-const dashboardOverviewSections = computed(() => dashboardOverview.value?.sections?.filter(section => section.is_active !== false) || [])
-const dashboardOverviewCards = computed(() => dashboardOverview.value?.cards || [])
-const dashboardOverviewCharts = computed(() => dashboardOverview.value?.charts || [])
+// تمنع هذه الفلترة تكرار "نظرة عامة" عندما يتوفر مؤشر المستخدمين المكافئ.
+// إذا لم يصل مؤشر المستخدمين، تبقى "نظرة عامة" كخيار احتياطي للمستخدم محدود الصلاحيات.
+function withoutDuplicateOverview<T extends { key: string; section?: string }>(items: T[]): T[] {
+  const hasUsers = items.some(item => (item.section || item.key) === 'users')
+  if (!hasUsers) return items
+
+  return items.filter(item => (item.section || item.key) !== 'overview')
+}
+
+const dashboardOverviewSections = computed(() => withoutDuplicateOverview(
+  dashboardOverview.value?.sections?.filter(section => section.is_active !== false) || []
+))
+const dashboardOverviewCards = computed(() => withoutDuplicateOverview(dashboardOverview.value?.cards || []))
+const dashboardOverviewCharts = computed(() => withoutDuplicateOverview(dashboardOverview.value?.charts || []))
 const dashboardOverviewActivities = computed(() => dashboardOverview.value?.activities || [])
 
 const fallbackSectionByKey = computed(() => new Map(sectionModels.map(section => [section.key, section])))
@@ -603,10 +615,17 @@ const quickStats = computed(() => {
   const numberLocale = currentLocale.value === 'ar' ? 'ar-SA' : 'en-US'
   const cards = new Map(dashboardOverviewCards.value.map(card => [card.key, card]))
 
-  return quickMetricKeys.map(key => ({
-    label: quickMetricLabels[currentLocale.value][key],
-    value: Number(cards.get(key)?.value ?? 0).toLocaleString(numberLocale)
-  }))
+  // تعتمد الفلترة على البطاقات التي أعادها الخادم بعد تطبيق الصلاحيات الدقيقة.
+  // البطاقة الغائبة لا تظهر في الملخص، ولا تُستبدل بقيمة صفرية وهمية.
+  return quickMetricKeys.flatMap((key) => {
+    const card = cards.get(key)
+    if (!card) return []
+
+    return [{
+      label: quickMetricLabels[currentLocale.value][key],
+      value: Number(card.value).toLocaleString(numberLocale)
+    }]
+  })
 })
 
 const heroAvatar = computed(() => auth.user?.avatar || '/logo.svg')
@@ -738,8 +757,9 @@ async function fetchDashboardOverview(): Promise<void> {
     dashboardOverview.value = response.success ? response.data : null
 
     if (dashboardOverview.value?.sections?.length && !hasSyncedOverviewSections.value) {
-      selectedSections.value = dashboardOverview.value.sections
-        .filter(section => section.is_active !== false)
+      selectedSections.value = withoutDuplicateOverview(
+        dashboardOverview.value.sections.filter(section => section.is_active !== false)
+      )
         .map(section => section.key)
       hasSyncedOverviewSections.value = true
     }
