@@ -9,16 +9,22 @@ use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Requests\Auth\ResetPasswordRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Services\Audit\AuditEventLogger;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
+use Throwable;
 
 
 class AuthApiController extends Controller
 {
+    public function __construct(
+        private readonly AuditEventLogger $auditEventLogger,
+    ) {}
+
     public function register(RegisterRequest $request): JsonResponse
     {
         $validated = $request->validated();
@@ -62,6 +68,21 @@ class AuthApiController extends Controller
 
         // Check if the key has exceeded the allowed attempts (5 attempts per 60 seconds)
         if (RateLimiter::tooManyAttempts($key, 5)) {
+            // نسجل المنع دون حفظ البريد أو كلمة المرور أو الإشارة إلى وجود الحساب.
+            $this->recordAuthAuditEvent($request, [
+                'event_type' => 'user.login.failed',
+                'category' => 'auth',
+                'severity' => 'warning',
+                'actor_type' => 'guest',
+                'action' => 'login',
+                'outcome' => 'failed',
+                'metadata' => [
+                    'auth_context' => 'sanctum',
+                    'reason' => 'rate_limited',
+                    'has_identifier' => filled($credentials['email'] ?? null),
+                ],
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'تم إيقاف محاولات تسجيل الدخول مؤقتًا. حاول مرة أخرى بعد دقيقة.',
@@ -75,6 +96,22 @@ class AuthApiController extends Controller
         if (! $user || ! Hash::check($credentials['password'], $user->password)) {
             // Record a failed attempt
             RateLimiter::hit($key);
+
+            // السبب موحد للحساب الموجود وغير الموجود حتى لا يكشف السجل حالة الحساب.
+            $this->recordAuthAuditEvent($request, [
+                'event_type' => 'user.login.failed',
+                'category' => 'auth',
+                'severity' => 'warning',
+                'actor_type' => 'guest',
+                'action' => 'login',
+                'outcome' => 'failed',
+                'metadata' => [
+                    'auth_context' => 'sanctum',
+                    'reason' => 'invalid_credentials',
+                    'has_identifier' => filled($credentials['email'] ?? null),
+                ],
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'بيانات الدخول غير صحيحة.',
@@ -87,6 +124,22 @@ class AuthApiController extends Controller
         RateLimiter::clear($key);
 
         $token = $user->createToken('auth-token')->plainTextToken;
+        $roleName = $user->roles->first()?->name;
+
+        // نسجل النجاح بعد إصدار التوكن دون تمرير التوكن أو بيانات الاعتماد إلى السجل.
+        $this->recordAuthAuditEvent($request, [
+            'event_type' => 'user.login.success',
+            'category' => 'auth',
+            'severity' => 'info',
+            'actor_type' => 'user',
+            'actor_id' => $user->id,
+            'actor_role' => $roleName,
+            'action' => 'login',
+            'outcome' => 'success',
+            'metadata' => [
+                'auth_context' => 'sanctum',
+            ],
+        ]);
 
         return response()->json([
             'success' => true,
@@ -94,7 +147,7 @@ class AuthApiController extends Controller
             'data' => [
                 'user' => new UserResource($user),
                 'token' => $token,
-                'role' => $user->roles->first()?->name,
+                'role' => $roleName,
                 'permissions' => $user->getAllPermissions()->pluck('name'),
             ],
             'errors' => null,
@@ -103,7 +156,26 @@ class AuthApiController extends Controller
 
     public function logout(Request $request): JsonResponse
     {
-        $request->user()->currentAccessToken()->delete();
+        // نلتقط هوية الفاعل قبل حذف التوكن، ثم نسجل النتيجة بعد نجاح الحذف.
+        $user = $request->user();
+        $actorId = $user?->id;
+        $actorRole = $user?->roles->first()?->name;
+
+        $user?->currentAccessToken()?->delete();
+
+        $this->recordAuthAuditEvent($request, [
+            'event_type' => 'user.logout',
+            'category' => 'auth',
+            'severity' => 'info',
+            'actor_type' => 'user',
+            'actor_id' => $actorId,
+            'actor_role' => $actorRole,
+            'action' => 'logout',
+            'outcome' => 'success',
+            'metadata' => [
+                'auth_context' => 'sanctum',
+            ],
+        ]);
 
         return response()->json([
             'success' => true,
@@ -178,5 +250,30 @@ class AuthApiController extends Controller
             'message' => 'رابط استعادة كلمة المرور غير صالح أو منتهي الصلاحية.',
             'errors' => null,
         ], 422);
+    }
+
+    /**
+     * يسجل حدث المصادقة بسياق طلب محدود، دون تمرير headers أو payload كامل.
+     *
+     * @param array<string, mixed> $event
+     */
+    private function recordAuthAuditEvent(Request $request, array $event): void
+    {
+        try {
+            $this->auditEventLogger->record([
+                ...$event,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'request_id' => $request->header('X-Request-ID'),
+                'correlation_id' => $request->header('X-Correlation-ID'),
+            ]);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            // في الاختبارات نعيد الخطأ حتى لا تمر عيوب برمجية أو أخطاء مخطط البيانات بصمت.
+            if (app()->environment('testing')) {
+                throw $exception;
+            }
+        }
     }
 }
