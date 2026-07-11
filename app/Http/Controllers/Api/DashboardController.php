@@ -127,6 +127,8 @@ class DashboardController extends Controller
             return response()->json(['message' => 'Invalid period provided'], 422);
         }
 
+        $periodRange = $this->dashboardPeriodRange($period);
+
         $role = 'other';
         if (in_array('admin', $userRoles) || in_array('super-admin', $userRoles)) {
             $role = 'admin';
@@ -147,18 +149,27 @@ class DashboardController extends Controller
             ->all();
 
         $totalUsers = User::count();
+        $periodUsers = User::query()
+            ->whereBetween('created_at', [$periodRange['start'], $periodRange['end']])
+            ->count();
         $totalAdmins = User::whereHas('roles', fn($query) => $query->whereIn('name', ['admin', 'super-admin']))->count();
         $totalStaff = User::whereHas('roles', fn($query) => $query->where('name', 'staff'))->count();
         $totalClients = User::whereHas('roles', fn($query) => $query->where('name', 'client'))->count();
         $totalDesigners = User::whereHas('roles', fn($query) => $query->where('name', 'designer'))->count();
 
         $totalRoles = Role::query()->count();
+        $periodRoles = Role::query()
+            ->whereBetween('created_at', [$periodRange['start'], $periodRange['end']])
+            ->count();
         $protectedRoles = Role::query()
             ->whereIn('name', $protectedRoleNames)
             ->count();
         $customRoles = max(0, $totalRoles - $protectedRoles);
 
         $totalPermissions = Permission::query()->count();
+        $periodPermissions = Permission::query()
+            ->whereBetween('created_at', [$periodRange['start'], $periodRange['end']])
+            ->count();
         $systemPermissions = Permission::query()
             ->when($systemPermissionNames !== [], fn($query) => $query->whereIn('name', $systemPermissionNames))
             ->when($systemPermissionNames === [], fn($query) => $query->whereRaw('1 = 0'))
@@ -172,7 +183,7 @@ class DashboardController extends Controller
             ->count();
 
         $cardValues = [
-            'users' => $totalUsers,
+            'users' => $periodUsers,
             'orders' => 0,
             'works' => 0,
             'contests' => 0,
@@ -180,11 +191,12 @@ class DashboardController extends Controller
             'works_review' => 0,
             'reports' => 0,
             'activities_feed' => 0,
-            'overview' => $totalUsers,
+            // Overview remains the users summary, scoped to the selected period.
+            'overview' => $periodUsers,
             'staff' => $totalStaff,
-            'roles' => $totalRoles,
-            'permissions' => $totalPermissions,
-            'access' => $totalRoles + $totalPermissions,
+            'roles' => $periodRoles,
+            'permissions' => $periodPermissions,
+            'access' => $periodRoles + $periodPermissions,
         ];
 
         $chartPoints = [
@@ -417,6 +429,30 @@ class DashboardController extends Controller
                 'selected_period' => $period,
             ],
         ]);
+    }
+
+    private function dashboardPeriodRange(string $period): array
+    {
+        $current = now();
+
+        return match ($period) {
+            'day' => [
+                'start' => $current->copy()->startOfDay(),
+                'end' => $current->copy()->endOfDay(),
+            ],
+            'week' => [
+                'start' => $current->copy()->startOfWeek(),
+                'end' => $current->copy()->endOfWeek(),
+            ],
+            'month' => [
+                'start' => $current->copy()->startOfMonth(),
+                'end' => $current->copy()->endOfMonth(),
+            ],
+            'year' => [
+                'start' => $current->copy()->startOfYear(),
+                'end' => $current->copy()->endOfYear(),
+            ],
+        };
     }
 
     private function dashboardActivitiesForUser(User $user): array

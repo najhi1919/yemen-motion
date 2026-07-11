@@ -173,7 +173,7 @@ class DashboardOverviewTest extends TestCase
         }
     }
 
-    public function test_admin_sees_real_access_metrics(): void
+    public function test_default_month_period_returns_current_month_access_metrics(): void
     {
         Permission::firstOrCreate(['name' => 'dashboard.overview.view', 'guard_name' => 'web']);
         Permission::firstOrCreate(['name' => 'admin.roles.view', 'guard_name' => 'web']);
@@ -197,11 +197,18 @@ class DashboardOverviewTest extends TestCase
             ->assertStatus(200);
 
         $cards = collect($response->json('data.cards'))->keyBy('key');
+        $current = now();
+        $periodRange = [$current->copy()->startOfMonth(), $current->copy()->endOfMonth()];
+        $periodRoles = Role::query()->whereBetween('created_at', $periodRange)->count();
+        $periodPermissions = Permission::query()->whereBetween('created_at', $periodRange)->count();
 
-        $this->assertSame(User::count(), $cards->get('users')['value']);
-        $this->assertSame(Role::count(), $cards->get('roles')['value']);
-        $this->assertSame(Permission::count(), $cards->get('permissions')['value']);
-        $this->assertSame(Role::count() + Permission::count(), $cards->get('access')['value']);
+        $this->assertSame(
+            User::query()->whereBetween('created_at', $periodRange)->count(),
+            $cards->get('users')['value']
+        );
+        $this->assertSame($periodRoles, $cards->get('roles')['value']);
+        $this->assertSame($periodPermissions, $cards->get('permissions')['value']);
+        $this->assertSame($periodRoles + $periodPermissions, $cards->get('access')['value']);
         $this->assertFalse($cards->has('staff'));
     }
 
@@ -635,6 +642,131 @@ class DashboardOverviewTest extends TestCase
                 ->assertJsonPath('data.period', $period)
                 ->assertJsonPath('meta.selected_period', $period);
         }
+    }
+
+    public function test_day_period_counts_only_users_created_today(): void
+    {
+        $current = now();
+        $admin = User::factory()->create(['created_at' => $current->copy()->subYears(2)]);
+        $admin->assignRole('admin');
+        User::factory()->create(['created_at' => $current]);
+        User::factory()->create(['created_at' => $current->copy()->subDay()]);
+
+        Sanctum::actingAs($admin, ['*']);
+
+        $cards = collect(
+            $this->json('GET', '/api/dashboard/overview?period=day')
+                ->assertStatus(200)
+                ->json('data.cards')
+        )->keyBy('key');
+
+        $this->assertSame(1, $cards->get('users')['value']);
+        $this->assertSame(1, $cards->get('overview')['value']);
+    }
+
+    public function test_week_period_counts_only_users_created_in_current_week(): void
+    {
+        $current = now();
+        $weekStart = $current->copy()->startOfWeek();
+        $admin = User::factory()->create(['created_at' => $current->copy()->subYears(2)]);
+        $admin->assignRole('admin');
+        User::factory()->create(['created_at' => $weekStart]);
+        User::factory()->create(['created_at' => $weekStart->copy()->subSecond()]);
+
+        Sanctum::actingAs($admin, ['*']);
+
+        $cards = collect(
+            $this->json('GET', '/api/dashboard/overview?period=week')
+                ->assertStatus(200)
+                ->json('data.cards')
+        )->keyBy('key');
+
+        $this->assertSame(1, $cards->get('users')['value']);
+    }
+
+    public function test_month_period_counts_only_users_created_in_current_month(): void
+    {
+        $current = now();
+        $monthStart = $current->copy()->startOfMonth();
+        $admin = User::factory()->create(['created_at' => $current->copy()->subYears(2)]);
+        $admin->assignRole('admin');
+        User::factory()->create(['created_at' => $monthStart]);
+        User::factory()->create(['created_at' => $monthStart->copy()->subSecond()]);
+
+        Sanctum::actingAs($admin, ['*']);
+
+        $cards = collect(
+            $this->json('GET', '/api/dashboard/overview?period=month')
+                ->assertStatus(200)
+                ->json('data.cards')
+        )->keyBy('key');
+
+        $this->assertSame(1, $cards->get('users')['value']);
+    }
+
+    public function test_year_period_excludes_users_created_before_current_year(): void
+    {
+        $current = now();
+        $yearStart = $current->copy()->startOfYear();
+        $admin = User::factory()->create(['created_at' => $current->copy()->subYears(2)]);
+        $admin->assignRole('admin');
+        User::factory()->create(['created_at' => $yearStart]);
+        User::factory()->create(['created_at' => $yearStart->copy()->subSecond()]);
+
+        Sanctum::actingAs($admin, ['*']);
+
+        $cards = collect(
+            $this->json('GET', '/api/dashboard/overview?period=year')
+                ->assertStatus(200)
+                ->json('data.cards')
+        )->keyBy('key');
+
+        $this->assertSame(1, $cards->get('users')['value']);
+    }
+
+    public function test_day_period_scopes_roles_permissions_and_access_card_values(): void
+    {
+        $current = now();
+        $outsidePeriod = $current->copy()->subDay();
+
+        Role::query()->update(['created_at' => $outsidePeriod]);
+        Permission::query()->update(['created_at' => $outsidePeriod]);
+
+        $superAdmin = User::factory()->create();
+        $superAdmin->assignRole('super-admin');
+
+        Role::create([
+            'name' => 'period-role-current',
+            'guard_name' => 'web',
+            'created_at' => $current,
+        ]);
+        Role::create([
+            'name' => 'period-role-old',
+            'guard_name' => 'web',
+            'created_at' => $outsidePeriod,
+        ]);
+        Permission::create([
+            'name' => 'period.permission.current',
+            'guard_name' => 'web',
+            'created_at' => $current,
+        ]);
+        Permission::create([
+            'name' => 'period.permission.old',
+            'guard_name' => 'web',
+            'created_at' => $outsidePeriod,
+        ]);
+
+        Sanctum::actingAs($superAdmin, ['*']);
+
+        $cards = collect(
+            $this->json('GET', '/api/dashboard/overview?period=day')
+                ->assertStatus(200)
+                ->json('data.cards')
+        )->keyBy('key');
+
+        $this->assertSame(1, $cards->get('roles')['value']);
+        $this->assertSame(1, $cards->get('permissions')['value']);
+        $this->assertSame(2, $cards->get('access')['value']);
     }
 
     public function test_invalid_period_returns_422(): void
