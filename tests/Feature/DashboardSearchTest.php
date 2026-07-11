@@ -75,10 +75,13 @@ class DashboardSearchTest extends TestCase
             ->assertStatus(403);
     }
 
-    public function test_designer_with_dashboard_overview_permission_cannot_search(): void
+    public function test_designer_with_dashboard_and_admin_users_permissions_still_cannot_search(): void
     {
         $designer = $this->userWithRole('designer');
-        $designer->givePermissionTo('dashboard.overview.view');
+        $designer->givePermissionTo([
+            'dashboard.overview.view',
+            'admin.users.view',
+        ]);
         Sanctum::actingAs($designer, ['*']);
 
         $this->getJson('/api/dashboard/search?q=ali')
@@ -114,6 +117,65 @@ class DashboardSearchTest extends TestCase
         $this->assertSame([], $response->json('data.grouped.staff'));
         $this->assertSame([], $response->json('data.grouped.roles'));
         $this->assertSame([], $response->json('data.grouped.permissions'));
+    }
+
+    public function test_staff_with_users_view_can_find_matching_users(): void
+    {
+        $staff = $this->userWithRole('staff');
+        $staff->givePermissionTo('admin.users.view');
+        User::factory()->create([
+            'name' => 'ali customer',
+            'email' => 'ali.customer@example.com',
+        ]);
+
+        Sanctum::actingAs($staff, ['*']);
+
+        $response = $this->getJson('/api/dashboard/search?q=ali')
+            ->assertStatus(200);
+
+        $users = collect($response->json('data.grouped.users'));
+
+        $this->assertTrue($users->contains(fn (array $result) => $result['title'] === 'ali customer'));
+        $this->assertSame('/admin/users?search=ali', $users->first()['route']);
+    }
+
+    public function test_staff_with_roles_view_can_find_matching_roles(): void
+    {
+        $staff = $this->userWithRole('staff');
+        $staff->givePermissionTo('admin.roles.view');
+        Role::create([
+            'name' => 'ali-reviewer',
+            'guard_name' => 'web',
+        ]);
+
+        Sanctum::actingAs($staff, ['*']);
+
+        $response = $this->getJson('/api/dashboard/search?q=ali')
+            ->assertStatus(200);
+
+        $roles = collect($response->json('data.grouped.roles'));
+
+        $this->assertTrue($roles->contains(fn (array $result) => $result['title'] === 'ali-reviewer'));
+        $this->assertSame('/admin/roles', $roles->first()['route']);
+    }
+
+    public function test_staff_without_permissions_view_cannot_find_matching_permissions(): void
+    {
+        $staff = $this->userWithRole('staff');
+        Permission::create([
+            'name' => 'ali.permission.view',
+            'guard_name' => 'web',
+        ]);
+
+        Sanctum::actingAs($staff, ['*']);
+
+        $response = $this->getJson('/api/dashboard/search?q=ali')
+            ->assertStatus(200);
+
+        $this->assertSame([], $response->json('data.grouped.permissions'));
+        $this->assertFalse(collect($response->json('data.results'))->contains(
+            fn (array $result) => $result['type'] === 'permission'
+        ));
     }
 
     public function test_admin_with_users_view_can_find_matching_users(): void

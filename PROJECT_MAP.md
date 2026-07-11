@@ -842,13 +842,69 @@ Staff Management الكامل
 تعديل بيانات الموظف
 إزالة/تعطيل موظف
 صلاحيات admin.staff.view/create/update/remove
-Permission-scoped global search
 ربط كل أقسام Dashboard التشغيلية بصلاحيات دقيقة بدل fallback dashboard.overview.view
 ```
 
 #### Notes
 
 هذه الحالة الحالية مقصودة كخطوة انتقالية صغيرة وآمنة. لا تعني اكتمال صفحة إدارة الموظفين، ولا تعني اكتمال Permission Map لكل أقسام Dashboard التشغيلية.
+
+
+### 0.16 Completed Permission-Scoped Dashboard Search — 2026-07-11
+
+تم إكمال وربط البحث العام داخل Dashboard عبر API وواجهة TopBar، ثم تثبيت نموذج التفويض والنتائج باختبارات صريحة.
+
+مراجع التنفيذ المعتمدة:
+
+```text
+7bd149c feat: add permission scoped dashboard search
+b4c4891 feat: connect topbar to dashboard search
+YM-DASH-SEARCH-PERMISSION-MODEL-001 — Permission-scoped search authorization and result tests
+```
+
+#### Authoritative access model
+
+Dashboard Search جزء من لوحة التحكم الداخلية، وليس بحثًا عامًا للعملاء أو المصممين أو الزوار.
+
+- `super-admin` يستطيع استخدام البحث ويرى كل مجموعات النتائج.
+- `admin` و`staff` يستطيعان استخدام البحث عند امتلاك `dashboard.overview.view`.
+- `client` و`designer` لا يستطيعان استخدام Dashboard Search حتى إذا مُنحا `dashboard.overview.view` أو صلاحيات `admin.*` بالخطأ.
+
+هذا يعني أن البحث للموظفين الداخليين ليس `admin-only`. الدخول الأساسي مقيد بنوع الحساب الداخلي وصلاحية Dashboard، بينما ظهور كل مجموعة نتائج يعتمد على صلاحيتها الدقيقة، لا على اسم الدور وحده.
+
+#### Permission-scoped result visibility
+
+| مجموعة النتائج | شرط الظهور |
+|----------------|------------|
+| `users` | `admin.users.view` أو `super-admin` |
+| `roles` | `admin.roles.view` أو `super-admin` |
+| `permissions` | `admin.permissions.view` أو `super-admin` |
+| `staff` | `super-admin` فقط حاليًا |
+
+تبقى نتائج `staff` محصورة في `super-admin` إلى أن تُضاف صلاحيات `admin.staff.*` ويُعتمد عقدها لاحقًا.
+
+القاعدة العامة داخل Dashboard هي أن ظهور الأقسام والبطاقات والرسوم ونتائج البحث يبنى على الصلاحيات المرتبطة بها. اسم الدور يحدد حدود الدخول الداخلية الأساسية فقط، ولا يمنح تلقائيًا رؤية كل البيانات.
+
+#### TopBar search behavior
+
+- في صفحات Dashboard الداخلية المدعومة، يتصل البحث العام في TopBar بـ Dashboard Search ويعرض dropdown للنتائج المسموح بها فقط.
+- تحتفظ صفحة `/admin/users` بالبحث السياقي الخاص بها عبر معامل users search الحالي.
+- لا يتحول بحث `/admin/users` إلى dropdown عام، ولا يخلط نتائج users السياقية مع مجموعات Dashboard Search الأخرى.
+
+#### Test lock
+
+تم تثبيت القرار في `YM-DASH-SEARCH-PERMISSION-MODEL-001` باختبارات تغطي:
+
+- حصول `staff` الذي يملك `dashboard.overview.view` فقط على استجابة ناجحة دون نتائج إدارية.
+- ظهور نتائج `users` لـ `staff` عند امتلاك `admin.users.view`.
+- ظهور نتائج `roles` لـ `staff` عند امتلاك `admin.roles.view`.
+- حجب نتائج `permissions` عن `staff` دون `admin.permissions.view`.
+- منع `client` و`designer` من البحث حتى مع منح صلاحيات Dashboard وusers لهما مباشرة.
+- استمرار رؤية `super-admin` لكل مجموعات النتائج، بما فيها `staff`.
+
+#### Deferred boundary
+
+هذا الإنجاز لا يضيف صلاحيات `admin.staff.*`، ولا يغير خطط Staff Management أو بقية أقسام Dashboard التشغيلية المؤجلة.
 
 ---
 
