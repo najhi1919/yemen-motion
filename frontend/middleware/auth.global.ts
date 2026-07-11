@@ -14,10 +14,11 @@ export default defineNuxtRouteMiddleware(async (to) => {
   const isPublicRoute = publicRoutes.includes(to.path)
 
   const adminRoles = ['super-admin', 'admin']
+  const internalDashboardRoles = [...adminRoles, 'staff']
 
   const routeRoleMap: Record<string, string[]> = {
-    '/admin': adminRoles,
-    '/staff': ['staff', ...adminRoles],
+    '/admin': internalDashboardRoles,
+    '/staff': internalDashboardRoles,
     '/designer': ['designer', ...adminRoles],
     '/client': ['client', ...adminRoles]
   }
@@ -25,7 +26,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
   const roleHomeMap: Record<string, string> = {
     'super-admin': '/admin',
     admin: '/admin',
-    staff: '/staff',
+    staff: '/admin',
     designer: '/designer',
     client: '/'
   }

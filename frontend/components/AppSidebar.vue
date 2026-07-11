@@ -169,6 +169,7 @@ const copy = computed(() => t[currentLocale.value])
 const isSuperAdmin = computed(() => auth.role === 'super-admin')
 const isAdmin = computed(() => ['super-admin', 'admin'].includes(auth.role || ''))
 const isStaff = computed(() => auth.role === 'staff')
+const isInternalDashboardUser = computed(() => ['super-admin', 'admin', 'staff'].includes(auth.role || ''))
 const hasPermission = (permission: string) => isSuperAdmin.value || auth.permissions.includes(permission)
 
 const roleLabel = computed(() => {
@@ -207,7 +208,7 @@ const allItems = computed(() => {
     items.push({ separator }, ...sectionItems)
   }
 
-  if (isAdmin.value) {
+  if (isInternalDashboardUser.value) {
     addSection(c.menu, [
       ...(hasPermission('dashboard.overview.view') ? [{ path: '/admin', label: c.home, icon: icons.home }] : [])
     ])
@@ -234,10 +235,6 @@ const allItems = computed(() => {
       { path: '/admin/flags', label: c.flags, icon: icons.flag },
       { path: '/admin/support', label: c.support, icon: icons.support }
     ] : [])
-  } else if (isStaff.value) {
-    addSection(c.menu, [
-      ...(hasPermission('dashboard.overview.view') ? [{ path: '/staff', label: c.home, icon: icons.home }] : [])
-    ])
   }
 
   return items

@@ -112,7 +112,13 @@ class DashboardController extends Controller
         $this->authorizeDashboardPermission($request, 'dashboard.overview.view');
 
         $user = $request->user();
+
+        if (! $user->hasAnyRole(['super-admin', 'admin', 'staff'])) {
+            abort(403, 'غير مصرح لك بعرض بيانات لوحة التحكم.');
+        }
+
         $userRoles = $user->roles->pluck('name')->toArray();
+        $isSuperAdmin = $user->hasRole('super-admin');
 
         $validPeriods = ['day', 'week', 'month', 'year'];
         $period = $request->input('period', 'month');
@@ -216,14 +222,14 @@ class DashboardController extends Controller
             ],
         ];
 
-        // Fallback to dashboard.overview.view until module-specific dashboard permissions exist.
+        // Placeholder modules remain super-admin only until their precise permissions exist.
         $allSections = [
             'users' => [
                 'key' => 'users',
                 'label' => ['ar' => 'المستخدمون', 'en' => 'Users'],
                 'icon' => 'user-group',
                 'color' => '#10b981',
-                'is_admin_only' => true,
+                'is_admin_only' => false,
                 'permission' => 'admin.users.view',
                 'is_live' => true,
                 'is_placeholder' => false,
@@ -274,7 +280,7 @@ class DashboardController extends Controller
                 'icon' => 'users',
                 'color' => '#14b8a6',
                 'is_admin_only' => true,
-                'permission' => 'dashboard.overview.view',
+                'permission' => 'super-admin',
                 'is_live' => true,
                 'is_placeholder' => false,
             ],
@@ -283,7 +289,7 @@ class DashboardController extends Controller
                 'label' => ['ar' => 'الأدوار', 'en' => 'Roles'],
                 'icon' => 'shield-check',
                 'color' => '#8b5cf6',
-                'is_admin_only' => true,
+                'is_admin_only' => false,
                 'permission' => 'admin.roles.view',
                 'is_live' => true,
                 'is_placeholder' => false,
@@ -293,7 +299,7 @@ class DashboardController extends Controller
                 'label' => ['ar' => 'الصلاحيات', 'en' => 'Permissions'],
                 'icon' => 'key',
                 'color' => '#0ea5e9',
-                'is_admin_only' => true,
+                'is_admin_only' => false,
                 'permission' => 'admin.permissions.view',
                 'is_live' => true,
                 'is_placeholder' => false,
@@ -303,7 +309,7 @@ class DashboardController extends Controller
                 'label' => ['ar' => 'إدارة الوصول', 'en' => 'Access Management'],
                 'icon' => 'rectangle-group',
                 'color' => '#f97316',
-                'is_admin_only' => true,
+                'is_admin_only' => false,
                 'permission' => 'admin.access.view',
                 'is_live' => true,
                 'is_placeholder' => false,
@@ -338,13 +344,13 @@ class DashboardController extends Controller
                 'is_live' => false,
                 'is_placeholder' => true,
             ],
-            // Minimal section for 'other' roles
+            // Base section for internal roles with dashboard overview access.
             'overview' => [
                 'key' => 'overview',
                 'label' => ['ar' => 'نظرة عامة', 'en' => 'Overview'],
                 'icon' => 'chart-bar',
                 'color' => '#94a3b8',
-                'is_admin_only' => false, // Accessible by all
+                'is_admin_only' => false,
                 'permission' => 'dashboard.overview.view',
                 'is_live' => true,
                 'is_placeholder' => false,
@@ -352,16 +358,11 @@ class DashboardController extends Controller
         ];
 
         foreach ($allSections as $key => $sectionConfig) {
-            $roleAllowsSection = false;
-            if ($role === 'admin') {
-                $roleAllowsSection = true; // Admin sees all sections
-            } elseif ($role === 'staff' && !$sectionConfig['is_admin_only']) {
-                $roleAllowsSection = true; // Staff sees staff-safe sections
-            } elseif ($role === 'other' && $key === 'overview') {
-                $roleAllowsSection = true; // 'Other' roles only see a minimal overview
-            }
-
-            $canView = $roleAllowsSection && $user->can($sectionConfig['permission']);
+            $canView = $isSuperAdmin || (
+                ! $sectionConfig['is_placeholder']
+                && $sectionConfig['permission'] !== 'super-admin'
+                && $user->can($sectionConfig['permission'])
+            );
 
             if ($canView) {
                 $sections[] = array_merge($sectionConfig, [
