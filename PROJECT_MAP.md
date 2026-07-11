@@ -1062,6 +1062,23 @@ activities
 - لا يبدأ بناء reports module قبل إغلاق `YM-REPORTS-SCOPE-DECISION-001` واعتماد قراره.
 - تبقى خطط الوحدات التشغيلية الأخرى وترتيبها دون تغيير.
 
+
+### 0.19 Reports and Analytics Scope Decision — 2026-07-11
+
+تم اعتماد نطاق وظيفي منفصل لـDashboard وReports وAnalytics. الرابطان `/admin/reports` و`/admin/analytics` موجودان في القائمة الجانبية، لكن صفحتيهما لم تُبنَ بعد.
+
+#### Scope decision
+
+- يبقى Dashboard للمتابعة التشغيلية السريعة ضمن الفترة الحالية.
+- يكون Reports مركزًا للتقارير التاريخية التفصيلية وجداول السجلات.
+- يكون Analytics مركزًا للتحليلات والاتجاهات والمقارنات طويلة المدى.
+
+مرجع القرار: `docs/ym-sdd/specs/YM-REPORTS-HISTORICAL-ANALYTICS-SCOPE-001.md`.
+
+أول تنفيذين مقترحين لاحقًا هما `YM-REPORTS-USERS-MVP-001` ثم `YM-ANALYTICS-USERS-MVP-001`.
+
+هذا اعتماد نطاق فقط، ولا يعني بناء الصفحات أو APIs أو snapshots أو صلاحيات فعلية في المرحلة الحالية.
+
 ---
 
 ## 1. TECH_STACK — المعمارية النهائية المعتمدة
