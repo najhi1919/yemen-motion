@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Api\Admin\RoleController as AdminRoleController;
 use App\Http\Controllers\Api\Admin\PermissionController as AdminPermissionController;
 use App\Http\Controllers\Api\Admin\StaffController as AdminStaffController;
+use App\Http\Controllers\Api\Audit\PageViewAuditController;
 use App\Http\Controllers\Api\AuthApiController;
 use App\Http\Controllers\Api\DashboardSearchController;
 use Illuminate\Http\Request;
@@ -18,6 +19,8 @@ Route::prefix('auth')->group(function () {
 });
 
 Route::middleware(['auth:sanctum'])->get('/user', [AuthApiController::class, 'user']);
+
+Route::middleware(['auth:sanctum'])->post('/audit/page-view', PageViewAuditController::class);
 
 Route::middleware(['auth:sanctum'])->prefix('dashboard')->group(function () {
     Route::get('/stats', [\App\Http\Controllers\Api\DashboardController::class, 'stats']);
