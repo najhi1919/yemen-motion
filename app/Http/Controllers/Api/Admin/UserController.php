@@ -4,12 +4,18 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\Audit\AuditEventLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Throwable;
 
 class UserController extends Controller
 {
+    public function __construct(
+        private readonly AuditEventLogger $auditEventLogger,
+    ) {}
+
     public function index(Request $request): JsonResponse
     {
         $viewer = $request->user();
@@ -123,8 +129,27 @@ class UserController extends Controller
             ], 422);
         }
 
+        $previousRoles = $user->getRoleNames()
+            ->sort()
+            ->values()
+            ->all();
+
         $user->syncRoles($roles);
         $user->load('roles:id,name');
+        $newRoles = $user->roles
+            ->pluck('name')
+            ->sort()
+            ->values()
+            ->all();
+
+        // نسجل المزامنة بعد نجاحها باستخدام أسماء الأدوار النظامية فقط.
+        // لا نمرر اسم المستخدم أو بريده أو نموذج الطلب أو payload كامل.
+        $this->recordUserRolesSyncedAuditEvent(
+            $request,
+            $user->id,
+            $previousRoles,
+            $newRoles,
+        );
 
         return response()->json([
             'success' => true,
@@ -138,5 +163,56 @@ class UserController extends Controller
             'message' => 'تم تحديث أدوار المستخدم بنجاح',
             'errors' => null,
         ]);
+    }
+
+    /**
+     * يسجل مزامنة الأدوار بسياق محدود دون بيانات المستخدم الشخصية.
+     *
+     * @param list<string> $previousRoles
+     * @param list<string> $newRoles
+     */
+    private function recordUserRolesSyncedAuditEvent(
+        Request $request,
+        int $targetUserId,
+        array $previousRoles,
+        array $newRoles,
+    ): void {
+        $actor = $request->user();
+        $addedRoles = array_values(array_diff($newRoles, $previousRoles));
+        $removedRoles = array_values(array_diff($previousRoles, $newRoles));
+
+        try {
+            $this->auditEventLogger->record([
+                'event_type' => 'user.roles.synced',
+                'category' => 'users',
+                'severity' => 'notice',
+                'actor_type' => 'user',
+                'actor_id' => $actor?->id,
+                'actor_role' => $actor?->roles->first()?->name,
+                'target_type' => 'user',
+                'target_id' => $targetUserId,
+                'action' => 'sync_roles',
+                'outcome' => 'success',
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'request_id' => $request->header('X-Request-ID'),
+                'correlation_id' => $request->header('X-Correlation-ID'),
+                'metadata' => [
+                    'previous_roles' => $previousRoles,
+                    'new_roles' => $newRoles,
+                    'added_roles' => $addedRoles,
+                    'removed_roles' => $removedRoles,
+                    'role_count' => count($newRoles),
+                    'source' => 'admin_users_role_sync',
+                ],
+            ]);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            // في الاختبارات نعيد الخطأ حتى لا تمر عيوب audit أو مخطط البيانات بصمت.
+            if (app()->environment('testing')) {
+                throw $exception;
+            }
+        }
     }
 }
