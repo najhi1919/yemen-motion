@@ -5,15 +5,21 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StorePermissionRequest;
 use App\Http\Requests\Admin\UpdatePermissionRequest;
+use App\Services\Audit\AuditEventLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
+use Throwable;
 
 class PermissionController extends Controller
 {
+    public function __construct(
+        private readonly AuditEventLogger $auditEventLogger,
+    ) {}
+
     public function index(Request $request): JsonResponse
     {
         $viewer = $request->user();
@@ -60,10 +66,26 @@ class PermissionController extends Controller
         }
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
+        $permission->refresh();
+
+        // نسجل إنشاء الصلاحية بعد اكتمال الحفظ والإسناد، دون تمرير payload الطلب.
+        $this->recordPermissionAuditEvent($request, [
+            'event_type' => 'permission.created',
+            'category' => 'permissions',
+            'severity' => 'notice',
+            'target_type' => 'permission',
+            'target_id' => $permission->id,
+            'action' => 'create',
+            'outcome' => 'success',
+            'metadata' => [
+                'permission_name' => $permission->name,
+                'source' => 'access_management_permission_create',
+            ],
+        ]);
 
         return response()->json([
             'success' => true,
-            'data' => $this->permissionPayload($permission->fresh()),
+            'data' => $this->permissionPayload($permission),
             'message' => 'تم إنشاء الصلاحية بنجاح',
             'errors' => null,
         ], 201);
@@ -85,15 +107,35 @@ class PermissionController extends Controller
             abort(422, 'لا يمكن تحويل صلاحية مخصصة إلى صلاحية نظام.');
         }
 
+        $oldPermissionName = $permission->name;
+
         $permission->update([
             'name' => $validated['name'],
         ]);
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
+        $permission->refresh();
+
+        // نسجل تعديل الاسم بعد نجاح التحديث مع الاسمين النظاميين الآمنين فقط.
+        $this->recordPermissionAuditEvent($request, [
+            'event_type' => 'permission.updated',
+            'category' => 'permissions',
+            'severity' => 'notice',
+            'target_type' => 'permission',
+            'target_id' => $permission->id,
+            'action' => 'update',
+            'outcome' => 'success',
+            'metadata' => [
+                'changed_fields' => ['name'],
+                'old_permission_name' => $oldPermissionName,
+                'new_permission_name' => $permission->name,
+                'source' => 'access_management_permission_update',
+            ],
+        ]);
 
         return response()->json([
             'success' => true,
-            'data' => $this->permissionPayload($permission->fresh()),
+            'data' => $this->permissionPayload($permission),
             'message' => 'تم تحديث الصلاحية بنجاح',
             'errors' => null,
         ]);
@@ -115,9 +157,27 @@ class PermissionController extends Controller
             abort(422, 'لا يمكن حذف صلاحية مرتبطة بأدوار أو مستخدمين.');
         }
 
+        $deletedPermissionId = $permission->id;
+        $deletedPermissionName = $permission->name;
+
         $permission->delete();
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+        // نسجل الحذف بعد نجاحه باستخدام الهوية والاسم المحفوظين قبل إزالة الصلاحية.
+        $this->recordPermissionAuditEvent($request, [
+            'event_type' => 'permission.deleted',
+            'category' => 'permissions',
+            'severity' => 'notice',
+            'target_type' => 'permission',
+            'target_id' => $deletedPermissionId,
+            'action' => 'delete',
+            'outcome' => 'success',
+            'metadata' => [
+                'permission_name' => $deletedPermissionName,
+                'source' => 'access_management_permission_delete',
+            ],
+        ]);
 
         return response()->json([
             'success' => true,
@@ -169,5 +229,35 @@ class PermissionController extends Controller
         return DB::table($modelHasPermissionsTable)
             ->where($permissionPivotKey, $permission->id)
             ->exists();
+    }
+
+    /**
+     * يسجل حدث الصلاحية بسياق طلب محدود دون تمرير request أو payload كامل.
+     *
+     * @param array<string, mixed> $event
+     */
+    private function recordPermissionAuditEvent(Request $request, array $event): void
+    {
+        $actor = $request->user();
+
+        try {
+            $this->auditEventLogger->record([
+                ...$event,
+                'actor_type' => 'user',
+                'actor_id' => $actor?->id,
+                'actor_role' => $actor?->roles->first()?->name,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'request_id' => $request->header('X-Request-ID'),
+                'correlation_id' => $request->header('X-Correlation-ID'),
+            ]);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            // في الاختبارات نعيد الخطأ حتى لا تمر عيوب audit أو مخطط البيانات بصمت.
+            if (app()->environment('testing')) {
+                throw $exception;
+            }
+        }
     }
 }
