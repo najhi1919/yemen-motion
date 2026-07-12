@@ -7,14 +7,20 @@ use App\Http\Requests\Admin\StoreRoleRequest;
 use App\Http\Requests\Admin\SyncRolePermissionsRequest;
 use App\Http\Requests\Admin\UpdateRoleRequest;
 use App\Models\User;
+use App\Services\Audit\AuditEventLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
+use Throwable;
 
 class RoleController extends Controller
 {
+    public function __construct(
+        private readonly AuditEventLogger $auditEventLogger,
+    ) {}
+
     public function index(Request $request): JsonResponse
     {
         $viewer = $request->user();
@@ -70,10 +76,26 @@ class RoleController extends Controller
         ]);
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
+        $role->load('permissions:id,name');
+
+        // نسجل إنشاء الدور بعد اكتمال الحفظ، ونمرر الاسم النظامي فقط دون payload الطلب.
+        $this->recordRoleAuditEvent($request, [
+            'event_type' => 'role.created',
+            'category' => 'roles',
+            'severity' => 'notice',
+            'target_type' => 'role',
+            'target_id' => $role->id,
+            'action' => 'create',
+            'outcome' => 'success',
+            'metadata' => [
+                'role_name' => $role->name,
+                'source' => 'access_management_role_create',
+            ],
+        ]);
 
         return response()->json([
             'success' => true,
-            'data' => $this->rolePayload($role->load('permissions:id,name')),
+            'data' => $this->rolePayload($role),
             'message' => 'تم إنشاء الدور بنجاح',
             'errors' => null,
         ], 201);
@@ -92,15 +114,35 @@ class RoleController extends Controller
             abort(422, 'لا يمكن تحويل دور مخصص إلى دور محمي.');
         }
 
+        $oldRoleName = $role->name;
+
         $role->update([
             'name' => $validated['name'],
         ]);
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
+        $role->load('permissions:id,name');
+
+        // نسجل تعديل الاسم بعد نجاح التحديث مع القيمتين الآمنتين فقط.
+        $this->recordRoleAuditEvent($request, [
+            'event_type' => 'role.updated',
+            'category' => 'roles',
+            'severity' => 'notice',
+            'target_type' => 'role',
+            'target_id' => $role->id,
+            'action' => 'update',
+            'outcome' => 'success',
+            'metadata' => [
+                'changed_fields' => ['name'],
+                'old_role_name' => $oldRoleName,
+                'new_role_name' => $role->name,
+                'source' => 'access_management_role_update',
+            ],
+        ]);
 
         return response()->json([
             'success' => true,
-            'data' => $this->rolePayload($role->fresh('permissions:id,name')),
+            'data' => $this->rolePayload($role),
             'message' => 'تم تحديث الدور بنجاح',
             'errors' => null,
         ]);
@@ -124,9 +166,27 @@ class RoleController extends Controller
             abort(422, 'لا يمكن حذف دور مرتبط بمستخدمين.');
         }
 
+        $deletedRoleId = $role->id;
+        $deletedRoleName = $role->name;
+
         $role->delete();
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+        // نسجل الحذف بعد نجاحه باستخدام الهوية والاسم اللذين حُفظا قبل إزالة الدور.
+        $this->recordRoleAuditEvent($request, [
+            'event_type' => 'role.deleted',
+            'category' => 'roles',
+            'severity' => 'notice',
+            'target_type' => 'role',
+            'target_id' => $deletedRoleId,
+            'action' => 'delete',
+            'outcome' => 'success',
+            'metadata' => [
+                'role_name' => $deletedRoleName,
+                'source' => 'access_management_role_delete',
+            ],
+        ]);
 
         return response()->json([
             'success' => true,
@@ -147,10 +207,33 @@ class RoleController extends Controller
         $role->syncPermissions($validated['permissions']);
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
+        $role->load('permissions:id,name');
+        $permissionNames = $role->permissions
+            ->pluck('name')
+            ->sort()
+            ->values()
+            ->all();
+
+        // نسجل المزامنة بعد اكتمالها من الصلاحيات الناتجة، دون تمرير الطلب أو payload كامل.
+        $this->recordRoleAuditEvent($request, [
+            'event_type' => 'role.permissions.synced',
+            'category' => 'roles',
+            'severity' => 'notice',
+            'target_type' => 'role',
+            'target_id' => $role->id,
+            'action' => 'sync_permissions',
+            'outcome' => 'success',
+            'metadata' => [
+                'role_name' => $role->name,
+                'permission_count' => count($permissionNames),
+                'permission_names' => $permissionNames,
+                'source' => 'access_management_role_permissions_sync',
+            ],
+        ]);
 
         return response()->json([
             'success' => true,
-            'data' => $this->rolePayload($role->fresh('permissions:id,name')),
+            'data' => $this->rolePayload($role),
             'message' => 'تم تحديث صلاحيات الدور بنجاح',
             'errors' => null,
         ]);
@@ -187,5 +270,35 @@ class RoleController extends Controller
             ->where($rolePivotKey, $role->id)
             ->where('model_type', User::class)
             ->count();
+    }
+
+    /**
+     * يسجل حدث الدور بسياق طلب محدود دون تمرير request أو payload كامل.
+     *
+     * @param array<string, mixed> $event
+     */
+    private function recordRoleAuditEvent(Request $request, array $event): void
+    {
+        $actor = $request->user();
+
+        try {
+            $this->auditEventLogger->record([
+                ...$event,
+                'actor_type' => 'user',
+                'actor_id' => $actor?->id,
+                'actor_role' => $actor?->roles->first()?->name,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'request_id' => $request->header('X-Request-ID'),
+                'correlation_id' => $request->header('X-Correlation-ID'),
+            ]);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            // في الاختبارات نعيد الخطأ حتى لا تمر عيوب audit أو مخطط البيانات بصمت.
+            if (app()->environment('testing')) {
+                throw $exception;
+            }
+        }
     }
 }
