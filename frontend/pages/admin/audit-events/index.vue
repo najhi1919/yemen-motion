@@ -23,7 +23,13 @@
       </div>
     </section>
 
-    <section v-if="forbidden" class="ym-audit-access-state" role="status">
+    <section v-if="authPending" class="ym-audit-access-state" role="status" aria-live="polite">
+      <span class="ym-audit-spinner" aria-hidden="true" />
+      <h2>{{ copy.authLoadingTitle }}</h2>
+      <p>{{ copy.authLoadingCopy }}</p>
+    </section>
+
+    <section v-else-if="forbidden" class="ym-audit-access-state" role="status">
       <span class="ym-audit-access-state__icon" aria-hidden="true">!</span>
       <h2>{{ copy.forbiddenTitle }}</h2>
       <p>{{ copy.forbiddenCopy }}</p>
@@ -302,6 +308,8 @@ const copyMap = {
     totalEvents: 'إجمالي الأحداث',
     internalRecords: 'سجلات داخلية محمية',
     notice: 'لا توفر هذه الصفحة تعديل السجلات أو حذفها أو تصديرها، ولا ترتبط بالتقارير أو التحليلات.',
+    authLoadingTitle: 'جارٍ التحقق من صلاحية الوصول',
+    authLoadingCopy: 'ننتظر اكتمال تهيئة جلسة المستخدم قبل تحميل سجل التدقيق.',
     forbiddenTitle: 'الوصول إلى سجل التدقيق غير متاح',
     forbiddenCopy: 'هذه الصفحة محصورة على المدير الأعلى. لم تتم محاولة تحميل أي سجلات لهذا الحساب.',
     filtersTitle: 'فلاتر السجل',
@@ -352,6 +360,8 @@ const copyMap = {
     totalEvents: 'Total events',
     internalRecords: 'Protected internal records',
     notice: 'This page does not edit, delete, or export events and is not connected to Reports or Analytics.',
+    authLoadingTitle: 'Checking audit access',
+    authLoadingCopy: 'Waiting for the user session to initialize before loading audit events.',
     forbiddenTitle: 'Audit access is unavailable',
     forbiddenCopy: 'This page is restricted to super-admin. No audit data request was made for this account.',
     filtersTitle: 'Audit filters',
@@ -397,6 +407,12 @@ const copyMap = {
 }
 
 const copy = computed(() => copyMap[currentLocale.value])
+const authPending = computed(() => !authStore.isInitialized)
+const hasAuditAccess = computed(() => (
+  authStore.isInitialized
+  && authStore.isAuthenticated
+  && authStore.role === 'super-admin'
+))
 const events = ref<AuditEvent[]>([])
 const loading = ref(false)
 const forbidden = ref(false)
@@ -420,6 +436,9 @@ const filters = reactive<AuditFilters>({
   to: '',
   per_page: 15
 })
+let pageMounted = false
+let loadedForCurrentAuthorization = false
+let accessRevision = 0
 
 const summaryCards = computed(() => [
   { label: copy.value.currentRows, value: events.value.length, subtitle: copy.value.liveData, color: '#38bdf8' },
@@ -513,11 +532,16 @@ function buildEndpoint(): string {
 }
 
 async function fetchAuditEvents(): Promise<void> {
+  // لا نحكم على الوصول ولا نرسل الطلب قبل اكتمال تهيئة جلسة المصادقة.
+  if (!authStore.isInitialized) return
+
   // نمنع الطلب من الواجهة مبكرًا، مع بقاء الخادم هو حارس التفويض النهائي.
-  if (authStore.role !== 'super-admin') {
+  if (!hasAuditAccess.value) {
     forbidden.value = true
     return
   }
+
+  const requestAccessRevision = accessRevision
 
   if (filters.from && filters.to && filters.to < filters.from) {
     error.value = copy.value.invalidDateRange
@@ -529,12 +553,17 @@ async function fetchAuditEvents(): Promise<void> {
 
   try {
     const response = await apiFetch<AuditEventsResponse>(buildEndpoint())
+
+    if (requestAccessRevision !== accessRevision || !hasAuditAccess.value) return
+
     events.value = response.data?.data || []
     pagination.current_page = response.data?.current_page || 1
     pagination.last_page = response.data?.last_page || 1
     pagination.per_page = response.data?.per_page || filters.per_page
     pagination.total = response.data?.total || 0
   } catch (requestError: unknown) {
+    if (requestAccessRevision !== accessRevision || !hasAuditAccess.value) return
+
     const status = errorStatus(requestError)
 
     if (status === 403) {
@@ -545,8 +574,45 @@ async function fetchAuditEvents(): Promise<void> {
 
     error.value = status === 422 ? copy.value.validationError : copy.value.genericError
   } finally {
-    loading.value = false
+    if (requestAccessRevision === accessRevision) {
+      loading.value = false
+    }
   }
+}
+
+function clearAuditResults(): void {
+  events.value = []
+  error.value = null
+  loading.value = false
+  pagination.current_page = 1
+  pagination.last_page = 1
+  pagination.per_page = filters.per_page
+  pagination.total = 0
+}
+
+function syncAuditAccessState(): void {
+  if (!pageMounted) return
+
+  if (!authStore.isInitialized) {
+    forbidden.value = false
+    loadedForCurrentAuthorization = false
+    clearAuditResults()
+    return
+  }
+
+  if (!hasAuditAccess.value) {
+    forbidden.value = true
+    loadedForCurrentAuthorization = false
+    clearAuditResults()
+    return
+  }
+
+  forbidden.value = false
+
+  if (loadedForCurrentAuthorization) return
+
+  loadedForCurrentAuthorization = true
+  void fetchAuditEvents()
 }
 
 function applyFilters(): void {
@@ -578,13 +644,18 @@ function changePage(nextPage: number): void {
   void fetchAuditEvents()
 }
 
-onMounted(() => {
-  if (authStore.role !== 'super-admin') {
-    forbidden.value = true
-    return
-  }
+watch(
+  () => [authStore.isInitialized, authStore.isAuthenticated, authStore.role] as const,
+  () => {
+    accessRevision += 1
+    syncAuditAccessState()
+  },
+  { flush: 'post' }
+)
 
-  void fetchAuditEvents()
+onMounted(() => {
+  pageMounted = true
+  syncAuditAccessState()
 })
 </script>
 
