@@ -1168,6 +1168,38 @@ activities
 - لا يغير الصلاحيات فعليًا.
 - لا يغير Dashboard الحالي أو مصادر بياناته أو سلوكه.
 
+
+### 0.21 Audit Tracking Implementation Baseline — 2026-07-13
+
+تحول قرار Audit / Tracking السابق إلى baseline تنفيذي فعلي لجمع الأحداث الداخلية المهمة.
+
+#### Implemented foundation
+
+- جدول `audit_events` مع `AuditEvent` model.
+- خدمة `AuditEventLogger` المركزية لتسجيل الحقول المعتمدة وتنقيح metadata.
+- تتبع زيارات الواجهة لمسارات `/admin` و`/staff` عبر endpoint داخلي محمي.
+
+#### Completed events
+
+- Auth: `user.login.success`, `user.login.failed`, `user.logout`.
+- Staff: `staff.created`.
+- Dashboard search: `dashboard.search.performed`.
+- Role management: `role.created`, `role.updated`, `role.deleted`, `role.permissions.synced`.
+- Permission management: `permission.created`, `permission.updated`, `permission.deleted`.
+- Admin user role sync: `user.roles.synced`.
+- Page views: `admin.page.viewed`.
+
+#### Security baseline
+
+- لا تحفظ passwords أو tokens أو cookies، ولا payload أو request كاملًا.
+- لا يحفظ page view أي query string أو full URL أو referrer.
+- يمنع `client` و`designer` من internal page view tracking حتى عند منحهما صلاحيات بالخطأ.
+- فشل audit logging لا يكسر runtime، بينما يعاد رمي الخطأ في testing لكشف العيوب.
+
+#### Current boundary
+
+تُجمع Audit logs الآن للأحداث الداخلية الرئيسية المذكورة أعلاه. لا توجد بعد APIs لقراءة السجلات، ولا Reports / Analytics UI؛ وتبقى هذه أعمالًا مستقبلية مستقلة.
+
 ---
 
 ## 1. TECH_STACK — المعمارية النهائية المعتمدة
