@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\Admin\UserController as AdminUserController;
+use App\Http\Controllers\Api\Admin\AuditEventController as AdminAuditEventController;
 use App\Http\Controllers\Api\Admin\RoleController as AdminRoleController;
 use App\Http\Controllers\Api\Admin\PermissionController as AdminPermissionController;
 use App\Http\Controllers\Api\Admin\StaffController as AdminStaffController;
@@ -31,6 +32,8 @@ Route::middleware(['auth:sanctum'])->prefix('dashboard')->group(function () {
 });
 
 Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
+    Route::get('/audit-events', [AdminAuditEventController::class, 'index']);
+
     Route::get('/users', [AdminUserController::class, 'index']);
     Route::put('/users/{user}/roles', [AdminUserController::class, 'syncRoles']);
     Route::post('/staff', [AdminStaffController::class, 'store']);
