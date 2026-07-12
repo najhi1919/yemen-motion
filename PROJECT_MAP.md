@@ -1200,6 +1200,30 @@ activities
 
 تُجمع Audit logs الآن للأحداث الداخلية الرئيسية المذكورة أعلاه. لا توجد بعد APIs لقراءة السجلات، ولا Reports / Analytics UI؛ وتبقى هذه أعمالًا مستقبلية مستقلة.
 
+
+### 0.22 Audit Logs Read Access Baseline — 2026-07-13
+
+يحدّث هذا القسم حد القراءة السابق: أصبحت سجلات Audit قابلة للقراءة داخليًا بصورة مقيدة للمدير الأعلى فقط.
+
+#### Backend read API
+
+- endpoint القراءة: `GET /api/admin/audit-events`.
+- الوصول محصور على `super-admin`؛ وتمنع أدوار `admin` و`staff` و`client` و`designer` حتى مع صلاحيات عرضية.
+- يدعم pagination وفلاتر allowlist: `event_type`, `category`, `severity`, `outcome`, `actor_id`, `target_type`, `target_id`, `from`, `to`, `per_page`, `page`.
+- لا يدعم البحث في `email`, `name`, `payload`, `request`, `token`, `password`, `cookie`, أو `metadata`.
+- تعرض الاستجابة الحقول المعتمدة فقط من `audit_events` دون علاقات users أو models كاملة.
+
+#### Frontend read-only page
+
+- صفحة القراءة: `/admin/audit-events`.
+- تعرض حالات loading وerror وempty وforbidden وsuccess مع pagination وفلاتر API المسموحة.
+- تعرض metadata كنص JSON آمن داخل عنصر قابل للتوسيع، ولا تفسرها كـHTML.
+- يظهر رابط «سجل التدقيق» في Sidebar لدور `super-admin` فقط.
+
+#### Current boundary
+
+هذه القراءة مخصصة للمراجعة الداخلية فقط. لا تشمل Reports أو Analytics أو export، ولا توفر تعديل سجلات Audit أو حذفها.
+
 ---
 
 ## 1. TECH_STACK — المعمارية النهائية المعتمدة
