@@ -1224,6 +1224,32 @@ activities
 
 هذه القراءة مخصصة للمراجعة الداخلية فقط. لا تشمل Reports أو Analytics أو export، ولا توفر تعديل سجلات Audit أو حذفها.
 
+### 0.23 Access Denied Audit Events Baseline — 2026-07-13
+
+أصبح رفض الوصول إلى مسارات API الداخلية المحددة جزءًا من Audit Tracking عبر middleware مركزي: `App\Http\Middleware\RecordAccessDeniedAuditEvent`.
+
+#### Implemented behavior
+
+- يسجل رفض الوصول بحالتي `401` و`403` دون تغيير الاستجابة الأصلية.
+- هوية الحدث: `event_type = access.denied`, و`category = access_control`, و`severity = warning`.
+- العملية والنتيجة: `action = access_denied`, و`outcome = denied`.
+
+#### Tracked and excluded paths
+
+- المسارات الداخلة: `/api/admin`, و`/api/admin/*`, و`/api/dashboard`, و`/api/dashboard/*`, و`/api/audit`, و`/api/audit/*`, و`/api/user`, و`/api/auth/logout`.
+- المسارات المستثناة: `/api/auth/login`, و`/api/auth/register`, و`/api/auth/forgot-password`, و`/api/auth/reset-password`، إضافة إلى health/public endpoints.
+
+#### Safe metadata and security
+
+- تحفظ metadata فقط: `method`, و`path` دون query string، و`status`, و`route_name` عند توفره، و`source = access_denied_tracking`.
+- لا يحفظ الحدث full URL أو query string أو referrer أو payload أو request كاملًا أو headers أو Authorization.
+- لا يحفظ cookies أو tokens أو passwords أو email أو name.
+- يمنع تكرار الحدث للطلب نفسه عبر request attribute داخلي.
+
+#### Verification baseline
+
+- الاختبار الكامل بعد التنفيذ: `207 passed / 1306 assertions`.
+
 ---
 
 ## 1. TECH_STACK — المعمارية النهائية المعتمدة
