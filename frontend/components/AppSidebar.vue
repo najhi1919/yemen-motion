@@ -123,6 +123,7 @@ const t = {
     staff: 'الموظفون',
     roles: 'الأدوار والصلاحيات',
     permissions: 'الصلاحيات',
+    auditEvents: 'سجل التدقيق',
     works: 'الأعمال',
     orders: 'الطلبات',
     bookings: 'الحجوزات',
@@ -150,6 +151,7 @@ const t = {
     staff: 'Staff',
     roles: 'Roles & Permissions',
     permissions: 'Permissions',
+    auditEvents: 'Audit Events',
     works: 'Works',
     orders: 'Orders',
     bookings: 'Bookings',
@@ -217,7 +219,8 @@ const allItems = computed(() => {
       ...(hasPermission('admin.users.view') ? [{ path: '/admin/users', label: c.users, icon: icons.users }] : []),
       ...(isSuperAdmin.value ? [{ path: '/admin/staff', label: c.staff, icon: icons.briefcase }] : []),
       ...(hasPermission('admin.roles.view') ? [{ path: '/admin/roles', label: c.roles, icon: icons.shield }] : []),
-      ...(hasPermission('admin.permissions.view') ? [{ path: '/admin/permissions', label: c.permissions, icon: icons.shield }] : [])
+      ...(hasPermission('admin.permissions.view') ? [{ path: '/admin/permissions', label: c.permissions, icon: icons.shield }] : []),
+      ...(isSuperAdmin.value ? [{ path: '/admin/audit-events', label: c.auditEvents, icon: icons.eye }] : [])
     ])
 
     addSection(c.content, isSuperAdmin.value ? [
