@@ -1406,6 +1406,177 @@ activities
 - لا يوجد تنفيذ برمجي أو مراجعة بصرية شاملة ضمن خطوة التوثيق هذه.
 - لا تدخل Orders أو Contests أو Bookings أو Finance ضمن إدارة الأعمال؛ تبقى أقسامًا مستقلة ويمكنها الاستفادة من Works لاحقًا.
 
+### 0.29 Works Management Permission Matrix Baseline — 2026-07-13
+
+تحدد هذه المصفوفة عقد الصلاحيات المعتمد للتنفيذ القادم في `/admin/works`، ولا تعني أن الصلاحيات أو صفحات إدارة الأعمال منفذة حاليًا.
+
+#### Internal-only access contract
+
+- إدارة الأعمال داخلية فقط: يملك `super-admin` جميع صلاحياتها، بينما يخضع `admin` و`staff` وبقية الأدوار الداخلية للصلاحيات الدقيقة.
+- يمنع `client` و`designer` من جميع صفحات `/admin/works` حتى إذا مُنحا صلاحيات بالخطأ.
+- تخفي الواجهة أو تعطل العناصر غير المسموحة وفق الصلاحية وحالة العمل، ويبقى Backend الحارس النهائي عند التنفيذ.
+
+#### Permission registry contract
+
+##### Navigation and page access
+
+```text
+admin.works.access
+admin.works.overview.view
+admin.works.all.view
+admin.works.review.view
+admin.works.visibility.view
+admin.works.reports.view
+admin.works.taxonomy.view
+admin.works.activity.view
+admin.works.settings.view
+```
+
+##### Read and detail permissions
+
+```text
+admin.works.list
+admin.works.detail.view
+admin.works.media.view
+admin.works.metadata.view
+admin.works.designer.view
+admin.works.private_notes.view
+```
+
+##### Create and update permissions
+
+```text
+admin.works.create
+admin.works.update.basic
+admin.works.update.media
+admin.works.update.pricing
+admin.works.update.delivery
+admin.works.update.category
+admin.works.update.tags
+admin.works.update.designer
+admin.works.update.private_notes
+```
+
+##### Review workflow permissions
+
+```text
+admin.works.review.start
+admin.works.review.approve
+admin.works.review.request_changes
+admin.works.review.reject
+admin.works.review.publish_after_approval
+admin.works.review.assign_reviewer
+admin.works.review.reopen
+```
+
+##### Visibility and promotion permissions
+
+```text
+admin.works.publish
+admin.works.unpublish
+admin.works.hide
+admin.works.restore_visibility
+admin.works.feature
+admin.works.unfeature
+admin.works.pin
+admin.works.unpin
+admin.works.visibility.order
+```
+
+##### Reports and violations permissions
+
+```text
+admin.works.reports.list
+admin.works.reports.detail.view
+admin.works.reports.review
+admin.works.reports.dismiss
+admin.works.reports.request_changes
+admin.works.reports.hide_work
+admin.works.reports.restore_work
+admin.works.reports.archive
+```
+
+##### Taxonomy permissions
+
+```text
+admin.works.taxonomy.categories.view
+admin.works.taxonomy.categories.create
+admin.works.taxonomy.categories.update
+admin.works.taxonomy.categories.disable
+admin.works.taxonomy.tags.view
+admin.works.taxonomy.tags.create
+admin.works.taxonomy.tags.update
+admin.works.taxonomy.tags.disable
+admin.works.taxonomy.bulk_assign
+admin.works.taxonomy.merge_tags
+```
+
+##### Bulk action permissions
+
+```text
+admin.works.bulk.publish
+admin.works.bulk.hide
+admin.works.bulk.archive
+admin.works.bulk.restore
+admin.works.bulk.category_update
+admin.works.bulk.tags_update
+admin.works.bulk.assign_reviewer
+```
+
+##### Activity and audit permissions
+
+```text
+admin.works.activity.list
+admin.works.activity.detail.view
+admin.works.audit.metadata.view
+admin.works.audit.export_denied
+```
+
+`admin.works.audit.export_denied` يثبت منع التصدير ضمن العقد الحالي، ولا يمنح قدرة Export.
+
+##### Settings permissions
+
+```text
+admin.works.settings.manage
+admin.works.settings.workflow.manage
+admin.works.settings.review_sla.manage
+admin.works.settings.direct_publish_trust.manage
+admin.works.settings.media_limits.manage
+```
+
+##### Topbar search permissions
+
+```text
+admin.works.search
+admin.works.search.private_metadata
+admin.works.search.designer
+admin.works.search.reports
+```
+
+#### Page, Sidebar, button, and field rules
+
+- لا يظهر رابط الأعمال لمن لا يملك أي صلاحية داخل Works، ويعيد الدخول المباشر إلى `/admin/works` دون صلاحية استجابة `403`.
+- إذا ملك المستخدم صلاحية قسم واحد فقط، تظهر إدارة الأعمال وتوسعتها السياقية بذلك القسم فقط؛ وتظهر بقية الأقسام الفرعية داخل Sidebar حسب صلاحياته.
+- يظهر كل زر أو يتعطل وفق الصلاحية وحالة العمل: النشر يحتاج `admin.works.publish` وحالة مناسبة، والرفض يحتاج `admin.works.review.reject` مع سبب، والتمييز يحتاج `admin.works.feature`.
+- تحتاج الإجراءات الجماعية صلاحيات `admin.works.bulk.*` مستقلة.
+- تتطلب الحقول الحساسة صلاحيات منفصلة: السعر `admin.works.update.pricing`، ومدة التسليم `admin.works.update.delivery`، والمصمم `admin.works.update.designer`، والملاحظات الداخلية `admin.works.update.private_notes`.
+
+#### Audit and lifecycle boundaries
+
+- تسجل كل عملية تغيير أو قرار أو إجراء جماعي في Audit، وتسجل رفضيات الوصول المؤثرة عبر access denied flow.
+- تقتصر metadata على البيانات الآمنة دون password أو token أو cookie أو raw payload أو بيانات شخصية غير ضرورية.
+- تتبع أسماء الأحداث عقد `0.28`، مثل `work.published` و`work.rejected` وبقية أحداث دورة العمل المعتمدة.
+- لا يعتمد hard delete زرًا إداريًا عاديًا؛ تعتمد الإدارة على archive وrestore. وأي حذف دائم تحتاجه الصيانة مستقبلًا يكون خارج الواجهة اليومية وبصلاحية عالية منفصلة وخارج هذا النطاق.
+
+#### Default role direction and deferred implementation
+
+- `super-admin`: جميع الصلاحيات.
+- `admin`: إدارة واسعة للأعمال، باستثناء الإعدادات الحساسة بحسب ربط الصلاحيات.
+- `content-manager`: المراجعة والظهور والبلاغات والتصنيفات الأساسية بحسب الحاجة.
+- `staff`: لا صلاحيات افتراضية، ويقتصر وصوله على ما يمنح له صراحة.
+- `client` و`designer`: ممنوعان من `/admin/works`.
+- لا تنفيذ برمجي أو seeders أو tests في هذه الخطوة. يبدأ التنفيذ القادم بتسجيل الصلاحيات في registry/seeders، ثم اختبارات Backend، ثم UI.
+
 ---
 
 ## 1. TECH_STACK — المعمارية النهائية المعتمدة
