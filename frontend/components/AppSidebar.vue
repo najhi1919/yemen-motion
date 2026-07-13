@@ -40,25 +40,58 @@
             <div v-else class="ym-sidebar-section-line" />
           </div>
 
-          <NuxtLink
-            v-else
-            :to="item.path"
-            :class="[
-              'ym-sidebar-link group',
-              props.collapsed ? 'justify-center px-2' : 'px-4',
-              isActive(item.path) ? 'is-active' : ''
-            ]"
-            :aria-label="item.label"
-            @mouseenter="showSidebarTooltip($event, item.label)"
-            @focus="showSidebarTooltip($event, item.label)"
-            @mouseleave="hideSidebarTooltip"
-            @blur="hideSidebarTooltip"
-          >
-            <span class="ym-sidebar-link__glow" />
-            <span class="ym-sidebar-icon" v-html="item.icon" />
-            <span v-if="!props.collapsed" class="ym-sidebar-label">{{ item.label }}</span>
-            <span v-if="!props.collapsed && item.badge" class="ym-sidebar-badge">{{ item.badge }}</span>
-          </NuxtLink>
+          <template v-else>
+            <NuxtLink
+              :to="item.path"
+              :class="[
+                'ym-sidebar-link group',
+                props.collapsed ? 'justify-center px-2' : 'px-4',
+                isActive(item.path) ? 'is-active' : ''
+              ]"
+              :aria-label="item.label"
+              @mouseenter="showSidebarTooltip($event, item.label)"
+              @focus="showSidebarTooltip($event, item.label)"
+              @mouseleave="hideSidebarTooltip"
+              @blur="hideSidebarTooltip"
+            >
+              <span class="ym-sidebar-link__glow" />
+              <span class="ym-sidebar-icon">
+                <svg
+                  v-if="item.icon"
+                  class="h-7 w-7"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" :d="item.icon" />
+                </svg>
+              </span>
+              <span v-if="!props.collapsed" class="ym-sidebar-label">{{ item.label }}</span>
+              <span v-if="!props.collapsed && item.badge" class="ym-sidebar-badge">{{ item.badge }}</span>
+            </NuxtLink>
+
+            <div
+              v-if="shouldShowWorksSubnavigation(item.path)"
+              class="ym-works-subnav"
+              role="list"
+              :aria-label="copy.works"
+            >
+              <NuxtLink
+                v-for="section in worksSections"
+                :key="section.key"
+                :to="section.route"
+                class="ym-works-subnav-link"
+                :class="isWorksSectionActive(section.route) ? 'is-active' : ''"
+                :aria-current="isWorksSectionActive(section.route) ? 'page' : undefined"
+                role="listitem"
+              >
+                <span class="ym-works-subnav-marker" aria-hidden="true" />
+                <span class="ym-works-subnav-label">{{ section.label_ar }}</span>
+              </NuxtLink>
+            </div>
+          </template>
         </template>
       </div>
     </nav>
@@ -83,6 +116,7 @@
 </template>
 
 <script setup lang="ts">
+import { useApiClient } from '~/composables/useApiClient'
 import { useAuthStore } from '~/stores/authStore'
 
 const props = withDefaults(defineProps<{
@@ -96,9 +130,28 @@ defineEmits<{ toggle: [] }>()
 
 const auth = useAuthStore()
 const route = useRoute()
+const { apiFetch } = useApiClient()
 const currentLocale = useState<'ar' | 'en'>('ym-dashboard-locale', () => 'ar')
 
 type FloatingTooltipPlacement = 'left' | 'right'
+
+interface WorksAccessSection {
+  key: string
+  label_ar: string
+  route: string
+  permission: string
+  allowed: true
+}
+
+interface WorksAccessResponse {
+  success: boolean
+  data: {
+    base_route: string
+    sidebar_mode: string
+    sections: WorksAccessSection[]
+    permissions: Record<string, boolean>
+  } | null
+}
 
 const sidebarTooltip = reactive({
   visible: false,
@@ -173,6 +226,20 @@ const isAdmin = computed(() => ['super-admin', 'admin'].includes(auth.role || ''
 const isStaff = computed(() => auth.role === 'staff')
 const isInternalDashboardUser = computed(() => ['super-admin', 'admin', 'staff'].includes(auth.role || ''))
 const hasPermission = (permission: string) => isSuperAdmin.value || auth.permissions.includes(permission)
+const isWorksRoute = computed(() => route.path === '/admin/works' || route.path.startsWith('/admin/works/'))
+const canLoadWorksAccess = computed(() => (
+  auth.isInitialized
+  && auth.isAuthenticated
+  && isWorksRoute.value
+  && isInternalDashboardUser.value
+))
+const worksAccessSignature = computed(() => canLoadWorksAccess.value
+  ? [auth.role || '', ...[...auth.permissions].sort()].join('|')
+  : '')
+const worksSections = ref<WorksAccessSection[]>([])
+
+let worksAccessRequestSequence = 0
+let loadedWorksAccessSignature: string | null = null
 
 const roleLabel = computed(() => {
   if (isAdmin.value) return copy.value.adminRole
@@ -180,22 +247,21 @@ const roleLabel = computed(() => {
   return auth.role || ''
 })
 
-const icon = (path: string) => `<svg class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">${path}</svg>`
 const icons = {
-  home: icon('<path stroke-linecap="round" stroke-linejoin="round" d="M3 11.5 12 4l9 7.5M5.5 10.5V20h13v-9.5M9.5 20v-5h5v5" />'),
-  users: icon('<path stroke-linecap="round" stroke-linejoin="round" d="M16 19.5c0-2.1-2.7-3.8-6-3.8s-6 1.7-6 3.8M10 12.5a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm8.5 5.5c1.5-.5 2.5-1.5 2.5-2.8 0-1.8-1.8-3.2-4.2-3.6m-.8-7a3 3 0 0 1 0 5.8" />'),
-  briefcase: icon('<path stroke-linecap="round" stroke-linejoin="round" d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7m-9.5 4.5h13M5 7h14a1.5 1.5 0 0 1 1.5 1.5v9A2.5 2.5 0 0 1 18 20H6a2.5 2.5 0 0 1-2.5-2.5v-9A1.5 1.5 0 0 1 5 7Z" />'),
-  shield: icon('<path stroke-linecap="round" stroke-linejoin="round" d="M12 3 20 6v5.5c0 4.2-3 7.8-8 9.5-5-1.7-8-5.3-8-9.5V6l8-3Zm-3 9 2 2 4-5" />'),
-  folder: icon('<path stroke-linecap="round" stroke-linejoin="round" d="M3.5 7.5h6l2 2h9v8A2.5 2.5 0 0 1 18 20H6a2.5 2.5 0 0 1-2.5-2.5v-10Z" />'),
-  cart: icon('<path stroke-linecap="round" stroke-linejoin="round" d="M4 5h2l1.5 10h9.5l2-7H7M9 20h.01M17 20h.01" />'),
-  calendar: icon('<path stroke-linecap="round" stroke-linejoin="round" d="M7 4v3m10-3v3M4.5 9.5h15M6 6h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z" />'),
-  trophy: icon('<path stroke-linecap="round" stroke-linejoin="round" d="M8 4h8v4.5a4 4 0 0 1-8 0V4Zm0 2H4.5C4.5 9 6 11 8.4 11.5M16 6h3.5c0 3-1.5 5-3.9 5.5M12 13v4m-4 3h8" />'),
-  wallet: icon('<path stroke-linecap="round" stroke-linejoin="round" d="M4 7.5A2.5 2.5 0 0 1 6.5 5H18v4H6.5A2.5 2.5 0 0 1 4 6.5v11A2.5 2.5 0 0 0 6.5 20H20v-8H6.5A2.5 2.5 0 0 1 4 9.5Zm13 8h.01" />'),
-  chart: icon('<path stroke-linecap="round" stroke-linejoin="round" d="M4 19V5m0 14h16M8 16v-5m4 5V8m4 8v-7" />'),
-  bell: icon('<path stroke-linecap="round" stroke-linejoin="round" d="M18 10a6 6 0 1 0-12 0c0 7-2 7-2 7h16s-2 0-2-7Zm-8 10h4" />'),
-  flag: icon('<path stroke-linecap="round" stroke-linejoin="round" d="M5 21V4m0 0h11l-1.5 4L16 12H5" />'),
-  support: icon('<path stroke-linecap="round" stroke-linejoin="round" d="M5 12a7 7 0 0 1 14 0v5a2 2 0 0 1-2 2h-2v-6h4M5 12v5a2 2 0 0 0 2 2h2v-6H5Zm6 8h2" />'),
-  eye: icon('<path stroke-linecap="round" stroke-linejoin="round" d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Zm9.5 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />')
+  home: 'M3 11.5 12 4l9 7.5M5.5 10.5V20h13v-9.5M9.5 20v-5h5v5',
+  users: 'M16 19.5c0-2.1-2.7-3.8-6-3.8s-6 1.7-6 3.8M10 12.5a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm8.5 5.5c1.5-.5 2.5-1.5 2.5-2.8 0-1.8-1.8-3.2-4.2-3.6m-.8-7a3 3 0 0 1 0 5.8',
+  briefcase: 'M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7m-9.5 4.5h13M5 7h14a1.5 1.5 0 0 1 1.5 1.5v9A2.5 2.5 0 0 1 18 20H6a2.5 2.5 0 0 1-2.5-2.5v-9A1.5 1.5 0 0 1 5 7Z',
+  shield: 'M12 3 20 6v5.5c0 4.2-3 7.8-8 9.5-5-1.7-8-5.3-8-9.5V6l8-3Zm-3 9 2 2 4-5',
+  folder: 'M3.5 7.5h6l2 2h9v8A2.5 2.5 0 0 1 18 20H6a2.5 2.5 0 0 1-2.5-2.5v-10Z',
+  cart: 'M4 5h2l1.5 10h9.5l2-7H7M9 20h.01M17 20h.01',
+  calendar: 'M7 4v3m10-3v3M4.5 9.5h15M6 6h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z',
+  trophy: 'M8 4h8v4.5a4 4 0 0 1-8 0V4Zm0 2H4.5C4.5 9 6 11 8.4 11.5M16 6h3.5c0 3-1.5 5-3.9 5.5M12 13v4m-4 3h8',
+  wallet: 'M4 7.5A2.5 2.5 0 0 1 6.5 5H18v4H6.5A2.5 2.5 0 0 1 4 6.5v11A2.5 2.5 0 0 0 6.5 20H20v-8H6.5A2.5 2.5 0 0 1 4 9.5Zm13 8h.01',
+  chart: 'M4 19V5m0 14h16M8 16v-5m4 5V8m4 8v-7',
+  bell: 'M18 10a6 6 0 1 0-12 0c0 7-2 7-2 7h16s-2 0-2-7Zm-8 10h4',
+  flag: 'M5 21V4m0 0h11l-1.5 4L16 12H5',
+  support: 'M5 12a7 7 0 0 1 14 0v5a2 2 0 0 1-2 2h-2v-6h4M5 12v5a2 2 0 0 0 2 2h2v-6H5Zm6 8h2',
+  eye: 'M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Zm9.5 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z'
 }
 
 const allItems = computed(() => {
@@ -223,12 +289,14 @@ const allItems = computed(() => {
       ...(isSuperAdmin.value ? [{ path: '/admin/audit-events', label: c.auditEvents, icon: icons.eye }] : [])
     ])
 
-    addSection(c.content, isSuperAdmin.value ? [
-      { path: '/admin/works', label: c.works, icon: icons.folder },
-      { path: '/admin/orders', label: c.orders, icon: icons.cart, badge: '3' },
-      { path: '/admin/bookings', label: c.bookings, icon: icons.calendar },
-      { path: '/admin/contests', label: c.contests, icon: icons.trophy }
-    ] : [])
+    addSection(c.content, [
+      ...(hasPermission('admin.works.access') ? [{ path: '/admin/works', label: c.works, icon: icons.folder }] : []),
+      ...(isSuperAdmin.value ? [
+        { path: '/admin/orders', label: c.orders, icon: icons.cart, badge: '3' },
+        { path: '/admin/bookings', label: c.bookings, icon: icons.calendar },
+        { path: '/admin/contests', label: c.contests, icon: icons.trophy }
+      ] : [])
+    ])
 
     addSection(c.insights, isSuperAdmin.value ? [
       { path: '/admin/wallet', label: c.wallet, icon: icons.wallet },
@@ -248,8 +316,94 @@ const visibleItems = computed(() => allItems.value)
 function isActive(path?: string): boolean {
   if (!path) return false
   if (path === '/admin' || path === '/staff') return route.path === path
-  return route.path.startsWith(path)
+  return route.path === path || route.path.startsWith(`${path}/`)
 }
+
+function shouldShowWorksSubnavigation(path?: string): boolean {
+  return !props.collapsed
+    && path === '/admin/works'
+    && isWorksRoute.value
+    && worksSections.value.length > 0
+}
+
+function isWorksSectionActive(path: string): boolean {
+  if (path === '/admin/works') return route.path === path
+
+  return route.path === path || route.path.startsWith(`${path}/`)
+}
+
+function isSafeWorksSection(value: unknown): value is WorksAccessSection {
+  if (!value || typeof value !== 'object') return false
+
+  const section = value as Partial<WorksAccessSection>
+  const isInternalRoute = section.route === '/admin/works'
+    || section.route?.startsWith('/admin/works/') === true
+
+  return typeof section.key === 'string'
+    && typeof section.label_ar === 'string'
+    && typeof section.route === 'string'
+    && typeof section.permission === 'string'
+    && section.permission.startsWith('admin.works.')
+    && section.allowed === true
+    && isInternalRoute
+}
+
+function clearWorksAccess(): void {
+  worksAccessRequestSequence += 1
+  loadedWorksAccessSignature = null
+  worksSections.value = []
+}
+
+async function loadWorksAccess(signature: string): Promise<void> {
+  const requestSequence = ++worksAccessRequestSequence
+  loadedWorksAccessSignature = signature
+  worksSections.value = []
+
+  try {
+    const response = await apiFetch<WorksAccessResponse>('/admin/works/access')
+
+    if (
+      requestSequence !== worksAccessRequestSequence
+      || !canLoadWorksAccess.value
+      || worksAccessSignature.value !== signature
+    ) {
+      return
+    }
+
+    const data = response.success ? response.data : null
+
+    if (
+      !data
+      || data.base_route !== '/admin/works'
+      || data.sidebar_mode !== 'contextual'
+      || !Array.isArray(data.sections)
+    ) {
+      return
+    }
+
+    worksSections.value = data.sections.filter(isSafeWorksSection)
+  } catch {
+    if (requestSequence === worksAccessRequestSequence) {
+      worksSections.value = []
+    }
+  }
+}
+
+// نحمّل التفرعات عند دخول سياق الأعمال فقط، ونلغي أي نتيجة متأخرة بعد مغادرته.
+watch(
+  [canLoadWorksAccess, worksAccessSignature],
+  ([canLoad, signature]) => {
+    if (!canLoad) {
+      clearWorksAccess()
+      return
+    }
+
+    if (loadedWorksAccessSignature === signature) return
+
+    void loadWorksAccess(signature)
+  },
+  { immediate: true }
+)
 
 function showSidebarTooltip(event: MouseEvent | FocusEvent, label: string): void {
   if (!props.collapsed) return
@@ -585,6 +739,84 @@ function hideSidebarTooltip(): void {
   font-size: 13.5px;
   font-weight: 900;
   padding: 0.14rem 0.48rem;
+}
+
+.ym-works-subnav {
+  position: relative;
+  display: grid;
+  gap: 0.35rem;
+  margin-block: 0.35rem 0.65rem;
+  margin-inline-start: 1rem;
+  padding-inline-start: 1rem;
+}
+
+.ym-works-subnav::before {
+  position: absolute;
+  inset-block: 0.45rem;
+  inset-inline-start: 0.15rem;
+  width: 2px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(129, 140, 248, 0.68), rgba(190, 0, 1, 0.2));
+  content: '';
+}
+
+.ym-works-subnav-link {
+  position: relative;
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 0.65rem;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  color: rgba(226, 232, 240, 0.78);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.35;
+  padding: 0.55rem 0.7rem;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.ym-works-subnav-link:hover,
+.ym-works-subnav-link.is-active {
+  transform: translateX(-1px);
+  border-color: rgba(129, 140, 248, 0.28);
+  background: rgba(99, 102, 241, 0.15);
+  color: #fff;
+}
+
+.ym-works-subnav-link.is-active {
+  box-shadow: inset 0 0 0 1px rgba(129, 140, 248, 0.12);
+}
+
+.ym-works-subnav-marker {
+  position: relative;
+  z-index: 1;
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border: 2px solid rgba(165, 180, 252, 0.72);
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.ym-works-subnav-label {
+  min-width: 0;
+}
+
+.ym-sidebar--light .ym-works-subnav::before {
+  background: linear-gradient(180deg, rgba(109, 40, 217, 0.55), rgba(192, 38, 211, 0.16));
+}
+
+.ym-sidebar--light .ym-works-subnav-link {
+  color: rgba(55, 32, 76, 0.78);
+}
+
+.ym-sidebar--light .ym-works-subnav-link:hover,
+.ym-sidebar--light .ym-works-subnav-link.is-active {
+  border-color: rgba(126, 34, 206, 0.24);
+  background: rgba(124, 58, 237, 0.1);
+  color: #4c1d95;
 }
 
 .ym-sidebar-bottom {
