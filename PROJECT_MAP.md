@@ -1250,6 +1250,30 @@ activities
 
 - الاختبار الكامل بعد التنفيذ: `207 passed / 1306 assertions`.
 
+### 0.24 Users Reports MVP Baseline — 2026-07-13
+
+بدأت حزمة Reports بأول تقرير فعلي ومقيد للمستخدمين، مع API تجميعي وصفحة إدارة تعتمد على البيانات الحقيقية.
+
+#### Backend users report
+
+- endpoint التقرير: `GET /api/admin/reports/users`.
+- الوصول محصور على `super-admin`؛ وتمنع أدوار `admin` و`staff` و`client` و`designer` حتى مع صلاحيات عرضية.
+- التقرير Aggregated فقط ولا يعرض قائمة مستخدمين.
+- الفلاتر المعتمدة: `from`, و`to`, و`role`, و`period`؛ ويدعم `period` القيم `day`, و`week`, و`month`, و`year`.
+- تعرض الاستجابة: `summary`, و`role_breakdown`, و`registrations_series`, و`filters`, و`generated_at`.
+- لا تعرض `email` أو `name` أو `password` أو `remember_token` أو `token` أو `cookie`، ولا user models أو relations أو raw pivot data.
+
+#### Frontend reports page
+
+- صفحة التقرير: `/admin/reports`، وتستهلك API تقرير المستخدمين الحقيقي.
+- تعرض summary cards وتوزيع الأدوار وسلسلة التسجيلات وحالات auth pending وloading وerror وempty وforbidden وsuccess.
+- تنتظر `authStore.isInitialized` قبل طلب البيانات، ولا تعرض بيانات شخصية.
+- تستخدم HTML وCSS فقط للعرض البصري البسيط دون مكتبة charts خارجية.
+
+#### Current boundary
+
+هذا MVP هو بداية Reports فقط. لا تزال Analytics وExport وتقارير الطلبات والمالية والأعمال غير جاهزة، ولا توفر صفحة التقارير عمليات تعديل أو حذف.
+
 ---
 
 ## 1. TECH_STACK — المعمارية النهائية المعتمدة
