@@ -60,6 +60,29 @@
           </button>
         </header>
 
+        <div class="ym-audit-quick-filters">
+          <div class="ym-audit-quick-filters__head">
+            <h3>{{ copy.quickFiltersTitle }}</h3>
+            <p>{{ copy.quickFiltersCopy }}</p>
+          </div>
+
+          <div class="ym-audit-quick-filters__options" role="group" :aria-label="copy.quickFiltersTitle">
+            <button
+              v-for="preset in quickFilters"
+              :key="preset.key"
+              type="button"
+              class="ym-audit-quick-filter"
+              :class="activeQuickFilter === preset.key ? 'is-active' : ''"
+              :aria-pressed="activeQuickFilter === preset.key"
+              :disabled="loading"
+              @click="applyQuickFilter(preset)"
+            >
+              <span>{{ preset.label }}</span>
+              <code dir="ltr">{{ preset.event_type || '*' }}</code>
+            </button>
+          </div>
+        </div>
+
         <form class="ym-audit-filter-grid" @submit.prevent="applyFilters">
           <label>
             <span>{{ copy.eventType }}</span>
@@ -295,6 +318,16 @@ type AuditFilters = {
   per_page: PageSize
 }
 
+type QuickFilterKey = 'all' | 'reports' | 'analytics' | 'page_views' | 'access_denied'
+
+type AuditQuickFilter = {
+  key: QuickFilterKey
+  label: string
+  event_type: string
+  category: string
+  outcome: string
+}
+
 const authStore = useAuthStore()
 const { apiFetch } = useApiClient()
 const currentLocale = useState<Locale>('ym-dashboard-locale', () => 'ar')
@@ -307,13 +340,20 @@ const copyMap = {
     description: 'عرض آمن ومنظم للأحداث الإدارية المسجلة، متاح للمدير الأعلى فقط.',
     totalEvents: 'إجمالي الأحداث',
     internalRecords: 'سجلات داخلية محمية',
-    notice: 'لا توفر هذه الصفحة تعديل السجلات أو حذفها أو تصديرها، ولا ترتبط بالتقارير أو التحليلات.',
+    notice: 'هذه الصفحة قراءة فقط ولا توفر تعديلًا أو حذفًا أو تصديرًا. تسهّل الاختصارات الوصول للأحداث الداخلية، وتعرض metadata الآمنة كما يعيدها API.',
     authLoadingTitle: 'جارٍ التحقق من صلاحية الوصول',
     authLoadingCopy: 'ننتظر اكتمال تهيئة جلسة المستخدم قبل تحميل سجل التدقيق.',
     forbiddenTitle: 'الوصول إلى سجل التدقيق غير متاح',
     forbiddenCopy: 'هذه الصفحة محصورة على المدير الأعلى. لم تتم محاولة تحميل أي سجلات لهذا الحساب.',
     filtersTitle: 'فلاتر السجل',
     filtersCopy: 'استخدم الحقول المسموحة في واجهة القراءة لتضييق النتائج.',
+    quickFiltersTitle: 'اختصارات السجل',
+    quickFiltersCopy: 'تطبّق نوع الحدث والتصنيف والنتيجة مباشرة. يظل الإجراء ظاهرًا في الجدول لأن API لا يدعمه كفلتر مستقل.',
+    quickAll: 'كل السجلات',
+    quickReports: 'تقارير المستخدمين',
+    quickAnalytics: 'تحليلات المستخدمين',
+    quickPageViews: 'زيارات صفحات الإدارة',
+    quickAccessDenied: 'الوصول المرفوض',
     eventType: 'نوع الحدث',
     category: 'التصنيف',
     severity: 'الأهمية',
@@ -359,13 +399,20 @@ const copyMap = {
     description: 'A safe, structured view of recorded administrative events, available to super-admin only.',
     totalEvents: 'Total events',
     internalRecords: 'Protected internal records',
-    notice: 'This page does not edit, delete, or export events and is not connected to Reports or Analytics.',
+    notice: 'This page is read-only and does not edit, delete, or export events. Shortcuts simplify access to internal events, while metadata is shown safely as returned by the API.',
     authLoadingTitle: 'Checking audit access',
     authLoadingCopy: 'Waiting for the user session to initialize before loading audit events.',
     forbiddenTitle: 'Audit access is unavailable',
     forbiddenCopy: 'This page is restricted to super-admin. No audit data request was made for this account.',
     filtersTitle: 'Audit filters',
     filtersCopy: 'Use the read API allowlisted fields to narrow the results.',
+    quickFiltersTitle: 'Quick filters',
+    quickFiltersCopy: 'Applies event type, category, and outcome immediately. Action remains visible in the table because the API does not expose it as a filter.',
+    quickAll: 'All records',
+    quickReports: 'Users reports',
+    quickAnalytics: 'Users analytics',
+    quickPageViews: 'Admin page views',
+    quickAccessDenied: 'Access denied',
     eventType: 'Event type',
     category: 'Category',
     severity: 'Severity',
@@ -445,6 +492,68 @@ const summaryCards = computed(() => [
   { label: copy.value.totalEvents, value: pagination.total, subtitle: copy.value.internalRecords, color: '#8b5cf6' },
   { label: copy.value.currentPage, value: pagination.current_page, subtitle: copy.value.paginationState, color: '#10b981' }
 ])
+const quickFilters = computed<AuditQuickFilter[]>(() => [
+  {
+    key: 'all',
+    label: copy.value.quickAll,
+    event_type: '',
+    category: '',
+    outcome: ''
+  },
+  {
+    key: 'reports',
+    label: copy.value.quickReports,
+    event_type: 'reports.users.generated',
+    category: 'reports',
+    outcome: 'success'
+  },
+  {
+    key: 'analytics',
+    label: copy.value.quickAnalytics,
+    event_type: 'analytics.users.generated',
+    category: 'analytics',
+    outcome: 'success'
+  },
+  {
+    key: 'page_views',
+    label: copy.value.quickPageViews,
+    event_type: 'admin.page.viewed',
+    category: 'page_view',
+    outcome: 'success'
+  },
+  {
+    key: 'access_denied',
+    label: copy.value.quickAccessDenied,
+    event_type: 'access.denied',
+    category: 'access_control',
+    outcome: 'denied'
+  }
+])
+const activeQuickFilter = computed<QuickFilterKey | null>(() => {
+  const matchedPreset = quickFilters.value
+    .filter(preset => preset.key !== 'all')
+    .find(preset => (
+      filters.event_type === preset.event_type
+      && filters.category === preset.category
+      && filters.outcome === preset.outcome
+    ))
+
+  if (matchedPreset) return matchedPreset.key
+
+  const hasManualFilters = [
+    filters.event_type,
+    filters.category,
+    filters.severity,
+    filters.outcome,
+    filters.actor_id,
+    filters.target_type,
+    filters.target_id,
+    filters.from,
+    filters.to
+  ].some(value => value.trim() !== '')
+
+  return hasManualFilters ? null : 'all'
+})
 
 watch(filters, () => {
   page.value = 1
@@ -616,6 +725,25 @@ function syncAuditAccessState(): void {
 }
 
 function applyFilters(): void {
+  page.value = 1
+  void fetchAuditEvents()
+}
+
+function applyQuickFilter(preset: AuditQuickFilter): void {
+  const currentPageSize = filters.per_page
+
+  Object.assign(filters, {
+    event_type: preset.event_type,
+    category: preset.category,
+    severity: '',
+    outcome: preset.outcome,
+    actor_id: '',
+    target_type: '',
+    target_id: '',
+    from: '',
+    to: '',
+    per_page: currentPageSize
+  })
   page.value = 1
   void fetchAuditEvents()
 }
@@ -884,6 +1012,87 @@ onMounted(() => {
   font-weight: 800;
   line-height: 1.7;
   margin: 0.3rem 0 0;
+}
+
+.ym-audit-quick-filters {
+  border: 1px solid var(--ym-soft-border);
+  border-radius: 20px;
+  background: var(--ym-control-bg);
+  margin-bottom: 1rem;
+  padding: 0.9rem;
+}
+
+.ym-audit-quick-filters__head {
+  margin-bottom: 0.75rem;
+}
+
+.ym-audit-quick-filters__head h3 {
+  color: var(--ym-text);
+  font-size: 14px;
+  font-weight: 950;
+  margin: 0;
+}
+
+.ym-audit-quick-filters__head p {
+  color: var(--ym-muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.65;
+  margin: 0.25rem 0 0;
+}
+
+.ym-audit-quick-filters__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.ym-audit-quick-filter {
+  display: grid;
+  flex: 1 1 185px;
+  gap: 0.25rem;
+  min-width: 0;
+  border: 1px solid var(--ym-soft-border);
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--ym-card-bg) 72%, transparent);
+  color: var(--ym-text);
+  padding: 0.65rem 0.75rem;
+  text-align: start;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.ym-audit-quick-filter span {
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.ym-audit-quick-filter code {
+  color: var(--ym-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 10px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.ym-audit-quick-filter:hover:not(:disabled) {
+  border-color: #8b5cf6;
+  transform: translateY(-1px);
+}
+
+.ym-audit-quick-filter.is-active {
+  border-color: color-mix(in srgb, #8b5cf6 72%, var(--ym-soft-border));
+  background: color-mix(in srgb, #8b5cf6 15%, var(--ym-control-bg));
+  box-shadow: 0 0 0 3px color-mix(in srgb, #8b5cf6 12%, transparent);
+}
+
+.ym-audit-quick-filter.is-active code {
+  color: #a78bfa;
+}
+
+.ym-audit-quick-filter:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .ym-audit-filter-grid {
@@ -1184,6 +1393,10 @@ onMounted(() => {
 
   .ym-audit-pagination .ym-audit-button {
     width: 100%;
+  }
+
+  .ym-audit-quick-filter {
+    flex-basis: 100%;
   }
 }
 </style>
