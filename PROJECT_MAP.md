@@ -1306,6 +1306,30 @@ activities
 - لا توجد عمليات تعديل أو حذف عبر صفحة التحليلات، ولا يوجد Export.
 - هذا MVP هو بداية Analytics فقط؛ تحليلات الطلبات والمالية والأعمال وExport ما زالت غير جاهزة، ولم تضف مكتبة charts خارجية.
 
+### 0.26 Insights Generated Audit Events Baseline — 2026-07-13
+
+أصبح نجاح إنشاء تقرير المستخدمين وتحليلات المستخدمين مسجلًا ضمن Audit Tracking بعد بناء البيانات وقبل إرجاع الاستجابة.
+
+#### Generated events
+
+- يسجل تقرير المستخدمين `reports.users.generated`: `category = reports`, و`severity = info`, و`target_type = report`, و`target_id = null` حاليًا لأن الحقل رقمي، و`action = generate`, و`outcome = success`.
+- تحفظ metadata للتقرير فقط: `source`, و`period`, و`has_from_filter`, و`has_to_filter`, و`has_role_filter`, و`users_in_range`, و`role_breakdown_count`, و`series_points_count`.
+- تسجل تحليلات المستخدمين `analytics.users.generated`: `category = analytics`, و`severity = info`, و`target_type = analytics`, و`target_id = null` حاليًا لأن الحقل رقمي، و`action = generate`, و`outcome = success`.
+- تحفظ metadata للتحليلات فقط: `source`, و`period`, و`has_from_filter`, و`has_to_filter`, و`has_role_filter`, و`current_period_users`, و`previous_period_users`, و`absolute_change`, و`percentage_change_available`, و`trend_points_count`, و`role_mix_count`.
+
+#### Recording and security boundaries
+
+- تسجل هذه الخطوة نجاح `generate` فقط؛ تبقى رفضيات `401/403` ضمن access denied middleware، ولا تسجل أخطاء validation بحالة `422` generated events.
+- لا تحفظ قيم `from` أو `to` أو `role` الخام، ولا query string أو full URL أو raw request أو payload.
+- لا تحفظ `email` أو `name` أو `password` أو `token` أو `cookie`، ولا user list أو user models أو relations أو raw pivot data.
+
+#### Implementation and verification
+
+- نُفذ السلوك في `app/Http/Controllers/Api/Admin/Reports/UserReportController.php` و`app/Http/Controllers/Api/Admin/Analytics/UserAnalyticsController.php`.
+- يغطيه `tests/Feature/Admin/InsightsGeneratedAuditEventsTest.php`: `4 tests / 93 assertions`.
+- خط التحقق الكامل: `241 passed / 1623 assertions`.
+- لا يضيف هذا baseline Export أو تحليلات الطلبات أو المالية أو الأعمال.
+
 ---
 
 ## 1. TECH_STACK — المعمارية النهائية المعتمدة
