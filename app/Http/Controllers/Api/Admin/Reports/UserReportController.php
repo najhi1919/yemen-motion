@@ -5,14 +5,20 @@ namespace App\Http\Controllers\Api\Admin\Reports;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\Reports\UserReportRequest;
 use App\Models\User;
+use App\Services\Audit\AuditEventLogger;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Spatie\Permission\Models\Role;
+use Throwable;
 
 class UserReportController extends Controller
 {
+    public function __construct(
+        private readonly AuditEventLogger $auditEventLogger,
+    ) {}
+
     public function __invoke(UserReportRequest $request): JsonResponse
     {
         $validated = $request->validated();
@@ -49,6 +55,18 @@ class UserReportController extends Controller
             ],
             'generated_at' => now()->toJSON(),
         ];
+
+        // نسجل نجاح إنشاء التقرير من العدادات النهائية فقط، دون قيم الفلاتر أو query الخام.
+        $this->recordGeneratedAuditEvent($request, [
+            'source' => 'users_reports_api',
+            'period' => $period,
+            'has_from_filter' => filled($validated['from'] ?? null),
+            'has_to_filter' => filled($validated['to'] ?? null),
+            'has_role_filter' => filled($validated['role'] ?? null),
+            'users_in_range' => $data['summary']['users_in_range'],
+            'role_breakdown_count' => count($data['role_breakdown']),
+            'series_points_count' => count($data['registrations_series']),
+        ]);
 
         return response()->json([
             'success' => true,
@@ -126,5 +144,42 @@ class UserReportController extends Controller
             'year' => $date->format('Y'),
             default => $date->toDateString(),
         };
+    }
+
+    /**
+     * يسجل إنشاء التقرير بسياق طلب محدود وmetadata تجميعية فقط.
+     *
+     * @param array<string, int|string|bool|null> $metadata
+     */
+    private function recordGeneratedAuditEvent(UserReportRequest $request, array $metadata): void
+    {
+        $actor = $request->user();
+
+        try {
+            $this->auditEventLogger->record([
+                'event_type' => 'reports.users.generated',
+                'category' => 'reports',
+                'severity' => 'info',
+                'actor_type' => 'user',
+                'actor_id' => $actor?->id,
+                'actor_role' => $actor?->roles->first()?->name,
+                'target_type' => 'report',
+                'target_id' => null,
+                'action' => 'generate',
+                'outcome' => 'success',
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'request_id' => $request->header('X-Request-ID'),
+                'correlation_id' => $request->header('X-Correlation-ID'),
+                'metadata' => $metadata,
+            ]);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            // في الاختبارات نعيد الخطأ حتى لا تمر عيوب audit أو مخطط البيانات بصمت.
+            if (app()->environment('testing')) {
+                throw $exception;
+            }
+        }
     }
 }
