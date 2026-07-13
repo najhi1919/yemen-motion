@@ -1274,6 +1274,38 @@ activities
 
 هذا MVP هو بداية Reports فقط. لا تزال Analytics وExport وتقارير الطلبات والمالية والأعمال غير جاهزة، ولا توفر صفحة التقارير عمليات تعديل أو حذف.
 
+### 0.25 Users Analytics MVP Baseline — 2026-07-13
+
+بدأت حزمة Analytics بأول تحليل فعلي ومقيد لنمو المستخدمين، مع API تجميعي وصفحة إدارة تعتمد على البيانات الحقيقية.
+
+#### Backend users analytics
+
+- endpoint التحليلات: `GET /api/admin/analytics/users`.
+- الوصول محصور على `super-admin`؛ وتمنع أدوار `admin` و`staff` و`client` و`designer` حتى مع صلاحيات عرضية.
+- التحليلات Aggregated فقط ولا تعرض قائمة مستخدمين.
+- الفلاتر المعتمدة: `from`, و`to`, و`role`, و`period`؛ ويدعم `period` القيم `day`, و`week`, و`month`, و`year`.
+- تعرض الاستجابة: `summary`, و`trend`, و`role_mix`, و`comparison`, و`filters`, و`generated_at`.
+- يعرض `summary`: `current_period_users`, و`previous_period_users`, و`absolute_change`, و`percentage_change`, و`verified_rate`, و`unverified_rate`.
+
+#### Comparison behavior
+
+- عند غياب `from` و`to` يكون المدى الحالي آخر 30 يومًا، والمدى السابق الثلاثين يومًا التي تسبقه مباشرة.
+- يساوي المدى السابق المدى الحالي في عدد الأيام ويسبقه مباشرة.
+- تكون `percentage_change = null` عندما يكون السابق صفرًا والحالي موجبًا، وتكون `0` عندما يكون كلاهما صفرًا.
+
+#### Frontend analytics page
+
+- صفحة التحليلات: `/admin/analytics`، وتستهلك API تحليلات المستخدمين الحقيقي.
+- تعرض summary cards وcomparison block وtrend مع `cumulative_count` و`role_mix`.
+- تغطي حالات auth pending وloading وerror وempty وforbidden وsuccess، وتنتظر `authStore.isInitialized` قبل طلب البيانات.
+- لا تعرض بيانات شخصية، وتستخدم HTML وCSS فقط دون مكتبة charts خارجية.
+
+#### Data and current boundaries
+
+- لا تعرض `email` أو `name` أو `password` أو `remember_token` أو `token` أو `cookie`، ولا user models أو relations أو raw pivot data.
+- لا توجد عمليات تعديل أو حذف عبر صفحة التحليلات، ولا يوجد Export.
+- هذا MVP هو بداية Analytics فقط؛ تحليلات الطلبات والمالية والأعمال وExport ما زالت غير جاهزة، ولم تضف مكتبة charts خارجية.
+
 ---
 
 ## 1. TECH_STACK — المعمارية النهائية المعتمدة
