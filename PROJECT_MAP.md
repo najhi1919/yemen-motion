@@ -1330,6 +1330,33 @@ activities
 - خط التحقق الكامل: `241 passed / 1623 assertions`.
 - لا يضيف هذا baseline Export أو تحليلات الطلبات أو المالية أو الأعمال.
 
+### 0.27 Audit Events Quick Filters Baseline — 2026-07-13
+
+حُسنت صفحة `/admin/audit-events` من الواجهة فقط داخل `frontend/pages/admin/audit-events/index.vue` بإضافة اختصارات للأحداث الداخلية المهمة.
+
+#### Quick filters
+
+- كل السجلات.
+- تقارير المستخدمين: `event_type = reports.users.generated`, و`category = reports`, و`outcome = success`.
+- تحليلات المستخدمين: `event_type = analytics.users.generated`, و`category = analytics`, و`outcome = success`.
+- زيارات صفحات الإدارة: `event_type = admin.page.viewed`, و`category = page_view`, و`outcome = success`.
+- الوصول المرفوض: `event_type = access.denied`, و`category = access_control`, و`outcome = denied`.
+
+#### Behavior and boundaries
+
+- تطبق الاختصارات الفلاتر مباشرة، وتعود إلى الصفحة الأولى، وتحافظ على `per_page`، وتمسح القيود اليدوية الأخرى، وتظهر الشريحة النشطة بصريًا.
+- يعيد زر إعادة الضبط الصفحة إلى كل السجلات.
+- لا يرسل `action` كفلتر لأن API القراءة لا يدعمه حاليًا.
+- بقيت الصفحة قراءة فقط، ولم يتغير Backend API أو التفويض، ولم يضف Export أو `v-html` أو console logs.
+
+#### Verification and future UI review
+
+- نجح `npm run build`.
+- `AuditEventsReadApiTest`: `17 tests / 70 assertions`.
+- `InsightsGeneratedAuditEventsTest`: `4 tests / 93 assertions`.
+- نجح الفحص البصري الأولي للشرائح، ولم ينشأ commit إضافي له.
+- المراجعة البصرية الشاملة وتحسينات الجدول والكثافة والتجاوب مؤجلة إلى مرحلة UI review مستقلة بعد اكتمال بقية الصفحات والأقسام.
+
 ---
 
 ## 1. TECH_STACK — المعمارية النهائية المعتمدة
