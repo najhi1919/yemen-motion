@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\Admin\StaffController as AdminStaffController;
 use App\Http\Controllers\Api\Admin\WorksAccessController as AdminWorksAccessController;
 use App\Http\Controllers\Api\Admin\WorksIndexController as AdminWorksIndexController;
 use App\Http\Controllers\Api\Admin\WorksOverviewController as AdminWorksOverviewController;
+use App\Http\Controllers\Api\Admin\WorksReviewQueueController as AdminWorksReviewQueueController;
 use App\Http\Controllers\Api\Admin\WorksShowController as AdminWorksShowController;
 use App\Http\Controllers\Api\Audit\PageViewAuditController;
 use App\Http\Controllers\Api\AuthApiController;
@@ -43,6 +44,7 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
     Route::get('/reports/users', AdminUserReportController::class);
     Route::get('/works/access', [AdminWorksAccessController::class, 'index']);
     Route::get('/works/overview', [AdminWorksOverviewController::class, 'index']);
+    Route::get('/works/review', [AdminWorksReviewQueueController::class, 'index']);
     Route::get('/works', [AdminWorksIndexController::class, 'index']);
     Route::get('/works/{work}', [AdminWorksShowController::class, 'show'])->whereNumber('work');
 
