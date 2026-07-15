@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\Admin\WorksReviewQueueController as AdminWorksRevie
 use App\Http\Controllers\Api\Admin\WorksSettingsController as AdminWorksSettingsController;
 use App\Http\Controllers\Api\Admin\WorksShowController as AdminWorksShowController;
 use App\Http\Controllers\Api\Admin\WorksTaxonomyController as AdminWorksTaxonomyController;
+use App\Http\Controllers\Api\Admin\WorksVisibilityActionController as AdminWorksVisibilityActionController;
 use App\Http\Controllers\Api\Admin\WorksVisibilityController as AdminWorksVisibilityController;
 use App\Http\Controllers\Api\Audit\PageViewAuditController;
 use App\Http\Controllers\Api\AuthApiController;
@@ -55,6 +56,14 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
     Route::get('/works/reports', [AdminWorksReportsController::class, 'index']);
     Route::get('/works/taxonomy', [AdminWorksTaxonomyController::class, 'index']);
     Route::get('/works/settings', [AdminWorksSettingsController::class, 'index']);
+    Route::patch('/works/{work}/visibility/publish', [AdminWorksVisibilityActionController::class, 'publish'])->whereNumber('work');
+    Route::patch('/works/{work}/visibility/unpublish', [AdminWorksVisibilityActionController::class, 'unpublish'])->whereNumber('work');
+    Route::patch('/works/{work}/visibility/hide', [AdminWorksVisibilityActionController::class, 'hide'])->whereNumber('work');
+    Route::patch('/works/{work}/visibility/restore', [AdminWorksVisibilityActionController::class, 'restore'])->whereNumber('work');
+    Route::patch('/works/{work}/visibility/feature', [AdminWorksVisibilityActionController::class, 'feature'])->whereNumber('work');
+    Route::patch('/works/{work}/visibility/unfeature', [AdminWorksVisibilityActionController::class, 'unfeature'])->whereNumber('work');
+    Route::patch('/works/{work}/visibility/pin', [AdminWorksVisibilityActionController::class, 'pin'])->whereNumber('work');
+    Route::patch('/works/{work}/visibility/unpin', [AdminWorksVisibilityActionController::class, 'unpin'])->whereNumber('work');
     Route::get('/works', [AdminWorksIndexController::class, 'index']);
     Route::get('/works/{work}', [AdminWorksShowController::class, 'show'])->whereNumber('work');
 
