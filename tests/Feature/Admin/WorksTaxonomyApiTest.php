@@ -233,7 +233,6 @@ class WorksTaxonomyApiTest extends TestCase
             'rows',
             'title',
             'slug',
-            'summary',
             'description',
             'internal_notes',
             'rejection_reason',
