@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\Admin\WorksActivityController as AdminWorksActivity
 use App\Http\Controllers\Api\Admin\WorksIndexController as AdminWorksIndexController;
 use App\Http\Controllers\Api\Admin\WorksOverviewController as AdminWorksOverviewController;
 use App\Http\Controllers\Api\Admin\WorksReportsController as AdminWorksReportsController;
+use App\Http\Controllers\Api\Admin\WorksReviewActionController as AdminWorksReviewActionController;
 use App\Http\Controllers\Api\Admin\WorksReviewQueueController as AdminWorksReviewQueueController;
 use App\Http\Controllers\Api\Admin\WorksSettingsController as AdminWorksSettingsController;
 use App\Http\Controllers\Api\Admin\WorksShowController as AdminWorksShowController;
@@ -52,6 +53,13 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
     Route::get('/works/activity', [AdminWorksActivityController::class, 'index']);
     Route::get('/works/overview', [AdminWorksOverviewController::class, 'index']);
     Route::get('/works/review', [AdminWorksReviewQueueController::class, 'index']);
+    Route::patch('/works/{work}/review/start', [AdminWorksReviewActionController::class, 'start'])->whereNumber('work');
+    Route::patch('/works/{work}/review/assign-reviewer', [AdminWorksReviewActionController::class, 'assignReviewer'])->whereNumber('work');
+    Route::patch('/works/{work}/review/approve', [AdminWorksReviewActionController::class, 'approve'])->whereNumber('work');
+    Route::patch('/works/{work}/review/request-changes', [AdminWorksReviewActionController::class, 'requestChanges'])->whereNumber('work');
+    Route::patch('/works/{work}/review/reject', [AdminWorksReviewActionController::class, 'reject'])->whereNumber('work');
+    Route::patch('/works/{work}/review/publish', [AdminWorksReviewActionController::class, 'publishAfterApproval'])->whereNumber('work');
+    Route::patch('/works/{work}/review/reopen', [AdminWorksReviewActionController::class, 'reopen'])->whereNumber('work');
     Route::get('/works/visibility', [AdminWorksVisibilityController::class, 'index']);
     Route::get('/works/reports', [AdminWorksReportsController::class, 'index']);
     Route::get('/works/taxonomy', [AdminWorksTaxonomyController::class, 'index']);
