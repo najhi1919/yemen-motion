@@ -148,7 +148,7 @@
           </label>
 
           <label>
-            <span>{{ copy.featured }}</span>
+            <span>{{ copy.featuredLabel }}</span>
             <select v-model="filters.is_featured">
               <option v-for="option in booleanOptions" :key="'featured-' + option.value" :value="option.value">
                 {{ option.label }}
@@ -157,7 +157,7 @@
           </label>
 
           <label>
-            <span>{{ copy.pinned }}</span>
+            <span>{{ copy.pinnedLabel }}</span>
             <select v-model="filters.is_pinned">
               <option v-for="option in booleanOptions" :key="'pinned-' + option.value" :value="option.value">
                 {{ option.label }}
@@ -263,8 +263,8 @@
                 <th>{{ copy.designer }}</th>
                 <th>{{ copy.reviewer }}</th>
                 <th>{{ copy.category }}</th>
-                <th>{{ copy.featured }}</th>
-                <th>{{ copy.pinned }}</th>
+                <th>{{ copy.featuredLabel }}</th>
+                <th>{{ copy.pinnedLabel }}</th>
                 <th>{{ copy.publicFlag }}</th>
                 <th>{{ copy.hiddenFlag }}</th>
                 <th>{{ copy.promotedFlag }}</th>
@@ -549,11 +549,11 @@
                 <dd><code dir="ltr">{{ displayValue(detail.work.media_type) }}</code></dd>
               </div>
               <div>
-                <dt>{{ copy.featured }}</dt>
+                <dt>{{ copy.featuredLabel }}</dt>
                 <dd>{{ booleanLabel(detail.work.is_featured) }}</dd>
               </div>
               <div>
-                <dt>{{ copy.pinned }}</dt>
+                <dt>{{ copy.pinnedLabel }}</dt>
                 <dd>{{ booleanLabel(detail.work.is_pinned) }}</dd>
               </div>
               <div>
@@ -835,9 +835,9 @@ const copyMap = {
     publicHint: 'ظهورها العام متاح',
     hidden: 'مخفية الظهور',
     hiddenHint: 'ظهورها العام مخفي',
-    featured: 'مميزة',
+    featuredSummary: 'مميزة',
     featuredHint: 'تحمل علامة التمييز',
-    pinned: 'مثبتة',
+    pinnedSummary: 'مثبتة',
     pinnedHint: 'تحمل علامة التثبيت',
     published: 'منشورة',
     publishedHint: 'حالتها منشورة',
@@ -936,8 +936,8 @@ const copyMap = {
     basicDetails: 'البيانات الأساسية',
     priceAmount: 'القيمة السعرية',
     deliveryDays: 'مدة التسليم بالأيام',
-    featured: 'مميز',
-    pinned: 'مثبت',
+    featuredLabel: 'مميز',
+    pinnedLabel: 'مثبت',
     people: 'المصمم والمراجع',
     notLinked: 'غير مرتبط',
     relationsUnavailable: 'المصمم والمراجع غير متاحين حسب الصلاحية.',
@@ -980,9 +980,9 @@ const copyMap = {
     publicHint: 'Publicly visible works',
     hidden: 'Hidden visibility',
     hiddenHint: 'Public visibility is hidden',
-    featured: 'Featured',
+    featuredSummary: 'Featured',
     featuredHint: 'Marked as featured',
-    pinned: 'Pinned',
+    pinnedSummary: 'Pinned',
     pinnedHint: 'Marked as pinned',
     published: 'Published',
     publishedHint: 'Published status',
@@ -1081,8 +1081,8 @@ const copyMap = {
     basicDetails: 'Basic details',
     priceAmount: 'Price amount',
     deliveryDays: 'Delivery days',
-    featured: 'Featured',
-    pinned: 'Pinned',
+    featuredLabel: 'Featured',
+    pinnedLabel: 'Pinned',
     people: 'Designer and reviewer',
     notLinked: 'Not linked',
     relationsUnavailable: 'Designer and reviewer are unavailable for this permission scope.',
@@ -1225,8 +1225,8 @@ const summaryCards = computed(() => [
   { key: 'total', label: copy.value.total, value: summary.total, hint: copy.value.totalHint, color: '#8b5cf6' },
   { key: 'public', label: copy.value.public, value: summary.public, hint: copy.value.publicHint, color: '#10b981' },
   { key: 'hidden', label: copy.value.hidden, value: summary.hidden, hint: copy.value.hiddenHint, color: '#64748b' },
-  { key: 'featured', label: copy.value.featured, value: summary.featured, hint: copy.value.featuredHint, color: '#f59e0b' },
-  { key: 'pinned', label: copy.value.pinned, value: summary.pinned, hint: copy.value.pinnedHint, color: '#a855f7' },
+  { key: 'featured', label: copy.value.featuredSummary, value: summary.featured, hint: copy.value.featuredHint, color: '#f59e0b' },
+  { key: 'pinned', label: copy.value.pinnedSummary, value: summary.pinned, hint: copy.value.pinnedHint, color: '#a855f7' },
   { key: 'published', label: copy.value.published, value: summary.published, hint: copy.value.publishedHint, color: '#22c55e' },
   { key: 'hidden_status', label: copy.value.hiddenStatus, value: summary.hidden_status, hint: copy.value.hiddenStatusHint, color: '#94a3b8' },
   { key: 'reported', label: copy.value.reported, value: summary.reported, hint: copy.value.reportedHint, color: '#f43f5e' },
