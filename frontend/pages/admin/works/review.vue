@@ -179,6 +179,76 @@
         </p>
       </section>
 
+      <section v-if="lastReviewAction" class="ym-works-review-followup-card">
+        <header>
+          <div>
+            <span>{{ copy.lastActionFollowup }}</span>
+            <h2>{{ lastReviewAction.work.title }}</h2>
+            <code dir="ltr">{{ lastReviewAction.work.slug }} · #{{ lastReviewAction.work.id }}</code>
+          </div>
+          <button
+            type="button"
+            class="ym-works-review-followup-card__close"
+            :title="copy.dismissFollowup"
+            :aria-label="copy.dismissFollowup"
+            :disabled="actionLoading?.workId === lastReviewAction.work.id"
+            @click="dismissLastAction"
+          >
+            ×
+          </button>
+        </header>
+
+        <div class="ym-works-review-followup-grid">
+          <span>
+            {{ copy.lastAction }}
+            <strong>{{ actionLabels[lastReviewAction.action] }}</strong>
+          </span>
+          <span>
+            {{ copy.status }}
+            <strong>{{ statusLabel(lastReviewAction.work.status) }}</strong>
+          </span>
+          <span>
+            {{ copy.visibility }}
+            <strong>{{ visibilityLabel(lastReviewAction.work.visibility_status) }}</strong>
+          </span>
+          <span>
+            {{ copy.reviewer }}
+            <strong>{{ reviewerDisplay(lastReviewAction.work.reviewer) }}</strong>
+          </span>
+          <span>
+            {{ copy.changeResult }}
+            <strong>{{ lastReviewAction.changed ? copy.changedYes : copy.changedNo }}</strong>
+          </span>
+          <span>
+            {{ copy.queueState }}
+            <strong>{{ lastReviewAction.work.review_flags.in_queue ? copy.inQueue : copy.outOfQueue }}</strong>
+          </span>
+        </div>
+
+        <div class="ym-works-review-followup-flags" :aria-label="copy.reviewFlags">
+          <span>{{ copy.assigned }}: {{ booleanLabel(lastReviewAction.work.review_flags.assigned) }}</span>
+          <span>{{ copy.decisionMade }}: {{ booleanLabel(lastReviewAction.work.review_flags.decision_made) }}</span>
+          <span>{{ copy.isPublished }}: {{ booleanLabel(lastReviewAction.work.review_flags.is_published) }}</span>
+          <span>{{ copy.reported }}: {{ booleanLabel(lastReviewAction.work.review_flags.has_reports) }}</span>
+          <span>{{ copy.needsAttention }}: {{ booleanLabel(lastReviewAction.work.review_flags.needs_attention) }}</span>
+        </div>
+
+        <div class="ym-works-review-followup-actions" :aria-label="copy.followupActions">
+          <button
+            v-for="action in availableReviewActions(lastReviewAction.work)"
+            :key="action.key"
+            type="button"
+            class="ym-works-review-action-button"
+            :class="'is-' + action.tone"
+            :disabled="!action.enabled || actionLoading?.workId === lastReviewAction.work.id"
+            :title="actionLoading?.workId === lastReviewAction.work.id ? copy.actionInProgress : action.reason"
+            @click="requestReviewAction(lastReviewAction.work, action.key)"
+          >
+            {{ action.label }}
+          </button>
+        </div>
+      </section>
+
       <section class="ym-works-review-table-card">
         <header class="ym-works-review-table-card__head">
           <div>
@@ -193,6 +263,22 @@
           </div>
         </header>
 
+        <aside
+          v-if="actionStatus"
+          class="ym-works-review-action-status"
+          :class="actionStatus.kind === 'success' ? 'is-success' : 'is-error'"
+          :role="actionStatus.kind === 'error' ? 'alert' : 'status'"
+          aria-live="polite"
+        >
+          <div>
+            <strong>{{ actionStatus.message }}</strong>
+            <span>{{ actionStatus.actionLabel }} · {{ actionStatus.workLabel }}</span>
+          </div>
+          <span v-if="actionStatus.changed !== null" class="ym-works-review-action-status__changed">
+            {{ actionStatus.changed ? copy.changedYes : copy.changedNo }}
+          </span>
+        </aside>
+
         <div v-if="loading" class="ym-works-review-state" role="status" aria-live="polite">
           <span class="ym-works-review-spinner" aria-hidden="true" />
           <h3>{{ copy.loadingTitle }}</h3>
@@ -203,7 +289,7 @@
           <span class="ym-works-review-state__icon" aria-hidden="true">!</span>
           <h3>{{ copy.errorTitle }}</h3>
           <p>{{ error }}</p>
-          <button type="button" class="ym-works-review-button is-secondary" @click="fetchReviewQueue">
+          <button type="button" class="ym-works-review-button is-secondary" @click="fetchReviewQueue()">
             {{ copy.retry }}
           </button>
         </div>
@@ -262,6 +348,7 @@
                     <span aria-hidden="true">{{ sortIndicator('updated_at') }}</span>
                   </button>
                 </th>
+                <th class="is-review-actions">{{ copy.reviewActions }}</th>
                 <th class="is-action">{{ copy.readAction }}</th>
               </tr>
             </thead>
@@ -343,6 +430,27 @@
                   <time :datetime="work.updated_at || undefined">
                     {{ formatDateTime(work.updated_at) }}
                   </time>
+                </td>
+                <td class="is-review-actions">
+                  <div class="ym-works-review-action-group" :aria-label="copy.actionsFor(work.title)">
+                    <button
+                      v-for="action in availableReviewActions(work)"
+                      :key="action.key"
+                      type="button"
+                      class="ym-works-review-action-button"
+                      :class="'is-' + action.tone"
+                      :disabled="!action.enabled || actionLoading?.workId === work.id"
+                      :title="actionLoading?.workId === work.id ? copy.actionInProgress : action.reason"
+                      @click="requestReviewAction(work, action.key)"
+                    >
+                      <span
+                        v-if="actionLoading?.workId === work.id && actionLoading.key === action.key"
+                        class="ym-works-review-action-spinner"
+                        aria-hidden="true"
+                      />
+                      {{ action.label }}
+                    </button>
+                  </div>
                 </td>
                 <td class="is-action">
                   <button
@@ -610,11 +718,115 @@
         </div>
       </section>
     </div>
+
+    <div
+      v-if="pendingReviewAction"
+      class="ym-review-action-backdrop"
+      role="presentation"
+      @click.self="cancelReviewAction"
+    >
+      <section
+        class="ym-review-action-dialog"
+        role="dialog"
+        aria-modal="true"
+        :aria-labelledby="actionDialogTitleId"
+        :aria-describedby="actionDialogDescriptionId"
+      >
+        <span class="ym-review-action-dialog__eyebrow">{{ copy.reviewActionConfirmation }}</span>
+        <h2 :id="actionDialogTitleId">{{ copy.confirmAction(pendingReviewAction.label) }}</h2>
+        <p :id="actionDialogDescriptionId">{{ actionDescriptions[pendingReviewAction.key] }}</p>
+
+        <div class="ym-review-action-dialog__work">
+          <span>{{ copy.affectedWork }}</span>
+          <strong :dir="textDirection(pendingReviewAction.target.title)">
+            {{ pendingReviewAction.target.title }}
+          </strong>
+          <code dir="ltr">{{ pendingReviewAction.target.slug }} · #{{ pendingReviewAction.target.id }}</code>
+        </div>
+
+        <label v-if="pendingReviewAction.kind === 'reviewer'" class="ym-review-action-dialog__field">
+          <span>{{ copy.reviewerId }}</span>
+          <input
+            v-model="reviewerIdInput"
+            type="number"
+            min="1"
+            step="1"
+            inputmode="numeric"
+            required
+            :disabled="actionLoading !== null"
+            :aria-invalid="Boolean(actionFieldErrors.reviewer_id)"
+            autofocus
+          />
+          <small>{{ copy.currentReviewer }}: {{ reviewerDisplay(pendingReviewAction.target.reviewer) }}</small>
+          <strong v-if="actionFieldErrors.reviewer_id" role="alert">{{ actionFieldErrors.reviewer_id }}</strong>
+        </label>
+
+        <label v-else-if="pendingReviewAction.kind === 'changes'" class="ym-review-action-dialog__field">
+          <span>{{ copy.changeRequestNotesInput }}</span>
+          <textarea
+            v-model="changeRequestNotesInput"
+            minlength="5"
+            maxlength="2000"
+            rows="7"
+            required
+            :disabled="actionLoading !== null"
+            :aria-invalid="Boolean(actionFieldErrors.change_request_notes)"
+            autofocus
+          />
+          <small>{{ textLength(changeRequestNotesInput) }} / 2000</small>
+          <strong v-if="actionFieldErrors.change_request_notes" role="alert">
+            {{ actionFieldErrors.change_request_notes }}
+          </strong>
+        </label>
+
+        <label v-else-if="pendingReviewAction.kind === 'reject'" class="ym-review-action-dialog__field">
+          <span>{{ copy.rejectionReasonInput }}</span>
+          <textarea
+            v-model="rejectionReasonInput"
+            minlength="5"
+            maxlength="2000"
+            rows="7"
+            required
+            :disabled="actionLoading !== null"
+            :aria-invalid="Boolean(actionFieldErrors.rejection_reason)"
+            autofocus
+          />
+          <small>{{ textLength(rejectionReasonInput) }} / 2000</small>
+          <strong v-if="actionFieldErrors.rejection_reason" role="alert">
+            {{ actionFieldErrors.rejection_reason }}
+          </strong>
+        </label>
+
+        <p v-if="modalActionError" class="ym-review-action-dialog__error" role="alert">
+          {{ modalActionError }}
+        </p>
+
+        <div class="ym-review-action-dialog__buttons">
+          <button
+            type="button"
+            class="ym-works-review-button is-primary"
+            :disabled="!canConfirmReviewAction || actionLoading !== null"
+            @click="confirmReviewAction"
+          >
+            <span v-if="actionLoading !== null" class="ym-works-review-action-spinner" aria-hidden="true" />
+            {{ actionLoading !== null ? copy.executingAction : copy.confirmExecution }}
+          </button>
+          <button
+            type="button"
+            class="ym-works-review-button is-secondary"
+            :disabled="actionLoading !== null"
+            @click="cancelReviewAction"
+          >
+            {{ copy.cancel }}
+          </button>
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useApiClient } from '~/composables/useApiClient'
 import { useAuthStore } from '~/stores/authStore'
 
@@ -628,6 +840,9 @@ type BooleanFilter = '' | '1' | '0'
 type PageSize = 15 | 25 | 50
 type SortDirection = 'asc' | 'desc'
 type ReviewSortKey = 'submitted_at' | 'updated_at' | 'reports_count' | 'created_at' | 'title' | 'status'
+type ReviewActionKey = 'start' | 'assign_reviewer' | 'approve' | 'request_changes' | 'reject' | 'publish' | 'reopen'
+type ReviewActionKind = 'simple' | 'reviewer' | 'changes' | 'reject'
+type ReviewActionTone = 'primary' | 'info' | 'positive' | 'warning' | 'danger' | 'promotion' | 'neutral'
 
 interface UserReference {
   id: number
@@ -638,6 +853,108 @@ interface ReviewFlags {
   assigned: boolean
   overdue: boolean
   needs_attention: boolean
+}
+
+interface ActionReviewFlags {
+  assigned: boolean
+  in_queue: boolean
+  decision_made: boolean
+  is_published: boolean
+  has_reports: boolean
+  needs_attention: boolean
+}
+
+interface ReviewActionWork {
+  id: number
+  title: string
+  slug: string
+  summary: string | null
+  status: WorkStatus
+  visibility_status: VisibilityStatus
+  media_type: string | null
+  designer: UserReference | null
+  reviewer: UserReference | null
+  category_id: number | null
+  is_featured: boolean
+  is_pinned: boolean
+  reports_count: number
+  views_count: number
+  likes_count: number
+  submitted_at: string | null
+  reviewed_at: string | null
+  approved_at: string | null
+  published_at: string | null
+  rejected_at: string | null
+  updated_at: string | null
+  created_at: string | null
+  review_flags: ActionReviewFlags
+}
+
+interface ReviewActionResponse {
+  success: boolean
+  data: {
+    action: ReviewActionKey
+    changed: boolean
+    work: ReviewActionWork
+  } | null
+  message?: string
+  errors?: Record<string, string[]> | null
+}
+
+interface ReviewActionTarget {
+  id: number
+  title: string
+  slug: string
+  status: WorkStatus
+  visibility_status: VisibilityStatus
+  reviewer: UserReference | null
+}
+
+interface ReviewActionDefinition {
+  key: ReviewActionKey
+  endpoint: string
+  permission: string
+  kind: ReviewActionKind
+  tone: ReviewActionTone
+}
+
+interface ReviewActionView extends ReviewActionDefinition {
+  label: string
+  enabled: boolean
+  reason: string
+}
+
+interface PendingReviewAction extends ReviewActionDefinition {
+  label: string
+  target: ReviewActionTarget
+}
+
+interface ReviewActionStatus {
+  kind: 'success' | 'error'
+  message: string
+  changed: boolean | null
+  actionLabel: string
+  workLabel: string
+}
+
+interface LastReviewAction {
+  action: ReviewActionKey
+  changed: boolean
+  work: {
+    id: number
+    title: string
+    slug: string
+    status: WorkStatus
+    visibility_status: VisibilityStatus
+    reviewer: UserReference | null
+    review_flags: ActionReviewFlags
+  }
+}
+
+interface ReviewActionFieldErrors {
+  reviewer_id?: string
+  change_request_notes?: string
+  rejection_reason?: string
 }
 
 interface ReviewQueueItem {
@@ -769,9 +1086,61 @@ const authStore = useAuthStore()
 const { apiFetch } = useApiClient()
 const currentLocale = useState<Locale>('ym-dashboard-locale', () => 'ar')
 
+const reviewActionDefinitions: ReviewActionDefinition[] = [
+  {
+    key: 'start',
+    endpoint: 'start',
+    permission: 'admin.works.review.start',
+    kind: 'simple',
+    tone: 'primary'
+  },
+  {
+    key: 'assign_reviewer',
+    endpoint: 'assign-reviewer',
+    permission: 'admin.works.review.assign_reviewer',
+    kind: 'reviewer',
+    tone: 'info'
+  },
+  {
+    key: 'approve',
+    endpoint: 'approve',
+    permission: 'admin.works.review.approve',
+    kind: 'simple',
+    tone: 'positive'
+  },
+  {
+    key: 'request_changes',
+    endpoint: 'request-changes',
+    permission: 'admin.works.review.request_changes',
+    kind: 'changes',
+    tone: 'warning'
+  },
+  {
+    key: 'reject',
+    endpoint: 'reject',
+    permission: 'admin.works.review.reject',
+    kind: 'reject',
+    tone: 'danger'
+  },
+  {
+    key: 'publish',
+    endpoint: 'publish',
+    permission: 'admin.works.review.publish_after_approval',
+    kind: 'simple',
+    tone: 'promotion'
+  },
+  {
+    key: 'reopen',
+    endpoint: 'reopen',
+    permission: 'admin.works.review.reopen',
+    kind: 'simple',
+    tone: 'neutral'
+  }
+]
+
 const copyMap = {
   ar: {
-    readonly: 'قراءة وتنظيم فقط',
+    readonly: 'إجراءات مراجعة مضبوطة',
     kicker: 'إدارة دورة مراجعة الأعمال',
     title: 'طلبات المراجعة',
     description: 'قائمة إدارية آمنة لتنظيم الأعمال المرسلة وتحت المراجعة وطلبات التعديل، مع قراءة التفاصيل المسموحة فقط.',
@@ -781,8 +1150,8 @@ const copyMap = {
     authLoadingCopy: 'ننتظر اكتمال تهيئة جلسة المستخدم قبل إرسال أي طلب بيانات.',
     forbiddenTitle: 'الوصول إلى طلبات المراجعة غير متاح',
     forbiddenCopy: 'لا يملك هذا الحساب صلاحيات قائمة المراجعة المطلوبة. لم تتم محاولة تحميل البيانات.',
-    noticeTitle: 'لا توجد قرارات تنفيذية في هذه الصفحة',
-    notice: 'هذه المرحلة للقراءة والتنظيم فقط؛ لا تتضمن بدء المراجعة أو الاعتماد أو الرفض أو طلب التعديل أو النشر أو الإخفاء أو الأرشفة أو الحذف.',
+    noticeTitle: 'قرارات المراجعة محكومة بالصلاحية والحالة',
+    notice: 'لا يظهر للمستخدم إلا الإجراء الذي تسمح به صلاحيته، وتبقى الحالات غير المناسبة معطلة بسبب واضح قبل التأكيد.',
     summaryLabel: 'ملخص طلبات مراجعة الأعمال',
     total: 'الإجمالي',
     totalHint: 'كل الطلبات المطابقة',
@@ -823,7 +1192,7 @@ const copyMap = {
     invalidIdentifiers: 'معرّفا المصمم والمراجع يجب أن يكونا عددين صحيحين موجبين.',
     validationError: 'تعذر تطبيق الفلاتر. تحقق من البحث والقيم والتواريخ.',
     tableTitle: 'طابور طلبات المراجعة',
-    tableCopy: 'رتّب الطلبات من رؤوس الأعمدة، وافتح التفاصيل عبر إجراء القراءة الوحيد.',
+    tableCopy: 'رتّب الطلبات من رؤوس الأعمدة، ونفّذ إجراءات المراجعة المصرح بها بعد التأكيد.',
     currentPage: 'الصفحة الحالية',
     loadingTitle: 'جارٍ تحميل طلبات المراجعة',
     loadingCopy: 'يتم جلب القائمة الآمنة وفق الفلاتر الحالية...',
@@ -842,6 +1211,60 @@ const copyMap = {
     submittedAt: 'تاريخ الإرسال',
     createdAt: 'تاريخ الإنشاء',
     updatedAt: 'آخر تحديث',
+    visibility: 'الظهور',
+    reviewActions: 'إجراءات المراجعة',
+    actionsFor: (title: string) => 'إجراءات المراجعة للعمل: ' + title,
+    actionInProgress: 'جارٍ تنفيذ إجراء مراجعة لهذا العمل.',
+    actionAvailable: 'الإجراء متاح لهذه الحالة.',
+    startAlreadyOpen: 'المراجعة بدأت بالفعل.',
+    startUnavailable: 'لا يمكن بدء المراجعة من الحالة الحالية.',
+    assignUnavailable: 'لا يمكن تعيين المراجع في الحالة الحالية.',
+    alreadyApproved: 'العمل معتمد بالفعل.',
+    approveUnavailable: 'لا يمكن اعتماد العمل من الحالة الحالية.',
+    changesUnavailable: 'لا يمكن طلب تعديلات من الحالة الحالية.',
+    rejectUnavailable: 'لا يمكن رفض العمل من الحالة الحالية.',
+    alreadyPublished: 'العمل منشور بالفعل.',
+    publishedHiddenUnavailable: 'العمل منشور لكنه غير عام؛ لا يمكن تنفيذ النشر بعد الاعتماد.',
+    publishUnavailable: 'لا يمكن النشر قبل اعتماد العمل.',
+    reopenAlreadyOpen: 'المراجعة مفتوحة بالفعل.',
+    reopenUnavailable: 'لا يمكن إعادة فتح المراجعة من الحالة الحالية.',
+    lastActionFollowup: 'متابعة آخر إجراء مراجعة',
+    dismissFollowup: 'إغلاق بطاقة المتابعة',
+    lastAction: 'آخر إجراء',
+    changeResult: 'نتيجة التغيير',
+    changedYes: 'تم تغيير الحالة',
+    changedNo: 'لم تتغير الحالة',
+    queueState: 'حالة الطابور',
+    inQueue: 'ضمن طابور المراجعة',
+    outOfQueue: 'خارج طابور المراجعة',
+    reviewFlags: 'مؤشرات المراجعة الحالية',
+    decisionMade: 'صدر قرار',
+    isPublished: 'منشور',
+    followupActions: 'الإجراءات التالية المتاحة',
+    reviewActionConfirmation: 'تأكيد إجراء مراجعة فعلي',
+    confirmAction: (action: string) => 'تأكيد إجراء: ' + action,
+    affectedWork: 'العمل المتأثر',
+    currentReviewer: 'المراجع الحالي',
+    changeRequestNotesInput: 'ملاحظات طلب التعديلات',
+    rejectionReasonInput: 'سبب رفض العمل',
+    confirmExecution: 'تأكيد التنفيذ',
+    executingAction: 'جارٍ التنفيذ...',
+    cancel: 'إلغاء',
+    actionSucceeded: 'تم تنفيذ إجراء المراجعة بنجاح',
+    actionUnchanged: 'لا يوجد تغيير؛ الحالة مطابقة بالفعل',
+    actionDenied: 'غير مصرح بتنفيذ هذا الإجراء.',
+    actionNotFound: 'لم يعد العمل موجودًا.',
+    actionFailed: 'تعذر تنفيذ إجراء المراجعة. حاول مرة أخرى.',
+    actionResponseInvalid: 'تعذر اعتماد نتيجة الإجراء. أُبقيت بيانات الصفحة دون تغيير.',
+    reviewerRequired: 'أدخل معرّف مراجع صحيحًا وموجبًا.',
+    notesLengthInvalid: 'يجب أن يكون النص بين 5 و2000 حرف.',
+    startDescription: 'سيُنقل العمل إلى حالة تحت المراجعة ويُعيّن المنفذ كمراجع عند عدم وجود مراجع.',
+    assignDescription: 'سيُعيّن معرّف المستخدم الداخلي المحدد كمراجع دون تغيير حالة العمل.',
+    approveDescription: 'سيُعتمد العمل ويخرج من طابور المراجعة دون نشره.',
+    changesDescription: 'سيُطلب تعديل العمل، أو تُحدّث الملاحظات إذا كان الطلب قائمًا.',
+    rejectDescription: 'سيُرفض العمل، أو يُحدّث سبب الرفض إذا كان مرفوضًا بالفعل.',
+    publishDescription: 'سيُنشر العمل المعتمد ويصبح ظاهرًا للعامة.',
+    reopenDescription: 'سيُعاد العمل إلى حالة تحت المراجعة مع الحفاظ على أثر القرارات السابقة.',
     readAction: 'إجراء القراءة',
     assignedYes: 'مسند',
     assignedNo: 'غير مسند',
@@ -906,7 +1329,7 @@ const copyMap = {
     hiddenVisibility: 'مخفي'
   },
   en: {
-    readonly: 'Read and organize only',
+    readonly: 'Controlled review actions',
     kicker: 'Works review workflow',
     title: 'Review Requests',
     description: 'A safe administrative queue for organizing submitted, in-review, and changes-requested works with permission-scoped details.',
@@ -916,8 +1339,8 @@ const copyMap = {
     authLoadingCopy: 'Waiting for the user session to initialize before requesting data.',
     forbiddenTitle: 'Review requests access is unavailable',
     forbiddenCopy: 'This account lacks the required review queue permissions. No data request was made.',
-    noticeTitle: 'No review decisions are available here',
-    notice: 'This step is limited to reading and organization. It does not start, approve, reject, request changes, publish, hide, archive, restore, or delete.',
+    noticeTitle: 'Review decisions are permission and state controlled',
+    notice: 'Users only see actions allowed by their exact permissions. Invalid state transitions remain disabled with a clear reason.',
     summaryLabel: 'Works review request summary',
     total: 'Total',
     totalHint: 'All matching requests',
@@ -958,7 +1381,7 @@ const copyMap = {
     invalidIdentifiers: 'Designer and reviewer identifiers must be positive integers.',
     validationError: 'The filters could not be applied. Check the search, values, and dates.',
     tableTitle: 'Review request queue',
-    tableCopy: 'Sort from supported headers and open details through the only read action.',
+    tableCopy: 'Sort from supported headers and run permitted review actions after confirmation.',
     currentPage: 'Current page',
     loadingTitle: 'Loading review requests',
     loadingCopy: 'Fetching the safe queue using the current filters...',
@@ -977,6 +1400,60 @@ const copyMap = {
     submittedAt: 'Submitted at',
     createdAt: 'Created at',
     updatedAt: 'Updated at',
+    visibility: 'Visibility',
+    reviewActions: 'Review actions',
+    actionsFor: (title: string) => 'Review actions for: ' + title,
+    actionInProgress: 'A review action is being executed for this work.',
+    actionAvailable: 'The action is available for this state.',
+    startAlreadyOpen: 'The review has already started.',
+    startUnavailable: 'The review cannot be started from the current state.',
+    assignUnavailable: 'A reviewer cannot be assigned in the current state.',
+    alreadyApproved: 'The work is already approved.',
+    approveUnavailable: 'The work cannot be approved from the current state.',
+    changesUnavailable: 'Changes cannot be requested from the current state.',
+    rejectUnavailable: 'The work cannot be rejected from the current state.',
+    alreadyPublished: 'The work is already published.',
+    publishedHiddenUnavailable: 'The work is published but not public; publish-after-approval is unavailable.',
+    publishUnavailable: 'The work must be approved before publishing.',
+    reopenAlreadyOpen: 'The review is already open.',
+    reopenUnavailable: 'The review cannot be reopened from the current state.',
+    lastActionFollowup: 'Latest review action follow-up',
+    dismissFollowup: 'Dismiss follow-up card',
+    lastAction: 'Last action',
+    changeResult: 'Change result',
+    changedYes: 'State changed',
+    changedNo: 'State unchanged',
+    queueState: 'Queue state',
+    inQueue: 'In the review queue',
+    outOfQueue: 'Outside the review queue',
+    reviewFlags: 'Current review flags',
+    decisionMade: 'Decision made',
+    isPublished: 'Published',
+    followupActions: 'Available next actions',
+    reviewActionConfirmation: 'Confirm a real review action',
+    confirmAction: (action: string) => 'Confirm action: ' + action,
+    affectedWork: 'Affected work',
+    currentReviewer: 'Current reviewer',
+    changeRequestNotesInput: 'Change request notes',
+    rejectionReasonInput: 'Rejection reason',
+    confirmExecution: 'Confirm execution',
+    executingAction: 'Executing...',
+    cancel: 'Cancel',
+    actionSucceeded: 'The review action was completed successfully',
+    actionUnchanged: 'No change; the state already matches',
+    actionDenied: 'You are not authorized to run this action.',
+    actionNotFound: 'The work no longer exists.',
+    actionFailed: 'The review action could not be completed. Try again.',
+    actionResponseInvalid: 'The action result could not be accepted. Page data was left unchanged.',
+    reviewerRequired: 'Enter a valid positive reviewer ID.',
+    notesLengthInvalid: 'The text must contain between 5 and 2000 characters.',
+    startDescription: 'The work will move into review and the actor will be assigned when no reviewer exists.',
+    assignDescription: 'The selected internal user ID will be assigned without changing the work state.',
+    approveDescription: 'The work will be approved and leave the review queue without being published.',
+    changesDescription: 'Changes will be requested, or the notes will be updated for an existing request.',
+    rejectDescription: 'The work will be rejected, or its rejection reason will be updated.',
+    publishDescription: 'The approved work will be published and made public.',
+    reopenDescription: 'The work will return to review while preserving prior decision history.',
     readAction: 'Read action',
     assignedYes: 'Assigned',
     assignedNo: 'Unassigned',
@@ -1043,6 +1520,34 @@ const copyMap = {
 } as const
 
 const copy = computed(() => copyMap[currentLocale.value])
+const actionLabels = computed<Record<ReviewActionKey, string>>(() => currentLocale.value === 'ar'
+  ? {
+      start: 'بدء المراجعة',
+      assign_reviewer: 'تعيين المراجع',
+      approve: 'اعتماد العمل',
+      request_changes: 'طلب تعديلات',
+      reject: 'رفض العمل',
+      publish: 'النشر بعد الاعتماد',
+      reopen: 'إعادة فتح المراجعة'
+    }
+  : {
+      start: 'Start review',
+      assign_reviewer: 'Assign reviewer',
+      approve: 'Approve work',
+      request_changes: 'Request changes',
+      reject: 'Reject work',
+      publish: 'Publish after approval',
+      reopen: 'Reopen review'
+    })
+const actionDescriptions = computed<Record<ReviewActionKey, string>>(() => ({
+  start: copy.value.startDescription,
+  assign_reviewer: copy.value.assignDescription,
+  approve: copy.value.approveDescription,
+  request_changes: copy.value.changesDescription,
+  reject: copy.value.rejectDescription,
+  publish: copy.value.publishDescription,
+  reopen: copy.value.reopenDescription
+}))
 const authPending = computed(() => !authStore.isInitialized)
 const hasReviewAccess = computed(() => {
   if (!authStore.isInitialized || !authStore.isAuthenticated) return false
@@ -1120,6 +1625,39 @@ const detail = ref<WorkDetailData | null>(null)
 const detailLoading = ref(false)
 const detailError = ref<string | null>(null)
 const drawerTitleId = 'ym-review-work-detail-title'
+const pendingReviewAction = ref<PendingReviewAction | null>(null)
+const actionLoading = ref<{ workId: number; key: ReviewActionKey } | null>(null)
+const actionStatus = ref<ReviewActionStatus | null>(null)
+const lastReviewAction = ref<LastReviewAction | null>(null)
+const reviewerIdInput = ref('')
+const changeRequestNotesInput = ref('')
+const rejectionReasonInput = ref('')
+const actionFieldErrors = reactive<ReviewActionFieldErrors>({})
+const modalActionError = ref<string | null>(null)
+const actionDialogTitleId = 'ym-review-action-dialog-title'
+const actionDialogDescriptionId = 'ym-review-action-dialog-description'
+
+const canConfirmReviewAction = computed(() => {
+  const pending = pendingReviewAction.value
+  if (!pending) return false
+
+  if (pending.kind === 'reviewer') {
+    const reviewerId = Number(reviewerIdInput.value)
+    return Number.isInteger(reviewerId) && reviewerId > 0
+  }
+
+  if (pending.kind === 'changes') {
+    const length = textLength(changeRequestNotesInput.value.trim())
+    return length >= 5 && length <= 2000
+  }
+
+  if (pending.kind === 'reject') {
+    const length = textLength(rejectionReasonInput.value.trim())
+    return length >= 5 && length <= 2000
+  }
+
+  return true
+})
 
 let pageMounted = false
 let loadedAuthorizationSignature: string | null = null
@@ -1240,6 +1778,522 @@ function visibilityClass(status: VisibilityStatus): string {
   return status === 'public' ? 'is-public' : 'is-hidden'
 }
 
+function textLength(value: string): number {
+  return Array.from(value).length
+}
+
+function reviewerDisplay(reviewer: UserReference | null): string {
+  return reviewer ? reviewer.name + ' (#' + reviewer.id + ')' : '—'
+}
+
+function hasActionPermission(permission: string): boolean {
+  if (!hasReviewAccess.value) return false
+  return authStore.role === 'super-admin' || authStore.permissions.includes(permission)
+}
+
+function reviewActionAvailability(
+  target: ReviewActionTarget,
+  key: ReviewActionKey
+): { enabled: boolean; reason: string } {
+  const hasReviewer = target.reviewer !== null
+
+  if (key === 'start') {
+    if (target.status === 'submitted') return { enabled: true, reason: copy.value.actionAvailable }
+    if (target.status === 'in_review' && !hasReviewer) {
+      return { enabled: true, reason: copy.value.actionAvailable }
+    }
+    return {
+      enabled: false,
+      reason: target.status === 'in_review' ? copy.value.startAlreadyOpen : copy.value.startUnavailable
+    }
+  }
+
+  if (key === 'assign_reviewer') {
+    const enabled = ['submitted', 'in_review', 'changes_requested'].includes(target.status)
+    return { enabled, reason: enabled ? copy.value.actionAvailable : copy.value.assignUnavailable }
+  }
+
+  if (key === 'approve') {
+    if (target.status === 'in_review') return { enabled: true, reason: copy.value.actionAvailable }
+    return {
+      enabled: false,
+      reason: target.status === 'approved' ? copy.value.alreadyApproved : copy.value.approveUnavailable
+    }
+  }
+
+  if (key === 'request_changes') {
+    const enabled = target.status === 'in_review' || target.status === 'changes_requested'
+    return { enabled, reason: enabled ? copy.value.actionAvailable : copy.value.changesUnavailable }
+  }
+
+  if (key === 'reject') {
+    const enabled = target.status === 'in_review' || target.status === 'rejected'
+    return { enabled, reason: enabled ? copy.value.actionAvailable : copy.value.rejectUnavailable }
+  }
+
+  if (key === 'publish') {
+    if (target.status === 'approved') return { enabled: true, reason: copy.value.actionAvailable }
+    if (target.status === 'published' && target.visibility_status === 'public') {
+      return { enabled: false, reason: copy.value.alreadyPublished }
+    }
+    return {
+      enabled: false,
+      reason: target.status === 'published'
+        ? copy.value.publishedHiddenUnavailable
+        : copy.value.publishUnavailable
+    }
+  }
+
+  if (target.status === 'in_review') {
+    return hasReviewer
+      ? { enabled: false, reason: copy.value.reopenAlreadyOpen }
+      : { enabled: true, reason: copy.value.actionAvailable }
+  }
+
+  const enabled = ['changes_requested', 'rejected', 'approved'].includes(target.status)
+  return { enabled, reason: enabled ? copy.value.actionAvailable : copy.value.reopenUnavailable }
+}
+
+function availableReviewActions(target: ReviewActionTarget): ReviewActionView[] {
+  return reviewActionDefinitions
+    .filter((action) => hasActionPermission(action.permission))
+    .map((action) => ({
+      ...action,
+      label: actionLabels.value[action.key],
+      ...reviewActionAvailability(target, action.key)
+    }))
+}
+
+function toActionTarget(source: ReviewActionTarget): ReviewActionTarget {
+  return {
+    id: source.id,
+    title: source.title,
+    slug: source.slug,
+    status: source.status,
+    visibility_status: source.visibility_status,
+    reviewer: source.reviewer
+      ? { id: source.reviewer.id, name: source.reviewer.name }
+      : null
+  }
+}
+
+function clearActionFieldErrors(): void {
+  delete actionFieldErrors.reviewer_id
+  delete actionFieldErrors.change_request_notes
+  delete actionFieldErrors.rejection_reason
+  modalActionError.value = null
+}
+
+function clearActionInputs(): void {
+  reviewerIdInput.value = ''
+  changeRequestNotesInput.value = ''
+  rejectionReasonInput.value = ''
+  clearActionFieldErrors()
+}
+
+function requestReviewAction(target: ReviewActionTarget, key: ReviewActionKey): void {
+  if (actionLoading.value || pendingReviewAction.value) return
+
+  const definition = reviewActionDefinitions.find((action) => action.key === key)
+  if (!definition || !hasActionPermission(definition.permission)) return
+
+  const availability = reviewActionAvailability(target, key)
+  if (!availability.enabled) return
+
+  clearActionInputs()
+  if (definition.kind === 'reviewer' && target.reviewer) {
+    reviewerIdInput.value = String(target.reviewer.id)
+  }
+
+  pendingReviewAction.value = {
+    ...definition,
+    label: actionLabels.value[key],
+    target: toActionTarget(target)
+  }
+}
+
+function cancelReviewAction(): void {
+  if (actionLoading.value) return
+  pendingReviewAction.value = null
+  clearActionInputs()
+}
+
+function dismissLastAction(): void {
+  if (actionLoading.value?.workId === lastReviewAction.value?.work.id) return
+  lastReviewAction.value = null
+}
+
+function requestErrorData(requestError: unknown): Record<string, unknown> | null {
+  if (!requestError || typeof requestError !== 'object' || !('data' in requestError)) return null
+  const data = (requestError as { data?: unknown }).data
+  return data && typeof data === 'object' ? data as Record<string, unknown> : null
+}
+
+function serverActionMessage(requestError: unknown): string | null {
+  const data = requestErrorData(requestError)
+  if (!data || typeof data.message !== 'string') return null
+  const message = data.message.trim()
+  return message || null
+}
+
+function applyServerFieldErrors(requestError: unknown): void {
+  const data = requestErrorData(requestError)
+  const errors = data?.errors
+  if (!errors || typeof errors !== 'object') return
+
+  for (const key of ['reviewer_id', 'change_request_notes', 'rejection_reason'] as const) {
+    const messages = (errors as Record<string, unknown>)[key]
+    if (Array.isArray(messages) && typeof messages[0] === 'string') {
+      actionFieldErrors[key] = messages[0]
+    }
+  }
+}
+
+function safeUserReference(value: unknown): UserReference | null {
+  if (!value || typeof value !== 'object') return null
+  const user = value as Record<string, unknown>
+  if (!Number.isInteger(user.id) || typeof user.name !== 'string') return null
+  return { id: user.id as number, name: user.name }
+}
+
+function isWorkStatus(value: unknown): value is WorkStatus {
+  return typeof value === 'string' && [
+    'draft',
+    'submitted',
+    'in_review',
+    'changes_requested',
+    'approved',
+    'published',
+    'rejected',
+    'hidden',
+    'archived'
+  ].includes(value)
+}
+
+function isReviewStatus(value: WorkStatus): value is ReviewStatus {
+  return ['submitted', 'in_review', 'changes_requested'].includes(value)
+}
+
+function safeStringOrNull(value: unknown): string | null {
+  return typeof value === 'string' ? value : null
+}
+
+function safeCount(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0
+}
+
+function toSafeActionWork(value: unknown): ReviewActionWork | null {
+  if (!value || typeof value !== 'object') return null
+  const work = value as Record<string, unknown>
+  const flags = work.review_flags
+
+  if (
+    !Number.isInteger(work.id)
+    || typeof work.title !== 'string'
+    || typeof work.slug !== 'string'
+    || !isWorkStatus(work.status)
+    || (work.visibility_status !== 'hidden' && work.visibility_status !== 'public')
+    || !flags
+    || typeof flags !== 'object'
+  ) {
+    return null
+  }
+
+  const reviewFlags = flags as Record<string, unknown>
+  if (![
+    'assigned',
+    'in_queue',
+    'decision_made',
+    'is_published',
+    'has_reports',
+    'needs_attention'
+  ].every((key) => typeof reviewFlags[key] === 'boolean')) {
+    return null
+  }
+
+  const designer = safeUserReference(work.designer)
+  const reviewer = safeUserReference(work.reviewer)
+  if ((work.designer !== null && !designer) || (work.reviewer !== null && !reviewer)) {
+    return null
+  }
+
+  return {
+    id: work.id as number,
+    title: work.title,
+    slug: work.slug,
+    summary: safeStringOrNull(work.summary),
+    status: work.status,
+    visibility_status: work.visibility_status,
+    media_type: safeStringOrNull(work.media_type),
+    designer,
+    reviewer,
+    category_id: typeof work.category_id === 'number' ? work.category_id : null,
+    is_featured: work.is_featured === true,
+    is_pinned: work.is_pinned === true,
+    reports_count: safeCount(work.reports_count),
+    views_count: safeCount(work.views_count),
+    likes_count: safeCount(work.likes_count),
+    submitted_at: safeStringOrNull(work.submitted_at),
+    reviewed_at: safeStringOrNull(work.reviewed_at),
+    approved_at: safeStringOrNull(work.approved_at),
+    published_at: safeStringOrNull(work.published_at),
+    rejected_at: safeStringOrNull(work.rejected_at),
+    updated_at: safeStringOrNull(work.updated_at),
+    created_at: safeStringOrNull(work.created_at),
+    review_flags: {
+      assigned: reviewFlags.assigned === true,
+      in_queue: reviewFlags.in_queue === true,
+      decision_made: reviewFlags.decision_made === true,
+      is_published: reviewFlags.is_published === true,
+      has_reports: reviewFlags.has_reports === true,
+      needs_attention: reviewFlags.needs_attention === true
+    }
+  }
+}
+
+function updateQueueItemFromAction(work: ReviewActionWork): void {
+  const index = items.value.findIndex((item) => item.id === work.id)
+
+  if (!isReviewStatus(work.status)) {
+    if (index !== -1) items.value.splice(index, 1)
+    return
+  }
+
+  if (index === -1) return
+  const current = items.value[index]
+  if (!current) return
+
+  items.value[index] = {
+    id: work.id,
+    title: work.title,
+    slug: work.slug,
+    summary: work.summary,
+    status: work.status,
+    visibility_status: work.visibility_status,
+    media_type: work.media_type,
+    designer: work.designer,
+    reviewer: work.reviewer,
+    category_id: work.category_id,
+    reports_count: work.reports_count,
+    views_count: work.views_count,
+    likes_count: work.likes_count,
+    submitted_at: work.submitted_at,
+    reviewed_at: work.reviewed_at,
+    updated_at: work.updated_at,
+    created_at: work.created_at,
+    review_flags: {
+      assigned: work.review_flags.assigned,
+      overdue: work.status === 'changes_requested' ? false : current.review_flags.overdue,
+      needs_attention: work.review_flags.needs_attention
+    }
+  }
+}
+
+function updateOpenDetailFromAction(work: ReviewActionWork): void {
+  if (!detail.value || detail.value.work.id !== work.id) return
+
+  const current = detail.value.work
+  detail.value.work = {
+    id: work.id,
+    title: work.title,
+    slug: work.slug,
+    summary: work.summary,
+    status: work.status,
+    visibility_status: work.visibility_status,
+    media_type: work.media_type,
+    price_amount: current.price_amount,
+    delivery_days: current.delivery_days,
+    category_id: work.category_id,
+    is_featured: work.is_featured,
+    is_pinned: work.is_pinned,
+    reports_count: work.reports_count,
+    views_count: work.views_count,
+    likes_count: work.likes_count,
+    submitted_at: work.submitted_at,
+    reviewed_at: work.reviewed_at,
+    approved_at: work.approved_at,
+    published_at: work.published_at,
+    rejected_at: work.rejected_at,
+    hidden_at: current.hidden_at,
+    archived_at: current.archived_at,
+    updated_at: work.updated_at,
+    created_at: work.created_at
+  }
+
+  if (detail.value.field_access.can_view_designer) {
+    detail.value.relations = {
+      designer: work.designer,
+      reviewer: work.reviewer
+    }
+  }
+  selectedWorkTitle.value = work.title
+}
+
+function validateActionInput(pending: PendingReviewAction): boolean {
+  clearActionFieldErrors()
+
+  if (pending.kind === 'reviewer') {
+    const reviewerId = Number(reviewerIdInput.value)
+    if (!Number.isInteger(reviewerId) || reviewerId < 1) {
+      actionFieldErrors.reviewer_id = copy.value.reviewerRequired
+      return false
+    }
+  }
+
+  if (pending.kind === 'changes') {
+    const length = textLength(changeRequestNotesInput.value.trim())
+    if (length < 5 || length > 2000) {
+      actionFieldErrors.change_request_notes = copy.value.notesLengthInvalid
+      return false
+    }
+  }
+
+  if (pending.kind === 'reject') {
+    const length = textLength(rejectionReasonInput.value.trim())
+    if (length < 5 || length > 2000) {
+      actionFieldErrors.rejection_reason = copy.value.notesLengthInvalid
+      return false
+    }
+  }
+
+  return true
+}
+
+async function confirmReviewAction(): Promise<void> {
+  const pending = pendingReviewAction.value
+  if (!pending || actionLoading.value || !validateActionInput(pending)) return
+  if (!hasActionPermission(pending.permission)) return
+
+  const availability = reviewActionAvailability(pending.target, pending.key)
+  if (!availability.enabled) {
+    modalActionError.value = availability.reason
+    return
+  }
+
+  actionLoading.value = { workId: pending.target.id, key: pending.key }
+  actionStatus.value = null
+  modalActionError.value = null
+
+  const options: { method: 'PATCH'; body?: Record<string, string | number> } = { method: 'PATCH' }
+  if (pending.kind === 'reviewer') {
+    options.body = { reviewer_id: Number(reviewerIdInput.value) }
+  } else if (pending.kind === 'changes') {
+    options.body = { change_request_notes: changeRequestNotesInput.value.trim() }
+  } else if (pending.kind === 'reject') {
+    options.body = { rejection_reason: rejectionReasonInput.value.trim() }
+  }
+
+  try {
+    const response = await apiFetch<ReviewActionResponse>(
+      '/admin/works/' + pending.target.id + '/review/' + pending.endpoint,
+      options
+    )
+    const safeWork = toSafeActionWork(response.data?.work)
+
+    if (
+      !response.success
+      || !response.data
+      || response.data.action !== pending.key
+      || typeof response.data.changed !== 'boolean'
+      || !safeWork
+      || safeWork.id !== pending.target.id
+    ) {
+      modalActionError.value = copy.value.actionResponseInvalid
+      actionStatus.value = {
+        kind: 'error',
+        message: copy.value.actionResponseInvalid,
+        changed: null,
+        actionLabel: pending.label,
+        workLabel: pending.target.title
+      }
+      return
+    }
+
+    updateQueueItemFromAction(safeWork)
+    updateOpenDetailFromAction(safeWork)
+    lastReviewAction.value = {
+      action: pending.key,
+      changed: response.data.changed === true,
+      work: {
+        id: safeWork.id,
+        title: safeWork.title,
+        slug: safeWork.slug,
+        status: safeWork.status,
+        visibility_status: safeWork.visibility_status,
+        reviewer: safeWork.reviewer
+          ? { id: safeWork.reviewer.id, name: safeWork.reviewer.name }
+          : null,
+        review_flags: {
+          assigned: safeWork.review_flags.assigned,
+          in_queue: safeWork.review_flags.in_queue,
+          decision_made: safeWork.review_flags.decision_made,
+          is_published: safeWork.review_flags.is_published,
+          has_reports: safeWork.review_flags.has_reports,
+          needs_attention: safeWork.review_flags.needs_attention
+        }
+      }
+    }
+    actionStatus.value = {
+      kind: 'success',
+      message: response.data.changed ? copy.value.actionSucceeded : copy.value.actionUnchanged,
+      changed: response.data.changed === true,
+      actionLabel: pending.label,
+      workLabel: safeWork.title
+    }
+
+    pendingReviewAction.value = null
+    clearActionInputs()
+
+    if (drawerOpen.value && selectedWorkId.value === safeWork.id && canViewDetails.value) {
+      void fetchWorkDetails(safeWork.id)
+    }
+    void fetchReviewQueue(true)
+  } catch (requestError: unknown) {
+    const status = errorStatus(requestError)
+    let message = copy.value.actionFailed
+
+    if (status === 422) {
+      applyServerFieldErrors(requestError)
+      message = actionFieldErrors.reviewer_id
+        || actionFieldErrors.change_request_notes
+        || actionFieldErrors.rejection_reason
+        || serverActionMessage(requestError)
+        || copy.value.actionFailed
+      modalActionError.value = message
+    } else if (status === 401 || status === 403) {
+      message = copy.value.actionDenied
+      pendingReviewAction.value = null
+      clearActionInputs()
+    } else if (status === 404) {
+      message = copy.value.actionNotFound
+      items.value = items.value.filter((item) => item.id !== pending.target.id)
+      if (lastReviewAction.value?.work.id === pending.target.id) lastReviewAction.value = null
+      if (drawerOpen.value && selectedWorkId.value === pending.target.id) closeDetails()
+      pendingReviewAction.value = null
+      clearActionInputs()
+      void fetchReviewQueue(true)
+    } else {
+      modalActionError.value = message
+    }
+
+    actionStatus.value = {
+      kind: 'error',
+      message,
+      changed: null,
+      actionLabel: pending.label,
+      workLabel: pending.target.title
+    }
+  } finally {
+    actionLoading.value = null
+  }
+}
+
+function handleActionEscape(event: KeyboardEvent): void {
+  if (event.key === 'Escape' && pendingReviewAction.value && !actionLoading.value) {
+    cancelReviewAction()
+  }
+}
+
 function sortIndicator(key: ReviewSortKey): string {
   if (appliedFilters.sort !== key) return '↕'
   return appliedFilters.direction === 'asc' ? '↑' : '↓'
@@ -1329,13 +2383,15 @@ function buildListQuery(): Record<string, string | number> {
   return query
 }
 
-async function fetchReviewQueue(): Promise<void> {
+async function fetchReviewQueue(silent = false): Promise<void> {
   if (!authStore.isInitialized || !hasReviewAccess.value) return
 
   const requestAccessRevision = accessRevision
   const currentRequestRevision = ++listRequestRevision
-  loading.value = true
-  error.value = null
+  if (!silent) {
+    loading.value = true
+    error.value = null
+  }
 
   try {
     const response = await apiFetch<ReviewQueueResponse>('/admin/works/review', {
@@ -1351,9 +2407,11 @@ async function fetchReviewQueue(): Promise<void> {
     }
 
     if (!response.success || !response.data) {
-      items.value = []
-      Object.assign(summary, emptySummary())
-      error.value = copy.value.genericError
+      if (!silent) {
+        items.value = []
+        Object.assign(summary, emptySummary())
+        error.value = copy.value.genericError
+      }
       return
     }
 
@@ -1380,13 +2438,13 @@ async function fetchReviewQueue(): Promise<void> {
     }
 
     if (status === 422) {
-      filterError.value = copy.value.validationError
+      if (!silent) filterError.value = copy.value.validationError
       return
     }
 
-    error.value = copy.value.genericError
+    if (!silent) error.value = copy.value.genericError
   } finally {
-    if (requestAccessRevision === accessRevision && currentRequestRevision === listRequestRevision) {
+    if (!silent && requestAccessRevision === accessRevision && currentRequestRevision === listRequestRevision) {
       loading.value = false
     }
   }
@@ -1539,6 +2597,9 @@ function clearPageState(): void {
   loading.value = false
   error.value = null
   filterError.value = null
+  pendingReviewAction.value = null
+  lastReviewAction.value = null
+  clearActionInputs()
   closeDetails()
 }
 
@@ -1576,7 +2637,12 @@ watch(
 
 onMounted(() => {
   pageMounted = true
+  window.addEventListener('keydown', handleActionEscape)
   syncReviewAccessState()
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleActionEscape)
 })
 </script>
 
@@ -1943,6 +3009,144 @@ onMounted(() => {
   padding: 0.75rem 0.85rem;
 }
 
+.ym-works-review-followup-card {
+  border: 1px solid color-mix(in srgb, #8b5cf6 38%, var(--ym-card-border));
+  border-radius: 24px;
+  background:
+    linear-gradient(135deg, rgba(139, 92, 246, 0.12), transparent 54%),
+    var(--ym-card-bg);
+  box-shadow: var(--ym-card-shadow);
+  padding: 1rem;
+}
+
+.ym-works-review-followup-card > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.ym-works-review-followup-card > header span,
+.ym-works-review-followup-card > header code {
+  display: block;
+  color: var(--ym-muted);
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.ym-works-review-followup-card > header h2 {
+  color: var(--ym-text);
+  font-size: 1.15rem;
+  font-weight: 950;
+  margin: 0.25rem 0;
+}
+
+.ym-works-review-followup-card__close {
+  display: grid;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid var(--ym-control-border);
+  border-radius: 12px;
+  background: var(--ym-control-bg);
+  color: var(--ym-muted);
+  font-size: 1.25rem;
+}
+
+.ym-works-review-followup-card__close:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.ym-works-review-followup-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin-top: 0.85rem;
+}
+
+.ym-works-review-followup-grid > span {
+  display: grid;
+  gap: 0.2rem;
+  border: 1px solid var(--ym-soft-border);
+  border-radius: 14px;
+  background: var(--ym-control-bg);
+  color: var(--ym-muted);
+  font-size: 10px;
+  font-weight: 850;
+  padding: 0.65rem;
+}
+
+.ym-works-review-followup-grid strong {
+  color: var(--ym-text);
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.ym-works-review-followup-flags,
+.ym-works-review-followup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.7rem;
+}
+
+.ym-works-review-followup-flags span {
+  border: 1px solid var(--ym-soft-border);
+  border-radius: 999px;
+  background: var(--ym-control-bg);
+  color: var(--ym-muted);
+  font-size: 10px;
+  font-weight: 850;
+  padding: 0.35rem 0.58rem;
+}
+
+.ym-works-review-action-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid var(--ym-soft-border);
+  border-radius: 16px;
+  margin: 0 1.2rem 1rem;
+  padding: 0.75rem 0.9rem;
+}
+
+.ym-works-review-action-status.is-success {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.09);
+}
+
+.ym-works-review-action-status.is-error {
+  border-color: rgba(244, 63, 94, 0.36);
+  background: rgba(244, 63, 94, 0.09);
+}
+
+.ym-works-review-action-status div {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.ym-works-review-action-status strong {
+  color: var(--ym-text);
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.ym-works-review-action-status span {
+  color: var(--ym-muted);
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.ym-works-review-action-status__changed {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--ym-control-bg);
+  padding: 0.38rem 0.62rem;
+}
+
 .ym-works-review-table-card__head {
   align-items: center;
 }
@@ -1977,7 +3181,7 @@ onMounted(() => {
 
 .ym-works-review-table {
   width: 100%;
-  min-width: 2080px;
+  min-width: 2460px;
   border-collapse: collapse;
   background: color-mix(in srgb, var(--ym-card-bg) 88%, transparent);
 }
@@ -2207,6 +3411,107 @@ onMounted(() => {
   z-index: 3;
 }
 
+.ym-works-review-table th.is-review-actions,
+.ym-works-review-table td.is-review-actions {
+  position: sticky;
+  inset-inline-end: 130px;
+  z-index: 1;
+  width: 360px;
+  min-width: 360px;
+  background: var(--ym-dropdown-bg);
+}
+
+.ym-works-review-table th.is-review-actions {
+  z-index: 3;
+}
+
+.ym-works-review-action-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.ym-works-review-action-button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border: 1px solid var(--ym-soft-border);
+  border-radius: 10px;
+  background: var(--ym-control-bg);
+  color: var(--ym-text);
+  font-size: 10px;
+  font-weight: 950;
+  padding: 0.42rem 0.52rem;
+  transition: background 150ms ease, border-color 150ms ease, transform 150ms ease;
+  white-space: nowrap;
+}
+
+.ym-works-review-action-button.is-primary {
+  border-color: rgba(99, 102, 241, 0.42);
+  background: rgba(99, 102, 241, 0.12);
+  color: #a5b4fc;
+}
+
+.ym-works-review-action-button.is-info {
+  border-color: rgba(56, 189, 248, 0.4);
+  background: rgba(56, 189, 248, 0.11);
+  color: #7dd3fc;
+}
+
+.ym-works-review-action-button.is-positive {
+  border-color: rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.11);
+  color: #34d399;
+}
+
+.ym-works-review-action-button.is-warning {
+  border-color: rgba(245, 158, 11, 0.4);
+  background: rgba(245, 158, 11, 0.11);
+  color: #fbbf24;
+}
+
+.ym-works-review-action-button.is-danger {
+  border-color: rgba(244, 63, 94, 0.42);
+  background: rgba(244, 63, 94, 0.11);
+  color: #fb7185;
+}
+
+.ym-works-review-action-button.is-promotion {
+  border-color: rgba(16, 185, 129, 0.48);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(139, 92, 246, 0.12));
+  color: #6ee7b7;
+}
+
+.ym-works-review-action-button.is-neutral {
+  border-color: rgba(139, 92, 246, 0.4);
+  background: rgba(139, 92, 246, 0.11);
+  color: #c4b5fd;
+}
+
+.ym-works-review-action-button:hover:not(:disabled) {
+  filter: brightness(1.15);
+  transform: translateY(-1px);
+}
+
+.ym-works-review-action-button:disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.65);
+  opacity: 0.42;
+}
+
+.ym-works-review-action-spinner {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 0.85rem;
+  height: 0.85rem;
+  border: 2px solid currentColor;
+  border-inline-end-color: transparent;
+  border-radius: 999px;
+  animation: ym-works-review-spin 760ms linear infinite;
+}
+
 .ym-works-review-details-button {
   width: 100%;
   min-height: 38px;
@@ -2338,6 +3643,137 @@ onMounted(() => {
   justify-content: flex-end;
   background: rgba(2, 6, 23, 0.68);
   backdrop-filter: blur(6px);
+}
+
+.ym-review-action-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  display: grid;
+  place-items: center;
+  background: rgba(2, 6, 23, 0.72);
+  backdrop-filter: blur(7px);
+  padding: 1rem;
+}
+
+.ym-review-action-dialog {
+  width: min(560px, 100%);
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  border: 1px solid var(--ym-card-border);
+  border-radius: 24px;
+  background: var(--ym-dropdown-bg);
+  box-shadow: 0 28px 80px rgba(2, 6, 23, 0.48);
+  color: var(--ym-text);
+  padding: 1.35rem;
+}
+
+.ym-review-action-dialog__eyebrow {
+  color: #a78bfa;
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.ym-review-action-dialog h2 {
+  font-size: 1.3rem;
+  font-weight: 950;
+  margin: 0.35rem 0 0;
+}
+
+.ym-review-action-dialog > p:not(.ym-review-action-dialog__error) {
+  color: var(--ym-muted);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.75;
+  margin: 0.65rem 0 0;
+}
+
+.ym-review-action-dialog__work {
+  display: grid;
+  gap: 0.22rem;
+  border: 1px solid var(--ym-soft-border);
+  border-radius: 16px;
+  background: var(--ym-control-bg);
+  margin-top: 1rem;
+  padding: 0.85rem;
+}
+
+.ym-review-action-dialog__work span,
+.ym-review-action-dialog__work code {
+  color: var(--ym-muted);
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.ym-review-action-dialog__work strong {
+  color: var(--ym-text);
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.ym-review-action-dialog__field {
+  display: grid;
+  gap: 0.38rem;
+  margin-top: 1rem;
+}
+
+.ym-review-action-dialog__field > span {
+  color: var(--ym-text);
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.ym-review-action-dialog__field input,
+.ym-review-action-dialog__field textarea {
+  width: 100%;
+  border: 1px solid var(--ym-control-border);
+  border-radius: 13px;
+  outline: none;
+  background: var(--ym-control-bg);
+  color: var(--ym-text);
+  font-size: 13px;
+  padding: 0.72rem 0.78rem;
+}
+
+.ym-review-action-dialog__field textarea {
+  min-height: 150px;
+  line-height: 1.7;
+  resize: vertical;
+}
+
+.ym-review-action-dialog__field input:focus,
+.ym-review-action-dialog__field textarea:focus,
+.ym-review-action-dialog button:focus-visible {
+  border-color: #818cf8;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
+}
+
+.ym-review-action-dialog__field small {
+  color: var(--ym-muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.ym-review-action-dialog__field > strong,
+.ym-review-action-dialog__error {
+  color: #fb7185;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.ym-review-action-dialog__error {
+  border: 1px solid rgba(244, 63, 94, 0.34);
+  border-radius: 13px;
+  background: rgba(244, 63, 94, 0.09);
+  margin: 0.8rem 0 0;
+  padding: 0.65rem 0.75rem;
+}
+
+.ym-review-action-dialog__buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  margin-top: 1rem;
 }
 
 .ym-review-detail-drawer {
@@ -2621,7 +4057,8 @@ onMounted(() => {
   }
 
   .ym-works-review-summary-grid,
-  .ym-works-review-filter-grid {
+  .ym-works-review-filter-grid,
+  .ym-works-review-followup-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -2650,8 +4087,19 @@ onMounted(() => {
     flex-direction: column;
   }
 
+  .ym-works-review-action-status,
+  .ym-review-action-dialog__buttons {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ym-review-action-dialog__buttons .ym-works-review-button {
+    width: 100%;
+  }
+
   .ym-works-review-summary-grid,
   .ym-works-review-filter-grid,
+  .ym-works-review-followup-grid,
   .ym-review-detail-access-grid,
   .ym-review-detail-grid,
   .ym-review-detail-grid.is-lifecycle,
@@ -2687,6 +4135,7 @@ onMounted(() => {
 
   .ym-works-review-button,
   .ym-works-review-details-button,
+  .ym-works-review-action-button,
   .ym-works-review-table tbody tr {
     transition: none;
   }
