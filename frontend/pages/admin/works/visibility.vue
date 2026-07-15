@@ -221,6 +221,22 @@
           </div>
         </header>
 
+        <aside
+          v-if="actionStatus"
+          class="ym-works-visibility-action-status"
+          :class="actionStatus.kind === 'success' ? 'is-success' : 'is-error'"
+          :role="actionStatus.kind === 'error' ? 'alert' : 'status'"
+          aria-live="polite"
+        >
+          <div>
+            <strong>{{ actionStatus.message }}</strong>
+            <span>{{ actionStatus.actionLabel }} · {{ actionStatus.workLabel }}</span>
+          </div>
+          <span v-if="actionStatus.changed !== null" class="ym-works-visibility-action-status__changed">
+            {{ actionStatus.changed ? copy.changedYes : copy.changedNo }}
+          </span>
+        </aside>
+
         <div v-if="loading" class="ym-works-visibility-state" role="status" aria-live="polite">
           <span class="ym-works-visibility-spinner" aria-hidden="true" />
           <h3>{{ copy.loadingTitle }}</h3>
@@ -231,7 +247,7 @@
           <span class="ym-works-visibility-state__icon" aria-hidden="true">!</span>
           <h3>{{ copy.errorTitle }}</h3>
           <p>{{ error }}</p>
-          <button type="button" class="ym-works-visibility-button is-secondary" @click="fetchVisibilityWorks">
+          <button type="button" class="ym-works-visibility-button is-secondary" @click="fetchVisibilityWorks()">
             {{ copy.retry }}
           </button>
         </div>
@@ -306,6 +322,7 @@
                     <span aria-hidden="true">{{ sortIndicator('updated_at') }}</span>
                   </button>
                 </th>
+                <th class="is-visibility-actions">{{ copy.visibilityActions }}</th>
                 <th class="is-action">{{ copy.readAction }}</th>
               </tr>
             </thead>
@@ -392,6 +409,27 @@
                 <td><time :datetime="work.hidden_at || undefined">{{ formatDateTime(work.hidden_at) }}</time></td>
                 <td><time :datetime="work.created_at || undefined">{{ formatDateTime(work.created_at) }}</time></td>
                 <td><time :datetime="work.updated_at || undefined">{{ formatDateTime(work.updated_at) }}</time></td>
+                <td class="is-visibility-actions">
+                  <div class="ym-works-visibility-action-group" :aria-label="copy.actionsFor(work.title)">
+                    <button
+                      v-for="action in availableActions(work)"
+                      :key="action.key"
+                      type="button"
+                      class="ym-works-visibility-action-button"
+                      :class="'is-' + action.tone"
+                      :disabled="!action.enabled || actionWorkId === work.id"
+                      :title="actionWorkId === work.id ? copy.actionInProgress : action.reason"
+                      @click="requestAction(work, action.key)"
+                    >
+                      <span
+                        v-if="actionWorkId === work.id && pendingAction?.key === action.key"
+                        class="ym-works-visibility-action-spinner"
+                        aria-hidden="true"
+                      />
+                      {{ action.label }}
+                    </button>
+                  </div>
+                </td>
                 <td class="is-action">
                   <button
                     type="button"
@@ -648,6 +686,49 @@
         </div>
       </section>
     </div>
+
+    <div
+      v-if="pendingAction"
+      class="ym-visibility-action-backdrop"
+      role="presentation"
+      @click.self="cancelAction"
+    >
+      <section
+        class="ym-visibility-action-dialog"
+        role="dialog"
+        aria-modal="true"
+        :aria-labelledby="actionDialogTitleId"
+        :aria-describedby="actionDialogDescriptionId"
+      >
+        <span class="ym-visibility-action-dialog__eyebrow">{{ copy.visibilityActionConfirmation }}</span>
+        <h2 :id="actionDialogTitleId">{{ copy.confirmAction(pendingAction.label) }}</h2>
+        <p :id="actionDialogDescriptionId">{{ copy.confirmActionCopy }}</p>
+        <div class="ym-visibility-action-dialog__work">
+          <span>{{ copy.affectedWork }}</span>
+          <strong :dir="textDirection(pendingAction.workLabel)">{{ pendingAction.workLabel }}</strong>
+          <code dir="ltr">#{{ pendingAction.workId }}</code>
+        </div>
+        <div class="ym-visibility-action-dialog__buttons">
+          <button
+            type="button"
+            class="ym-works-visibility-button is-primary"
+            :disabled="actionWorkId !== null"
+            @click="confirmAction"
+          >
+            <span v-if="actionWorkId !== null" class="ym-works-visibility-action-spinner" aria-hidden="true" />
+            {{ actionWorkId !== null ? copy.executingAction : copy.confirmExecution }}
+          </button>
+          <button
+            type="button"
+            class="ym-works-visibility-button is-secondary"
+            :disabled="actionWorkId !== null"
+            @click="cancelAction"
+          >
+            {{ copy.cancel }}
+          </button>
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -666,6 +747,8 @@ type PageSize = 15 | 25 | 50
 type SortDirection = 'asc' | 'desc'
 type VisibilitySortKey = 'updated_at' | 'published_at' | 'created_at' | 'title' | 'status' | 'reports_count' | 'views_count' | 'likes_count'
 type VisibilityFlagKey = 'public' | 'hidden' | 'promoted' | 'reported'
+type VisibilityActionKey = 'publish' | 'unpublish' | 'hide' | 'restore' | 'feature' | 'unfeature' | 'pin' | 'unpin'
+type VisibilityActionTone = 'positive' | 'warning' | 'promotion' | 'neutral'
 
 interface UserReference {
   id: number
@@ -733,6 +816,66 @@ interface VisibilityResponse {
   data: VisibilityData | null
   message?: string
   errors?: Record<string, string[]> | null
+}
+
+interface VisibilityActionWorkPayload {
+  id: number
+  title: string
+  slug: string
+  summary: string | null
+  status: WorkStatus
+  visibility_status: VisibilityStatus
+  media_type: string | null
+  category_id: number | null
+  is_featured: boolean
+  is_pinned: boolean
+  reports_count: number
+  views_count: number
+  likes_count: number
+  published_at: string | null
+  hidden_at: string | null
+  updated_at: string | null
+  created_at: string | null
+  visibility_flags: VisibilityFlags
+}
+
+interface VisibilityActionResponse {
+  success: boolean
+  data: {
+    action: VisibilityActionKey
+    changed: boolean
+    work: VisibilityActionWorkPayload
+  } | null
+  message?: string
+  errors?: Record<string, string[]> | null
+}
+
+interface VisibilityActionDefinition {
+  key: VisibilityActionKey
+  permission: string
+  endpoint: string
+  tone: VisibilityActionTone
+}
+
+interface VisibilityActionView extends VisibilityActionDefinition {
+  label: string
+  enabled: boolean
+  reason: string
+}
+
+interface PendingVisibilityAction {
+  key: VisibilityActionKey
+  label: string
+  workId: number
+  workLabel: string
+}
+
+interface VisibilityActionStatus {
+  kind: 'success' | 'error'
+  message: string
+  changed: boolean | null
+  actionLabel: string
+  workLabel: string
 }
 
 interface WorkDetailBase {
@@ -814,9 +957,20 @@ const authStore = useAuthStore()
 const { apiFetch } = useApiClient()
 const currentLocale = useState<Locale>('ym-dashboard-locale', () => 'ar')
 
+const visibilityActionDefinitions: VisibilityActionDefinition[] = [
+  { key: 'publish', permission: 'admin.works.publish', endpoint: 'publish', tone: 'positive' },
+  { key: 'unpublish', permission: 'admin.works.unpublish', endpoint: 'unpublish', tone: 'warning' },
+  { key: 'hide', permission: 'admin.works.hide', endpoint: 'hide', tone: 'warning' },
+  { key: 'restore', permission: 'admin.works.restore_visibility', endpoint: 'restore', tone: 'positive' },
+  { key: 'feature', permission: 'admin.works.feature', endpoint: 'feature', tone: 'promotion' },
+  { key: 'unfeature', permission: 'admin.works.unfeature', endpoint: 'unfeature', tone: 'neutral' },
+  { key: 'pin', permission: 'admin.works.pin', endpoint: 'pin', tone: 'promotion' },
+  { key: 'unpin', permission: 'admin.works.unpin', endpoint: 'unpin', tone: 'neutral' }
+]
+
 const copyMap = {
   ar: {
-    readonly: 'قراءة وتنظيم فقط',
+    readonly: 'إجراءات ظهور مضبوطة',
     kicker: 'إدارة ظهور الأعمال وترويجها',
     title: 'الظهور والتمييز',
     description: 'قائمة إدارية آمنة لمراجعة حالة ظهور الأعمال وتمييزها وتثبيتها، مع تفاصيل مقيدة بصلاحيات الحقول.',
@@ -826,8 +980,8 @@ const copyMap = {
     authLoadingCopy: 'ننتظر اكتمال تهيئة جلسة المستخدم قبل إرسال أي طلب بيانات.',
     forbiddenTitle: 'الوصول إلى الظهور والتمييز غير متاح',
     forbiddenCopy: 'لا يملك هذا الحساب صلاحيات القسم المطلوبة. لم تتم محاولة تحميل البيانات.',
-    noticeTitle: 'لا توجد إجراءات تنفيذية في هذه الصفحة',
-    notice: 'هذه المرحلة للقراءة والتنظيم فقط؛ لا تتضمن النشر أو إلغاءه أو الإخفاء أو استعادة الظهور أو التمييز أو التثبيت أو الأرشفة أو الحذف.',
+    noticeTitle: 'إجراءات الظهور محكومة بالصلاحية والحالة',
+    notice: 'لا يظهر للمستخدم إلا ما تسمح به صلاحياته، وتظل الإجراءات غير المناسبة لحالة العمل معطلة بسبب واضح قبل التأكيد والتنفيذ.',
     summaryLabel: 'ملخص ظهور الأعمال وتمييزها',
     total: 'الإجمالي',
     totalHint: 'كل الأعمال المطابقة',
@@ -873,7 +1027,7 @@ const copyMap = {
     invalidIdentifiers: 'معرّفات المصمم والمراجع والتصنيف يجب أن تكون أعدادًا صحيحة موجبة.',
     validationError: 'تعذر تطبيق الفلاتر. تحقق من البحث والقيم والتواريخ.',
     tableTitle: 'قائمة الظهور والتمييز',
-    tableCopy: 'رتّب النتائج من رؤوس الأعمدة، وافتح التفاصيل عبر إجراء القراءة الوحيد.',
+    tableCopy: 'رتّب النتائج من رؤوس الأعمدة، ونفّذ إجراءات الظهور المصرح بها بعد التأكيد.',
     currentPage: 'الصفحة الحالية',
     loadingTitle: 'جارٍ تحميل قائمة الظهور والتمييز',
     loadingCopy: 'يتم جلب القائمة الآمنة وفق الفلاتر الحالية...',
@@ -905,6 +1059,38 @@ const copyMap = {
     hiddenAt: 'تاريخ الإخفاء',
     createdAt: 'تاريخ الإنشاء',
     updatedAt: 'آخر تحديث',
+    visibilityActions: 'إجراءات الظهور',
+    actionsFor: (title: string) => 'إجراءات الظهور للعمل: ' + title,
+    actionInProgress: 'جارٍ تنفيذ إجراء لهذا العمل.',
+    changedYes: 'تم تغيير الحالة',
+    changedNo: 'لم تتغير الحالة',
+    visibilityActionConfirmation: 'تأكيد إجراء ظهور فعلي',
+    confirmAction: (action: string) => 'تأكيد إجراء: ' + action,
+    confirmActionCopy: 'سيتم تنفيذ إجراء ظهور فعلي على العمل المحدد. راجع العمل والإجراء قبل المتابعة.',
+    affectedWork: 'العمل المتأثر',
+    confirmExecution: 'تأكيد التنفيذ',
+    executingAction: 'جارٍ التنفيذ...',
+    cancel: 'إلغاء',
+    actionSucceeded: 'تم تنفيذ الإجراء بنجاح',
+    actionUnchanged: 'لا يوجد تغيير؛ الحالة مطابقة بالفعل',
+    actionValidationFailed: 'تعذر تنفيذ الإجراء من حالة العمل الحالية.',
+    actionDenied: 'غير مصرح بتنفيذ هذا الإجراء.',
+    actionNotFound: 'لم يعد العمل موجودًا.',
+    actionFailed: 'تعذر تنفيذ إجراء الظهور. حاول مرة أخرى.',
+    actionResponseInvalid: 'تعذر اعتماد نتيجة الإجراء. أُبقيت بيانات الصفحة دون تغيير.',
+    readyAction: 'الإجراء متاح لهذه الحالة.',
+    statusDoesNotAllow: 'حالة العمل الحالية لا تسمح بهذا الإجراء.',
+    archivedUnavailable: 'لا يمكن تنفيذ هذا الإجراء على عمل مؤرشف.',
+    alreadyPublishedPublic: 'منشور وعام بالفعل.',
+    alreadyUnpublished: 'غير منشور بالفعل.',
+    alreadyHidden: 'مخفي بالفعل.',
+    alreadyVisible: 'ظاهر بالفعل.',
+    restoreUnavailable: 'حالة العمل الحالية لا تسمح باستعادة الظهور.',
+    alreadyFeatured: 'مميز بالفعل.',
+    notFeatured: 'العمل غير مميز بالفعل.',
+    alreadyPinned: 'مثبت بالفعل.',
+    notPinned: 'العمل غير مثبت بالفعل.',
+    publishedPublicRequired: 'يتطلب الإجراء عملًا منشورًا وعامًا.',
     readAction: 'إجراء القراءة',
     viewDetails: 'عرض التفاصيل',
     viewDetailsHint: 'فتح تفاصيل العمل الآمنة',
@@ -961,7 +1147,7 @@ const copyMap = {
     hiddenVisibility: 'مخفي'
   },
   en: {
-    readonly: 'Read and organize only',
+    readonly: 'Controlled visibility actions',
     kicker: 'Works visibility and promotion management',
     title: 'Visibility & Promotion',
     description: 'A safe administrative list for reviewing work visibility, featuring, and pinning with permission-scoped details.',
@@ -971,8 +1157,8 @@ const copyMap = {
     authLoadingCopy: 'Waiting for the user session to initialize before requesting data.',
     forbiddenTitle: 'Visibility access is unavailable',
     forbiddenCopy: 'This account lacks the required section permissions. No data request was made.',
-    noticeTitle: 'No mutation actions are available here',
-    notice: 'This step is limited to reading and organization. It does not publish, unpublish, hide, restore visibility, feature, pin, archive, restore, or delete.',
+    noticeTitle: 'Visibility actions are permission and state controlled',
+    notice: 'Users only see permitted actions. Actions that do not fit the work state stay disabled with a clear reason before confirmation.',
     summaryLabel: 'Works visibility and promotion summary',
     total: 'Total',
     totalHint: 'All matching works',
@@ -1018,7 +1204,7 @@ const copyMap = {
     invalidIdentifiers: 'Designer, reviewer, and category identifiers must be positive integers.',
     validationError: 'The filters could not be applied. Check the search, values, and dates.',
     tableTitle: 'Visibility and promotion list',
-    tableCopy: 'Sort from supported headers and open details through the only read action.',
+    tableCopy: 'Sort from supported headers and run permitted visibility actions after confirmation.',
     currentPage: 'Current page',
     loadingTitle: 'Loading visibility works',
     loadingCopy: 'Fetching the safe list using the current filters...',
@@ -1050,6 +1236,38 @@ const copyMap = {
     hiddenAt: 'Hidden at',
     createdAt: 'Created at',
     updatedAt: 'Updated at',
+    visibilityActions: 'Visibility actions',
+    actionsFor: (title: string) => 'Visibility actions for: ' + title,
+    actionInProgress: 'An action is being executed for this work.',
+    changedYes: 'State changed',
+    changedNo: 'State unchanged',
+    visibilityActionConfirmation: 'Confirm a real visibility action',
+    confirmAction: (action: string) => 'Confirm action: ' + action,
+    confirmActionCopy: 'A real visibility action will be run on the selected work. Review the work and action before continuing.',
+    affectedWork: 'Affected work',
+    confirmExecution: 'Confirm execution',
+    executingAction: 'Executing...',
+    cancel: 'Cancel',
+    actionSucceeded: 'The action was completed successfully',
+    actionUnchanged: 'No change; the state already matches',
+    actionValidationFailed: 'The action cannot be run from the current work state.',
+    actionDenied: 'You are not authorized to run this action.',
+    actionNotFound: 'The work no longer exists.',
+    actionFailed: 'The visibility action could not be completed. Try again.',
+    actionResponseInvalid: 'The action result could not be accepted. Page data was left unchanged.',
+    readyAction: 'The action is available for this state.',
+    statusDoesNotAllow: 'The current work state does not allow this action.',
+    archivedUnavailable: 'This action cannot be run on an archived work.',
+    alreadyPublishedPublic: 'Already published and public.',
+    alreadyUnpublished: 'Already unpublished.',
+    alreadyHidden: 'Already hidden.',
+    alreadyVisible: 'Already visible.',
+    restoreUnavailable: 'The current state does not allow restoring visibility.',
+    alreadyFeatured: 'Already featured.',
+    notFeatured: 'The work is already not featured.',
+    alreadyPinned: 'Already pinned.',
+    notPinned: 'The work is already not pinned.',
+    publishedPublicRequired: 'This action requires a published and public work.',
     readAction: 'Read action',
     viewDetails: 'View details',
     viewDetailsHint: 'Open safe work details',
@@ -1108,6 +1326,27 @@ const copyMap = {
 } as const
 
 const copy = computed(() => copyMap[currentLocale.value])
+const actionLabels = computed<Record<VisibilityActionKey, string>>(() => currentLocale.value === 'ar'
+  ? {
+      publish: 'نشر',
+      unpublish: 'إلغاء النشر',
+      hide: 'إخفاء',
+      restore: 'استعادة الظهور',
+      feature: 'تمييز',
+      unfeature: 'إلغاء التمييز',
+      pin: 'تثبيت',
+      unpin: 'إلغاء التثبيت'
+    }
+  : {
+      publish: 'Publish',
+      unpublish: 'Unpublish',
+      hide: 'Hide',
+      restore: 'Restore visibility',
+      feature: 'Feature',
+      unfeature: 'Unfeature',
+      pin: 'Pin',
+      unpin: 'Unpin'
+    })
 const authPending = computed(() => !authStore.isInitialized)
 const hasVisibilityAccess = computed(() => {
   if (!authStore.isInitialized || !authStore.isAuthenticated) return false
@@ -1189,6 +1428,11 @@ const detail = ref<WorkDetailData | null>(null)
 const detailLoading = ref(false)
 const detailError = ref<string | null>(null)
 const drawerTitleId = 'ym-visibility-work-detail-title'
+const pendingAction = ref<PendingVisibilityAction | null>(null)
+const actionWorkId = ref<number | null>(null)
+const actionStatus = ref<VisibilityActionStatus | null>(null)
+const actionDialogTitleId = 'ym-visibility-action-dialog-title'
+const actionDialogDescriptionId = 'ym-visibility-action-dialog-description'
 
 let pageMounted = false
 let loadedAuthorizationSignature: string | null = null
@@ -1331,6 +1575,231 @@ function flagClass(key: VisibilityFlagKey, active: boolean): string {
   return active ? 'is-' + key : 'is-neutral'
 }
 
+function hasActionPermission(permission: string): boolean {
+  if (!hasVisibilityAccess.value) return false
+  return authStore.role === 'super-admin' || authStore.permissions.includes(permission)
+}
+
+function actionAvailability(
+  work: VisibilityWorkItem,
+  key: VisibilityActionKey
+): { enabled: boolean; reason: string } {
+  const isArchived = work.status === 'archived'
+  const isPublishedPublic = work.status === 'published' && work.visibility_status === 'public'
+
+  if (key === 'publish') {
+    if (isArchived) return { enabled: false, reason: copy.value.archivedUnavailable }
+    if (isPublishedPublic) return { enabled: false, reason: copy.value.alreadyPublishedPublic }
+    const enabled = ['approved', 'hidden', 'published'].includes(work.status)
+    return { enabled, reason: enabled ? copy.value.readyAction : copy.value.statusDoesNotAllow }
+  }
+
+  if (key === 'unpublish') {
+    if (work.status === 'approved' && work.visibility_status === 'hidden') {
+      return { enabled: false, reason: copy.value.alreadyUnpublished }
+    }
+    const enabled = work.status === 'published' || work.status === 'approved'
+    return { enabled, reason: enabled ? copy.value.readyAction : copy.value.statusDoesNotAllow }
+  }
+
+  if (key === 'hide') {
+    if (isArchived) return { enabled: false, reason: copy.value.archivedUnavailable }
+    if (work.status === 'hidden' && work.visibility_status === 'hidden') {
+      return { enabled: false, reason: copy.value.alreadyHidden }
+    }
+    return { enabled: true, reason: copy.value.readyAction }
+  }
+
+  if (key === 'restore') {
+    if (isArchived) return { enabled: false, reason: copy.value.archivedUnavailable }
+    if (isPublishedPublic) return { enabled: false, reason: copy.value.alreadyVisible }
+    const enabled = work.status === 'hidden'
+      || (work.visibility_status === 'hidden' && ['approved', 'published'].includes(work.status))
+    return { enabled, reason: enabled ? copy.value.readyAction : copy.value.restoreUnavailable }
+  }
+
+  if (key === 'feature') {
+    if (work.is_featured) return { enabled: false, reason: copy.value.alreadyFeatured }
+    return {
+      enabled: isPublishedPublic,
+      reason: isPublishedPublic ? copy.value.readyAction : copy.value.publishedPublicRequired
+    }
+  }
+
+  if (key === 'unfeature') {
+    return {
+      enabled: work.is_featured,
+      reason: work.is_featured ? copy.value.readyAction : copy.value.notFeatured
+    }
+  }
+
+  if (key === 'pin') {
+    if (work.is_pinned) return { enabled: false, reason: copy.value.alreadyPinned }
+    return {
+      enabled: isPublishedPublic,
+      reason: isPublishedPublic ? copy.value.readyAction : copy.value.publishedPublicRequired
+    }
+  }
+
+  return {
+    enabled: work.is_pinned,
+    reason: work.is_pinned ? copy.value.readyAction : copy.value.notPinned
+  }
+}
+
+function availableActions(work: VisibilityWorkItem): VisibilityActionView[] {
+  return visibilityActionDefinitions
+    .filter((action) => hasActionPermission(action.permission))
+    .map((action) => ({
+      ...action,
+      label: actionLabels.value[action.key],
+      ...actionAvailability(work, action.key)
+    }))
+}
+
+function requestAction(work: VisibilityWorkItem, key: VisibilityActionKey): void {
+  if (actionWorkId.value !== null || pendingAction.value) return
+
+  const definition = visibilityActionDefinitions.find((action) => action.key === key)
+  if (!definition || !hasActionPermission(definition.permission)) return
+
+  const availability = actionAvailability(work, key)
+  if (!availability.enabled) return
+
+  pendingAction.value = {
+    key,
+    label: actionLabels.value[key],
+    workId: work.id,
+    workLabel: work.title || work.slug
+  }
+}
+
+function cancelAction(): void {
+  if (actionWorkId.value !== null) return
+  pendingAction.value = null
+}
+
+function serverErrorMessage(requestError: unknown): string | null {
+  if (!requestError || typeof requestError !== 'object') return null
+
+  const errorData = 'data' in requestError
+    ? (requestError as { data?: unknown }).data
+    : null
+
+  if (
+    errorData
+    && typeof errorData === 'object'
+    && 'message' in errorData
+    && typeof (errorData as { message?: unknown }).message === 'string'
+  ) {
+    const message = (errorData as { message: string }).message.trim()
+    return message || null
+  }
+
+  return null
+}
+
+function mergeActionWork(workPayload: VisibilityActionWorkPayload): void {
+  const index = items.value.findIndex((work) => work.id === workPayload.id)
+  if (index !== -1) {
+    items.value[index] = { ...items.value[index], ...workPayload }
+  }
+
+  if (detail.value?.work.id === workPayload.id) {
+    detail.value.work = { ...detail.value.work, ...workPayload }
+    selectedWorkTitle.value = workPayload.title
+  }
+}
+
+async function confirmAction(): Promise<void> {
+  const action = pendingAction.value
+  if (!action || actionWorkId.value !== null) return
+
+  const definition = visibilityActionDefinitions.find((item) => item.key === action.key)
+  const currentWork = items.value.find((work) => work.id === action.workId)
+  if (!definition || !currentWork || !hasActionPermission(definition.permission)) {
+    pendingAction.value = null
+    actionStatus.value = {
+      kind: 'error',
+      message: currentWork ? copy.value.actionDenied : copy.value.actionNotFound,
+      changed: null,
+      actionLabel: action.label,
+      workLabel: action.workLabel
+    }
+    return
+  }
+
+  const availability = actionAvailability(currentWork, action.key)
+  if (!availability.enabled) {
+    pendingAction.value = null
+    actionStatus.value = {
+      kind: 'error',
+      message: availability.reason,
+      changed: null,
+      actionLabel: action.label,
+      workLabel: action.workLabel
+    }
+    return
+  }
+
+  actionWorkId.value = action.workId
+  actionStatus.value = null
+
+  try {
+    const response = await apiFetch<VisibilityActionResponse>(
+      '/admin/works/' + action.workId + '/visibility/' + definition.endpoint,
+      { method: 'PATCH' }
+    )
+
+    if (!response.success || !response.data?.work) {
+      actionStatus.value = {
+        kind: 'error',
+        message: copy.value.actionResponseInvalid,
+        changed: null,
+        actionLabel: action.label,
+        workLabel: action.workLabel
+      }
+      return
+    }
+
+    mergeActionWork(response.data.work)
+    actionStatus.value = {
+      kind: 'success',
+      message: response.data.changed ? copy.value.actionSucceeded : copy.value.actionUnchanged,
+      changed: response.data.changed,
+      actionLabel: action.label,
+      workLabel: response.data.work.title || response.data.work.slug
+    }
+
+    if (drawerOpen.value && selectedWorkId.value === action.workId && canViewDetails.value) {
+      void fetchWorkDetails(action.workId)
+    }
+    void fetchVisibilityWorks(true)
+  } catch (requestError: unknown) {
+    const status = errorStatus(requestError)
+    let message = copy.value.actionFailed
+
+    if (status === 422) message = serverErrorMessage(requestError) || copy.value.actionValidationFailed
+    if (status === 401 || status === 403) message = copy.value.actionDenied
+    if (status === 404) {
+      message = copy.value.actionNotFound
+      items.value = items.value.filter((work) => work.id !== action.workId)
+      void fetchVisibilityWorks(true)
+    }
+
+    actionStatus.value = {
+      kind: 'error',
+      message,
+      changed: null,
+      actionLabel: action.label,
+      workLabel: action.workLabel
+    }
+  } finally {
+    actionWorkId.value = null
+    pendingAction.value = null
+  }
+}
+
 function sortIndicator(key: VisibilitySortKey): string {
   if (appliedFilters.sort !== key) return '↕'
   return appliedFilters.direction === 'asc' ? '↑' : '↓'
@@ -1423,13 +1892,15 @@ function buildListQuery(): Record<string, string | number> {
   return query
 }
 
-async function fetchVisibilityWorks(): Promise<void> {
+async function fetchVisibilityWorks(silent = false): Promise<void> {
   if (!authStore.isInitialized || !hasVisibilityAccess.value) return
 
   const requestAccessRevision = accessRevision
   const currentRequestRevision = ++listRequestRevision
-  loading.value = true
-  error.value = null
+  if (!silent) {
+    loading.value = true
+    error.value = null
+  }
 
   try {
     const response = await apiFetch<VisibilityResponse>('/admin/works/visibility', {
@@ -1445,8 +1916,10 @@ async function fetchVisibilityWorks(): Promise<void> {
     }
 
     if (!response.success || !response.data) {
-      clearVisibilityData()
-      error.value = copy.value.genericError
+      if (!silent) {
+        clearVisibilityData()
+        error.value = copy.value.genericError
+      }
       return
     }
 
@@ -1473,13 +1946,13 @@ async function fetchVisibilityWorks(): Promise<void> {
     }
 
     if (status === 422) {
-      filterError.value = copy.value.validationError
+      if (!silent) filterError.value = copy.value.validationError
       return
     }
 
-    error.value = copy.value.genericError
+    if (!silent) error.value = copy.value.genericError
   } finally {
-    if (requestAccessRevision === accessRevision && currentRequestRevision === listRequestRevision) {
+    if (!silent && requestAccessRevision === accessRevision && currentRequestRevision === listRequestRevision) {
       loading.value = false
     }
   }
@@ -1632,6 +2105,7 @@ function clearPageState(): void {
   loading.value = false
   error.value = null
   filterError.value = null
+  if (actionWorkId.value === null) pendingAction.value = null
   closeDetails()
 }
 
@@ -2080,7 +2554,7 @@ onMounted(() => {
 
 .ym-works-visibility-table {
   width: 100%;
-  min-width: 2920px;
+  min-width: 3340px;
   border-collapse: collapse;
   background: color-mix(in srgb, var(--ym-card-bg) 88%, transparent);
 }
@@ -2316,6 +2790,134 @@ onMounted(() => {
   background: var(--ym-dropdown-bg);
 }
 
+.ym-works-visibility-table th.is-visibility-actions,
+.ym-works-visibility-table td.is-visibility-actions {
+  position: sticky;
+  inset-inline-end: 130px;
+  z-index: 1;
+  width: 390px;
+  min-width: 390px;
+  background: var(--ym-dropdown-bg);
+}
+
+.ym-works-visibility-table th.is-visibility-actions {
+  z-index: 3;
+}
+
+.ym-works-visibility-action-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.42rem;
+}
+
+.ym-works-visibility-action-button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border: 1px solid var(--ym-soft-border);
+  border-radius: 10px;
+  background: var(--ym-control-bg);
+  color: var(--ym-text);
+  font-size: 10px;
+  font-weight: 950;
+  padding: 0.42rem 0.55rem;
+  transition: background 150ms ease, border-color 150ms ease, transform 150ms ease;
+  white-space: nowrap;
+}
+
+.ym-works-visibility-action-button.is-positive {
+  border-color: rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.11);
+  color: #34d399;
+}
+
+.ym-works-visibility-action-button.is-warning {
+  border-color: rgba(245, 158, 11, 0.4);
+  background: rgba(245, 158, 11, 0.11);
+  color: #fbbf24;
+}
+
+.ym-works-visibility-action-button.is-promotion {
+  border-color: rgba(168, 85, 247, 0.42);
+  background: rgba(168, 85, 247, 0.12);
+  color: #d8b4fe;
+}
+
+.ym-works-visibility-action-button.is-neutral {
+  border-color: rgba(148, 163, 184, 0.38);
+  background: rgba(100, 116, 139, 0.11);
+  color: #cbd5e1;
+}
+
+.ym-works-visibility-action-button:hover:not(:disabled) {
+  filter: brightness(1.15);
+  transform: translateY(-1px);
+}
+
+.ym-works-visibility-action-button:disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.65);
+  opacity: 0.42;
+}
+
+.ym-works-visibility-action-spinner {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 0.85rem;
+  height: 0.85rem;
+  border: 2px solid currentColor;
+  border-inline-end-color: transparent;
+  border-radius: 999px;
+  animation: ym-works-visibility-spin 760ms linear infinite;
+}
+
+.ym-works-visibility-action-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid var(--ym-soft-border);
+  border-radius: 16px;
+  margin: 0 1.2rem 1rem;
+  padding: 0.75rem 0.9rem;
+}
+
+.ym-works-visibility-action-status.is-success {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.09);
+}
+
+.ym-works-visibility-action-status.is-error {
+  border-color: rgba(244, 63, 94, 0.36);
+  background: rgba(244, 63, 94, 0.09);
+}
+
+.ym-works-visibility-action-status div {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.ym-works-visibility-action-status strong {
+  color: var(--ym-text);
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.ym-works-visibility-action-status span {
+  color: var(--ym-muted);
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.ym-works-visibility-action-status__changed {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--ym-control-bg);
+  padding: 0.38rem 0.62rem;
+}
+
 .ym-works-visibility-table th.is-action {
   z-index: 3;
 }
@@ -2451,6 +3053,77 @@ onMounted(() => {
   justify-content: flex-end;
   background: rgba(2, 6, 23, 0.68);
   backdrop-filter: blur(6px);
+}
+
+.ym-visibility-action-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  display: grid;
+  place-items: center;
+  background: rgba(2, 6, 23, 0.72);
+  backdrop-filter: blur(7px);
+  padding: 1rem;
+}
+
+.ym-visibility-action-dialog {
+  width: min(520px, 100%);
+  border: 1px solid var(--ym-card-border);
+  border-radius: 24px;
+  background: var(--ym-dropdown-bg);
+  box-shadow: 0 28px 80px rgba(2, 6, 23, 0.48);
+  color: var(--ym-text);
+  padding: 1.35rem;
+}
+
+.ym-visibility-action-dialog__eyebrow {
+  color: #a78bfa;
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.ym-visibility-action-dialog h2 {
+  font-size: 1.3rem;
+  font-weight: 950;
+  margin: 0.35rem 0 0;
+}
+
+.ym-visibility-action-dialog > p {
+  color: var(--ym-muted);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.75;
+  margin: 0.65rem 0 0;
+}
+
+.ym-visibility-action-dialog__work {
+  display: grid;
+  gap: 0.22rem;
+  border: 1px solid var(--ym-soft-border);
+  border-radius: 16px;
+  background: var(--ym-control-bg);
+  margin-top: 1rem;
+  padding: 0.85rem;
+}
+
+.ym-visibility-action-dialog__work span,
+.ym-visibility-action-dialog__work code {
+  color: var(--ym-muted);
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.ym-visibility-action-dialog__work strong {
+  color: var(--ym-text);
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.ym-visibility-action-dialog__buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  margin-top: 1rem;
 }
 
 .ym-visibility-detail-drawer {
@@ -2762,6 +3435,16 @@ onMounted(() => {
     flex-direction: column;
   }
 
+  .ym-works-visibility-action-status,
+  .ym-visibility-action-dialog__buttons {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ym-visibility-action-dialog__buttons .ym-works-visibility-button {
+    width: 100%;
+  }
+
   .ym-works-visibility-summary-grid,
   .ym-works-visibility-filter-grid,
   .ym-visibility-detail-access-grid,
@@ -2799,6 +3482,7 @@ onMounted(() => {
 
   .ym-works-visibility-button,
   .ym-works-visibility-details-button,
+  .ym-works-visibility-action-button,
   .ym-works-visibility-table tbody tr {
     transition: none;
   }
