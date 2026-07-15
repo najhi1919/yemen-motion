@@ -1577,6 +1577,91 @@ admin.works.search.reports
 - `client` و`designer`: ممنوعان من `/admin/works`.
 - لا تنفيذ برمجي أو seeders أو tests في هذه الخطوة. يبدأ التنفيذ القادم بتسجيل الصلاحيات في registry/seeders، ثم اختبارات Backend، ثم UI.
 
+### 0.30 Admin Works Read-only MVP Baseline — 2026-07-15
+
+أغلقت هذه المرحلة baseline القراءة والتنظيم لقسم إدارة الأعمال. أصبحت الأسطح الإدارية الثمانية متصلة بعقود Backend حقيقية وآمنة، مع بقاء جميع عمليات التغيير خارج النطاق الحالي.
+
+آخر baseline معتمد لهذه المرحلة:
+
+```text
+9f6688f feat: add works settings admin page
+```
+
+#### Completed Admin Works sections
+
+| القسم | مسار الواجهة |
+|-------|--------------|
+| النظرة العامة | `/admin/works` |
+| كل الأعمال | `/admin/works/all` |
+| طلبات المراجعة | `/admin/works/review` |
+| الظهور والتمييز | `/admin/works/visibility` |
+| البلاغات والمخالفات | `/admin/works/reports` |
+| التصنيفات والوسوم | `/admin/works/taxonomy` |
+| سجل الأعمال | `/admin/works/activity` |
+| إعدادات وصلاحيات الأعمال | `/admin/works/settings` |
+
+كل صفحات Frontend السابقة تعتمد على APIs حقيقية، ولا تستخدم fake أو demo data.
+
+#### Completed read-only Backend APIs
+
+```text
+GET /api/admin/works/access
+GET /api/admin/works/overview
+GET /api/admin/works
+GET /api/admin/works/{work}
+GET /api/admin/works/review
+GET /api/admin/works/visibility
+GET /api/admin/works/reports
+GET /api/admin/works/taxonomy
+GET /api/admin/works/activity
+GET /api/admin/works/settings
+```
+
+هذه العقود مخصصة للقراءة والتنظيم. لا تحتوي المرحلة على action endpoints للنشر أو إلغاء النشر، أو الإخفاء أو الاستعادة، أو التمييز أو إلغائه، أو التثبيت أو إلغائه، أو الاعتماد أو الرفض أو طلب التعديلات. كما لا تحتوي على مراجعة البلاغات أو تجاهلها أو أرشفتها، ولا إنشاء أو تحديث أو تعطيل أو دمج التصنيفات والوسوم أو الإسناد الجماعي، ولا تعديل الإعدادات، ولا hard delete.
+
+#### Authorization baseline
+
+- يملك `super-admin` الوصول الكامل إلى Admin Works.
+- يخضع `admin` و`staff` لصلاحيات `admin.works.*` الدقيقة لكل صفحة وقائمة وتفصيل وحقل.
+- يمنع `client` و`designer` من جميع Admin Works APIs وصفحاته حتى إذا مُنحا صلاحيات عرضية بالخطأ.
+- يبقى Backend الحارس النهائي، ولا ترسل صفحات Frontend طلب البيانات قبل اكتمال تهيئة المصادقة أو عند المنع المحلي.
+- يحتوي permission registry المعتمد على `78` صلاحية ضمن مجموعة `admin.works`، دون `admin.works.delete` أو `admin.works.force_delete`.
+
+#### Sensitive data baseline
+
+- لا تعرض عقود Admin Works حقول `email`.
+- لا تعرض `password` أو `token` أو `cookie`.
+- لا تعرض `internal_notes` أو `rejection_reason` أو `change_request_notes` إلا عبر detail API وبصلاحية خاصة مناسبة.
+- لا تعيد raw models أو raw config أو database rows كاملة.
+- لا تعيد metadata أو payload غير ضرورية، وتبقى الحقول المسموحة محدودة بعقد كل endpoint.
+
+#### Intentional derived-data boundaries
+
+- يعتمد قسم البلاغات مؤقتًا على `works.reports_count`؛ لا يوجد جدول بلاغات أعمال مستقل ضمن هذا baseline.
+- يعتمد قسم التصنيفات مؤقتًا على `works.category_id`؛ لا يوجد دعم فعلي لجدول tags أو علاقات وسوم حقيقية بعد.
+- يعتمد سجل الأعمال على lifecycle timestamps في جدول `works`، ولا يقرأ `audit_events` ولا يملك جدول activity مستقلًا.
+- تعتمد إعدادات الأعمال على static defaults وregistered permissions، ولا يوجد persistent settings table أو endpoint للحفظ والتعديل.
+
+#### Verification baseline
+
+النتائج المعتمدة عند إغلاق baseline:
+
+```text
+Full test suite: 540 passed / 3615 assertions
+Settings API: 14 passed / 135 assertions
+WorksPermissionRegistryTest: 3 passed / 13 assertions
+WorksAccessGateTest: 11 passed / 50 assertions
+```
+
+#### Next proposed sequence
+
+```text
+YM-WORKS-VISIBILITY-ACTIONS-API-001
+YM-WORKS-VISIBILITY-ACTIONS-UI-001
+```
+
+بعد ذلك تُحسم مهام Review Actions وReports Actions وTaxonomy schema أو actions وفق القرار اللاحق، دون اعتبار أي منها منفذًا ضمن baseline القراءة الحالي.
+
 ---
 
 ## 1. TECH_STACK — المعمارية النهائية المعتمدة
