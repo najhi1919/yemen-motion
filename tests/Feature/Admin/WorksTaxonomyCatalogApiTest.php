@@ -456,7 +456,7 @@ class WorksTaxonomyCatalogApiTest extends TestCase
         $this->assertSensitiveParametersRejected(self::TAGS_ENDPOINT);
     }
 
-    public function test_catalog_routes_are_get_only_static_and_resolve_before_dynamic_work_show(): void
+    public function test_catalog_read_routes_remain_static_and_unsupported_methods_are_rejected(): void
     {
         $categoryRoute = Route::getRoutes()->match(Request::create(self::CATEGORIES_ENDPOINT, 'GET'));
         $tagRoute = Route::getRoutes()->match(Request::create(self::TAGS_ENDPOINT, 'GET'));
@@ -483,10 +483,12 @@ class WorksTaxonomyCatalogApiTest extends TestCase
         $this->assertLessThan($showPosition, $categoryPosition);
         $this->assertLessThan($showPosition, $tagPosition);
 
-        foreach ([self::CATEGORIES_ENDPOINT, self::TAGS_ENDPOINT] as $endpoint) {
-            foreach (['POST', 'PUT', 'PATCH', 'DELETE'] as $method) {
-                $this->json($method, $endpoint)->assertMethodNotAllowed();
-            }
+        foreach (['PUT', 'PATCH', 'DELETE'] as $method) {
+            $this->json($method, self::CATEGORIES_ENDPOINT)->assertMethodNotAllowed();
+        }
+
+        foreach (['POST', 'PUT', 'PATCH', 'DELETE'] as $method) {
+            $this->json($method, self::TAGS_ENDPOINT)->assertMethodNotAllowed();
         }
 
         $this->actingAsRole('super-admin');
