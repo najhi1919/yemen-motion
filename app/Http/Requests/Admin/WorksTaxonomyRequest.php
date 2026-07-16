@@ -68,8 +68,7 @@ class WorksTaxonomyRequest extends FormRequest
 
         return $user->hasAnyRole(['admin', 'staff'])
             && $user->can('admin.works.access')
-            && $user->can('admin.works.taxonomy.view')
-            && $user->can('admin.works.taxonomy.categories.view');
+            && $user->can('admin.works.taxonomy.view');
     }
 
     public function rules(): array

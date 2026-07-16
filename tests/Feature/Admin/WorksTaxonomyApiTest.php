@@ -291,34 +291,43 @@ class WorksTaxonomyApiTest extends TestCase
 
         $item = $response->json('data.items.0');
 
-        $this->assertSame([
-            'category_id',
-            'category',
-            'category_tracking',
-            'featured_count',
-            'hidden_count',
-            'label',
-            'latest_work_at',
-            'pinned_count',
-            'published_count',
-            'reported_count',
-            'review_queue_count',
-            'taxonomy_flags',
-            'total_likes',
-            'total_reports',
-            'total_views',
-            'works_count',
-        ], collect(array_keys($item))->sort()->values()->all());
-        $this->assertSame([
-            'has_hidden',
-            'has_published',
-            'has_reports',
-            'is_promoted',
-            'needs_attention',
-            'uncategorized',
-        ], collect(array_keys($item['taxonomy_flags']))->sort()->values()->all());
         $this->assertSame(
-            ['category_support', 'filters', 'items', 'pagination', 'summary', 'tag_support'],
+            collect([
+                'category',
+                'category_id',
+                'category_tracking',
+                'featured_count',
+                'hidden_count',
+                'label',
+                'latest_work_at',
+                'pinned_count',
+                'published_count',
+                'reported_count',
+                'review_queue_count',
+                'taxonomy_flags',
+                'total_likes',
+                'total_reports',
+                'total_views',
+                'works_count',
+            ])->sort()->values()->all(),
+            collect(array_keys($item))->sort()->values()->all(),
+        );
+        $this->assertSame(
+            collect([
+                'has_hidden',
+                'has_published',
+                'has_reports',
+                'is_promoted',
+                'needs_attention',
+                'uncategorized',
+            ])->sort()->values()->all(),
+            collect(array_keys($item['taxonomy_flags']))->sort()->values()->all(),
+        );
+        $this->assertSame(
+            collect(['category_support', 'filters', 'items', 'pagination', 'summary', 'tag_support'])
+                ->sort()
+                ->values()
+                ->all(),
             collect(array_keys($response->json('data')))->sort()->values()->all(),
         );
     }
