@@ -373,16 +373,27 @@ class WorksReportsTrackingApiTest extends TestCase
         $this->actingAsRole('super-admin');
         $work = Work::factory()->create(['reports_count' => 12]);
         $report = WorkReport::factory()->dismissed()->create(['work_id' => $work->id]);
-        $workSnapshot = $work->getRawOriginal();
-        $reportSnapshot = $report->getRawOriginal();
+        $workSnapshot = collect($work->fresh()->getRawOriginal())
+            ->sortKeys()
+            ->all();
+        $reportSnapshot = collect($report->fresh()->getRawOriginal())
+            ->sortKeys()
+            ->all();
         $auditCount = AuditEvent::query()->count();
 
         $this->getJson($this->listEndpoint($work))->assertOk();
         $this->getJson($this->detailEndpoint($report))->assertOk();
 
-        $this->assertSame($workSnapshot, $work->refresh()->getRawOriginal());
-        $this->assertSame($reportSnapshot, $report->refresh()->getRawOriginal());
-        $this->assertSame(12, $work->reports_count);
+        $workAfter = collect($work->fresh()->getRawOriginal())
+            ->sortKeys()
+            ->all();
+        $reportAfter = collect($report->fresh()->getRawOriginal())
+            ->sortKeys()
+            ->all();
+
+        $this->assertSame($workSnapshot, $workAfter);
+        $this->assertSame($reportSnapshot, $reportAfter);
+        $this->assertSame(12, $work->fresh()->reports_count);
         $this->assertSame($auditCount, AuditEvent::query()->count());
     }
 
