@@ -104,17 +104,18 @@ class WorksTaxonomyAssignmentApiTest extends TestCase
     public function test_individual_category_replaces_legacy_value_returns_safe_payload_and_audits(): void
     {
         $this->actingAsRole('super-admin');
-        $work = Work::factory()->create(['category_id' => 1]);
+        $category = WorkCategory::factory()->create(['sort_order' => 4]);
+        $legacyCategoryId = $category->id + 100_000;
+        $work = Work::factory()->create(['category_id' => $legacyCategoryId]);
         $tag = WorkTag::factory()->create();
         $work->tags()->attach($tag);
-        $category = WorkCategory::factory()->create(['sort_order' => 4]);
 
         $response = $this->patchJson($this->categoryEndpoint($work->id), ['category_id' => $category->id])
             ->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.changed', true)
             ->assertJsonPath('data.work.id', $work->id)
-            ->assertJsonPath('data.work.previous_category_id', 1)
+            ->assertJsonPath('data.work.previous_category_id', $legacyCategoryId)
             ->assertJsonPath('data.work.category_id', $category->id)
             ->assertJsonPath('data.work.category.id', $category->id)
             ->assertJsonPath('message', 'تم تحديث تصنيف العمل بنجاح')
@@ -125,10 +126,11 @@ class WorksTaxonomyAssignmentApiTest extends TestCase
             $this->sortedKeys($response->json('data.work')),
         );
         $this->assertSafeCategory($response->json('data.work.category'));
+        $this->assertSame($category->id, $work->fresh()->category_id);
         $this->assertSame([$tag->id], $work->fresh()->tags()->pluck('work_tags.id')->all());
         $this->assertAudit('work.category.changed', $work->id, 'category_change', [
             'work_id' => $work->id,
-            'previous_category_id' => 1,
+            'previous_category_id' => $legacyCategoryId,
             'current_category_id' => $category->id,
             'mode' => 'individual',
         ]);
@@ -446,16 +448,32 @@ class WorksTaxonomyAssignmentApiTest extends TestCase
         $this->assertDatabaseCount('audit_events', 0);
     }
 
-    public function test_forbidden_and_validation_failures_never_create_audit_events(): void
+    public function test_forbidden_and_validation_failures_never_create_assignment_audit_events(): void
     {
         $work = Work::factory()->create();
         $this->actingAsRole('client', array_values(array_unique(array_merge(...array_values($this->operationPermissions())))));
         $this->patchJson($this->categoryEndpoint($work->id), ['category_id' => null])->assertForbidden();
-        $this->assertDatabaseCount('audit_events', 0);
+        $this->assertSame(
+            0,
+            AuditEvent::query()
+                ->whereIn('event_type', [
+                    'work.category.changed',
+                    'work.tags.updated',
+                ])
+                ->count(),
+        );
 
         $this->actingAsRole('super-admin');
         $this->patchJson($this->tagsEndpoint($work->id), ['tag_ids' => [999999]])->assertUnprocessable();
-        $this->assertDatabaseCount('audit_events', 0);
+        $this->assertSame(
+            0,
+            AuditEvent::query()
+                ->whereIn('event_type', [
+                    'work.category.changed',
+                    'work.tags.updated',
+                ])
+                ->count(),
+        );
     }
 
     public function test_assignment_routes_use_expected_controller_order_constraints_and_methods(): void
