@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Work extends Model
 {
@@ -78,6 +79,14 @@ class Work extends Model
     public function reviewer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewer_id');
+    }
+
+    /**
+     * @return HasMany<WorkReport, $this>
+     */
+    public function reports(): HasMany
+    {
+        return $this->hasMany(WorkReport::class);
     }
 
     public function scopeSubmitted(Builder $query): Builder
