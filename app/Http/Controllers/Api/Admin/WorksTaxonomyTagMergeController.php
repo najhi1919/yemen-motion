@@ -84,7 +84,9 @@ class WorksTaxonomyTagMergeController extends Controller
                 ->delete();
             $activeSourceTagIds = $sourceTags
                 ->filter(fn (WorkTag $tag): bool => $tag->isActive())
-                ->modelKeys();
+                ->map(fn (WorkTag $tag): int => (int) $tag->getKey())
+                ->values()
+                ->all();
             $sourceTagsDisabled = count($activeSourceTagIds);
 
             if ($activeSourceTagIds !== []) {
