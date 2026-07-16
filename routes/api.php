@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\Admin\WorksShowController as AdminWorksShowControll
 use App\Http\Controllers\Api\Admin\WorksTaxonomyCatalogController as AdminWorksTaxonomyCatalogController;
 use App\Http\Controllers\Api\Admin\WorksTaxonomyCategoryActionController as AdminWorksTaxonomyCategoryActionController;
 use App\Http\Controllers\Api\Admin\WorksTaxonomyController as AdminWorksTaxonomyController;
+use App\Http\Controllers\Api\Admin\WorksTaxonomyTagActionController as AdminWorksTaxonomyTagActionController;
 use App\Http\Controllers\Api\Admin\WorksVisibilityActionController as AdminWorksVisibilityActionController;
 use App\Http\Controllers\Api\Admin\WorksVisibilityController as AdminWorksVisibilityController;
 use App\Http\Controllers\Api\Audit\PageViewAuditController;
@@ -76,6 +77,9 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
     Route::patch('/works/taxonomy/categories/{category}/disable', [AdminWorksTaxonomyCategoryActionController::class, 'disable'])->whereNumber('category');
     Route::patch('/works/taxonomy/categories/{category}', [AdminWorksTaxonomyCategoryActionController::class, 'update'])->whereNumber('category');
     Route::get('/works/taxonomy/tags', [AdminWorksTaxonomyCatalogController::class, 'tags']);
+    Route::post('/works/taxonomy/tags', [AdminWorksTaxonomyTagActionController::class, 'store']);
+    Route::patch('/works/taxonomy/tags/{tag}/disable', [AdminWorksTaxonomyTagActionController::class, 'disable'])->whereNumber('tag');
+    Route::patch('/works/taxonomy/tags/{tag}', [AdminWorksTaxonomyTagActionController::class, 'update'])->whereNumber('tag');
     Route::get('/works/taxonomy', [AdminWorksTaxonomyController::class, 'index']);
     Route::get('/works/settings', [AdminWorksSettingsController::class, 'index']);
     Route::patch('/works/{work}/visibility/publish', [AdminWorksVisibilityActionController::class, 'publish'])->whereNumber('work');

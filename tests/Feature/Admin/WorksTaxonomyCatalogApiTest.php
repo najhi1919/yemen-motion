@@ -487,7 +487,7 @@ class WorksTaxonomyCatalogApiTest extends TestCase
             $this->json($method, self::CATEGORIES_ENDPOINT)->assertMethodNotAllowed();
         }
 
-        foreach (['POST', 'PUT', 'PATCH', 'DELETE'] as $method) {
+        foreach (['PUT', 'PATCH', 'DELETE'] as $method) {
             $this->json($method, self::TAGS_ENDPOINT)->assertMethodNotAllowed();
         }
 
