@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\WorksTaxonomyRequest;
 use App\Models\Work;
+use App\Models\WorkCategory;
+use App\Models\WorkTag;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -42,7 +44,11 @@ class WorksTaxonomyController extends Controller
         $this->applyTaxonomySearch($worksQuery, $queryText);
 
         $bucketsQuery = $this->bucketsQuery($worksQuery);
-        $summary = $this->summary(clone $bucketsQuery);
+        $catalogSummary = $this->catalogSummary();
+        $summary = [
+            ...$this->summary(clone $bucketsQuery),
+            ...$catalogSummary,
+        ];
         $orderedBuckets = clone $bucketsQuery;
 
         if ($sort === 'category_id') {
@@ -56,14 +62,30 @@ class WorksTaxonomyController extends Controller
                 ->orderBy('category_id');
         }
 
-        $buckets = $orderedBuckets
-            ->paginate($perPage)
-            ->through(fn (Work $bucket): array => $this->bucketPayload($bucket));
+        $buckets = $orderedBuckets->paginate($perPage);
+        $categoryIds = collect($buckets->items())
+            ->pluck('category_id')
+            ->filter(fn (mixed $categoryId): bool => $categoryId !== null)
+            ->unique()
+            ->values();
+        $categories = WorkCategory::query()
+            ->select(['id', 'name_ar', 'name_en', 'slug', 'disabled_at', 'sort_order'])
+            ->whereIn('id', $categoryIds)
+            ->get()
+            ->keyBy('id');
+        $items = collect($buckets->items())
+            ->map(fn (Work $bucket): array => $this->bucketPayload(
+                $bucket,
+                $bucket->category_id === null
+                    ? null
+                    : $categories->get((int) $bucket->category_id),
+            ))
+            ->all();
 
         return response()->json([
             'success' => true,
             'data' => [
-                'items' => $buckets->items(),
+                'items' => $items,
                 'pagination' => [
                     'current_page' => $buckets->currentPage(),
                     'per_page' => $buckets->perPage(),
@@ -85,9 +107,20 @@ class WorksTaxonomyController extends Controller
                     'sort' => $sort,
                     'direction' => $direction,
                 ],
+                'category_support' => [
+                    'available' => true,
+                    'catalog_source' => 'work_categories',
+                    'work_reference' => 'works.category_id',
+                    'foreign_key_enforced' => false,
+                    'legacy_unmapped_values_possible' => true,
+                    'mapping_complete' => $catalogSummary['legacy_unmapped_category_ids'] === 0,
+                    'reason' => 'قد توجد قيم category_id قديمة لا يقابلها سجل في work_categories.',
+                ],
                 'tag_support' => [
-                    'available' => false,
-                    'reason' => 'لا توجد بنية وسوم مستقلة في قاعدة البيانات الحالية.',
+                    'available' => true,
+                    'catalog_source' => 'work_tags',
+                    'assignments_source' => 'work_tag_assignments',
+                    'reason' => 'بنية الوسوم المستقلة متاحة للقراءة.',
                 ],
             ],
             'message' => 'تم جلب تصنيفات الأعمال بنجاح',
@@ -267,6 +300,59 @@ class WorksTaxonomyController extends Controller
         ];
     }
 
+    /** @return array<string, int> */
+    private function catalogSummary(): array
+    {
+        $categoryCatalog = WorkCategory::query()
+            ->select(['id', 'disabled_at'])
+            ->withCount('works');
+        $categoryCounts = DB::query()
+            ->fromSub($categoryCatalog->toBase(), 'catalog_work_categories')
+            ->selectRaw('COUNT(*) AS total')
+            ->selectRaw('COALESCE(SUM(CASE WHEN disabled_at IS NULL THEN 1 ELSE 0 END), 0) AS active')
+            ->selectRaw('COALESCE(SUM(CASE WHEN disabled_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS disabled')
+            ->selectRaw('COALESCE(SUM(CASE WHEN works_count > 0 THEN 1 ELSE 0 END), 0) AS used')
+            ->first();
+        $tagCatalog = WorkTag::query()
+            ->select(['id', 'disabled_at'])
+            ->withCount('works');
+        $tagCounts = DB::query()
+            ->fromSub($tagCatalog->toBase(), 'catalog_work_tags')
+            ->selectRaw('COUNT(*) AS total')
+            ->selectRaw('COALESCE(SUM(CASE WHEN disabled_at IS NULL THEN 1 ELSE 0 END), 0) AS active')
+            ->selectRaw('COALESCE(SUM(CASE WHEN disabled_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS disabled')
+            ->selectRaw('COALESCE(SUM(CASE WHEN works_count > 0 THEN 1 ELSE 0 END), 0) AS used')
+            ->first();
+        $unmappedWorks = Work::query()
+            ->whereNotNull('category_id')
+            ->whereNotExists(function ($query): void {
+                $query
+                    ->selectRaw('1')
+                    ->from('work_categories')
+                    ->whereColumn('work_categories.id', 'works.category_id');
+            });
+        $categoryTotal = (int) ($categoryCounts?->total ?? 0);
+        $usedCategoryTotal = (int) ($categoryCounts?->used ?? 0);
+        $tagTotal = (int) ($tagCounts?->total ?? 0);
+        $usedTagTotal = (int) ($tagCounts?->used ?? 0);
+
+        return [
+            'catalog_categories_total' => $categoryTotal,
+            'active_catalog_categories' => (int) ($categoryCounts?->active ?? 0),
+            'disabled_catalog_categories' => (int) ($categoryCounts?->disabled ?? 0),
+            'used_catalog_categories' => $usedCategoryTotal,
+            'unused_catalog_categories' => $categoryTotal - $usedCategoryTotal,
+            'legacy_unmapped_category_ids' => (clone $unmappedWorks)->distinct()->count('category_id'),
+            'works_with_legacy_unmapped_category' => $unmappedWorks->count(),
+            'tags_total' => $tagTotal,
+            'active_tags' => (int) ($tagCounts?->active ?? 0),
+            'disabled_tags' => (int) ($tagCounts?->disabled ?? 0),
+            'used_tags' => $usedTagTotal,
+            'unused_tags' => $tagTotal - $usedTagTotal,
+            'tag_assignments_total' => DB::table('work_tag_assignments')->count(),
+        ];
+    }
+
     /**
      * @param array<string, mixed> $validated
      */
@@ -285,7 +371,7 @@ class WorksTaxonomyController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function bucketPayload(Work $bucket): array
+    private function bucketPayload(Work $bucket, ?WorkCategory $category): array
     {
         $categoryId = $bucket->category_id;
         $reportedCount = (int) $bucket->getAttribute('reported_count');
@@ -301,7 +387,15 @@ class WorksTaxonomyController extends Controller
 
         return [
             'category_id' => $categoryId,
-            'label' => $uncategorized ? 'غير مصنف' : $this->categoryLabel($categoryId),
+            'label' => $uncategorized
+                ? 'غير مصنف'
+                : ($category?->name_ar ?? $this->categoryLabel($categoryId)),
+            'category' => $this->categoryPayload($category),
+            'category_tracking' => [
+                'catalog_record_exists' => $category !== null,
+                'is_legacy_unmapped' => ! $uncategorized && $category === null,
+                'is_uncategorized' => $uncategorized,
+            ],
             'works_count' => (int) $bucket->getAttribute('works_count'),
             'published_count' => $publishedCount,
             'hidden_count' => $hiddenCount,
@@ -323,6 +417,24 @@ class WorksTaxonomyController extends Controller
                 'is_promoted' => $isPromoted,
                 'needs_attention' => $hasReports || $uncategorized || $hasHidden,
             ],
+        ];
+    }
+
+    /** @return array<string, mixed>|null */
+    private function categoryPayload(?WorkCategory $category): ?array
+    {
+        if (! $category) {
+            return null;
+        }
+
+        return [
+            'id' => $category->id,
+            'name_ar' => $category->name_ar,
+            'name_en' => $category->name_en,
+            'slug' => $category->slug,
+            'disabled_at' => $category->disabled_at?->toJSON(),
+            'is_active' => $category->isActive(),
+            'sort_order' => $category->sort_order,
         ];
     }
 

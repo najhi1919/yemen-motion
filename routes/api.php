@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\Admin\WorksReviewActionController as AdminWorksRevi
 use App\Http\Controllers\Api\Admin\WorksReviewQueueController as AdminWorksReviewQueueController;
 use App\Http\Controllers\Api\Admin\WorksSettingsController as AdminWorksSettingsController;
 use App\Http\Controllers\Api\Admin\WorksShowController as AdminWorksShowController;
+use App\Http\Controllers\Api\Admin\WorksTaxonomyCatalogController as AdminWorksTaxonomyCatalogController;
 use App\Http\Controllers\Api\Admin\WorksTaxonomyController as AdminWorksTaxonomyController;
 use App\Http\Controllers\Api\Admin\WorksVisibilityActionController as AdminWorksVisibilityActionController;
 use App\Http\Controllers\Api\Admin\WorksVisibilityController as AdminWorksVisibilityController;
@@ -69,6 +70,8 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
     Route::patch('/works/reports/{report}/dismiss', [AdminWorksReportActionController::class, 'dismiss'])->whereNumber('report');
     Route::patch('/works/reports/{report}/archive', [AdminWorksReportActionController::class, 'archive'])->whereNumber('report');
     Route::get('/works/{work}/reports', [AdminWorksTrackedReportsController::class, 'index'])->whereNumber('work');
+    Route::get('/works/taxonomy/categories', [AdminWorksTaxonomyCatalogController::class, 'categories']);
+    Route::get('/works/taxonomy/tags', [AdminWorksTaxonomyCatalogController::class, 'tags']);
     Route::get('/works/taxonomy', [AdminWorksTaxonomyController::class, 'index']);
     Route::get('/works/settings', [AdminWorksSettingsController::class, 'index']);
     Route::patch('/works/{work}/visibility/publish', [AdminWorksVisibilityActionController::class, 'publish'])->whereNumber('work');

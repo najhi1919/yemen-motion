@@ -5,6 +5,8 @@ namespace Tests\Feature\Admin;
 use App\Http\Controllers\Api\Admin\WorksTaxonomyController;
 use App\Models\User;
 use App\Models\Work;
+use App\Models\WorkCategory;
+use App\Models\WorkTag;
 use Database\Seeders\AuthRolesSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
@@ -66,7 +68,7 @@ class WorksTaxonomyApiTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_admin_with_access_and_taxonomy_view_only_gets_403(): void
+    public function test_admin_with_access_and_taxonomy_view_can_list_without_catalog_permission(): void
     {
         $this->actingAsRole('admin', [
             'admin.works.access',
@@ -74,7 +76,7 @@ class WorksTaxonomyApiTest extends TestCase
         ]);
 
         $this->getJson('/api/admin/works/taxonomy')
-            ->assertForbidden();
+            ->assertOk();
     }
 
     public function test_admin_and_staff_with_required_permissions_can_list(): void
@@ -129,6 +131,118 @@ class WorksTaxonomyApiTest extends TestCase
             ->assertJsonPath('data.items.0.taxonomy_flags.uncategorized', true);
     }
 
+    public function test_bucket_returns_safe_catalog_category_and_uses_its_arabic_name(): void
+    {
+        $this->actingAsRole('super-admin');
+        $category = WorkCategory::factory()->create([
+            'name_ar' => 'هوية بصرية',
+            'name_en' => 'Visual Identity',
+            'slug' => 'visual-identity',
+            'sort_order' => 6,
+        ]);
+        Work::factory()->create(['category_id' => $category->id]);
+
+        $this->getJson('/api/admin/works/taxonomy')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.category_id', $category->id)
+            ->assertJsonPath('data.items.0.label', 'هوية بصرية')
+            ->assertJsonPath('data.items.0.category', [
+                'id' => $category->id,
+                'name_ar' => 'هوية بصرية',
+                'name_en' => 'Visual Identity',
+                'slug' => 'visual-identity',
+                'disabled_at' => null,
+                'is_active' => true,
+                'sort_order' => 6,
+            ])
+            ->assertJsonPath('data.items.0.category_tracking', [
+                'catalog_record_exists' => true,
+                'is_legacy_unmapped' => false,
+                'is_uncategorized' => false,
+            ])
+            ->assertJsonPath('data.category_support.mapping_complete', true);
+    }
+
+    public function test_unmapped_and_uncategorized_buckets_have_distinct_tracking_states(): void
+    {
+        $this->actingAsRole('super-admin');
+        Work::factory()->create(['category_id' => 1]);
+        Work::factory()->create(['category_id' => null]);
+
+        $items = collect($this->getJson('/api/admin/works/taxonomy?per_page=50')
+            ->assertOk()
+            ->assertJsonPath('data.category_support.mapping_complete', false)
+            ->json('data.items'));
+        $legacy = $items->firstWhere('category_id', 1);
+        $uncategorized = $items->firstWhere('category_id', null);
+
+        $this->assertNull($legacy['category']);
+        $this->assertSame('تصنيف #1', $legacy['label']);
+        $this->assertSame([
+            'catalog_record_exists' => false,
+            'is_legacy_unmapped' => true,
+            'is_uncategorized' => false,
+        ], $legacy['category_tracking']);
+
+        $this->assertNull($uncategorized['category']);
+        $this->assertSame('غير مصنف', $uncategorized['label']);
+        $this->assertSame([
+            'catalog_record_exists' => false,
+            'is_legacy_unmapped' => false,
+            'is_uncategorized' => true,
+        ], $uncategorized['category_tracking']);
+    }
+
+    public function test_catalog_summary_additions_are_global_and_keep_bucket_summary_meanings(): void
+    {
+        $this->actingAsRole('super-admin');
+        $usedCategory = WorkCategory::factory()->create();
+        WorkCategory::factory()->disabled()->create();
+        $usedTag = WorkTag::factory()->create();
+        WorkTag::factory()->disabled()->create();
+        $linkedWork = Work::factory()->create(['category_id' => $usedCategory->id]);
+        Work::factory()->count(2)->create(['category_id' => 900]);
+        Work::factory()->create(['category_id' => null]);
+        $linkedWork->tags()->attach($usedTag->id);
+
+        $this->getJson('/api/admin/works/taxonomy?per_page=50')
+            ->assertOk()
+            ->assertJsonPath('data.summary.total_categories', 3)
+            ->assertJsonPath('data.summary.categorized_categories', 2)
+            ->assertJsonPath('data.summary.uncategorized_buckets', 1)
+            ->assertJsonPath('data.summary.total_works', 4)
+            ->assertJsonPath('data.summary.categorized_works', 3)
+            ->assertJsonPath('data.summary.uncategorized_works', 1)
+            ->assertJsonPath('data.summary.catalog_categories_total', 2)
+            ->assertJsonPath('data.summary.active_catalog_categories', 1)
+            ->assertJsonPath('data.summary.disabled_catalog_categories', 1)
+            ->assertJsonPath('data.summary.used_catalog_categories', 1)
+            ->assertJsonPath('data.summary.unused_catalog_categories', 1)
+            ->assertJsonPath('data.summary.legacy_unmapped_category_ids', 1)
+            ->assertJsonPath('data.summary.works_with_legacy_unmapped_category', 2)
+            ->assertJsonPath('data.summary.tags_total', 2)
+            ->assertJsonPath('data.summary.active_tags', 1)
+            ->assertJsonPath('data.summary.disabled_tags', 1)
+            ->assertJsonPath('data.summary.used_tags', 1)
+            ->assertJsonPath('data.summary.unused_tags', 1)
+            ->assertJsonPath('data.summary.tag_assignments_total', 1);
+    }
+
+    public function test_taxonomy_read_does_not_create_or_modify_catalog_or_work_data(): void
+    {
+        $this->actingAsRole('super-admin');
+        $work = Work::factory()->create(['category_id' => 1]);
+        $workUpdatedAt = $work->updated_at?->toJSON();
+
+        $this->getJson('/api/admin/works/taxonomy')->assertOk();
+
+        $this->assertSame(1, $work->refresh()->category_id);
+        $this->assertSame($workUpdatedAt, $work->updated_at?->toJSON());
+        $this->assertDatabaseCount('work_categories', 0);
+        $this->assertDatabaseCount('work_tags', 0);
+        $this->assertDatabaseCount('work_tag_assignments', 0);
+    }
+
     public function test_response_uses_safe_paginated_summary_filter_and_tag_support_shape(): void
     {
         $this->actingAsRole('super-admin');
@@ -164,16 +278,23 @@ class WorksTaxonomyApiTest extends TestCase
                 'sort' => 'works_count',
                 'direction' => 'desc',
             ])
-            ->assertJsonPath('data.tag_support.available', false)
+            ->assertJsonPath('data.tag_support.available', true)
+            ->assertJsonPath('data.tag_support.catalog_source', 'work_tags')
+            ->assertJsonPath('data.tag_support.assignments_source', 'work_tag_assignments')
             ->assertJsonPath(
                 'data.tag_support.reason',
-                'لا توجد بنية وسوم مستقلة في قاعدة البيانات الحالية.',
-            );
+                'بنية الوسوم المستقلة متاحة للقراءة.',
+            )
+            ->assertJsonPath('data.category_support.available', true)
+            ->assertJsonPath('data.category_support.mapping_complete', false)
+            ->assertJsonPath('data.category_support.foreign_key_enforced', false);
 
         $item = $response->json('data.items.0');
 
         $this->assertSame([
             'category_id',
+            'category',
+            'category_tracking',
             'featured_count',
             'hidden_count',
             'label',
@@ -197,7 +318,7 @@ class WorksTaxonomyApiTest extends TestCase
             'uncategorized',
         ], collect(array_keys($item['taxonomy_flags']))->sort()->values()->all());
         $this->assertSame(
-            ['filters', 'items', 'pagination', 'summary', 'tag_support'],
+            ['category_support', 'filters', 'items', 'pagination', 'summary', 'tag_support'],
             collect(array_keys($response->json('data')))->sort()->values()->all(),
         );
     }
@@ -232,7 +353,6 @@ class WorksTaxonomyApiTest extends TestCase
             'works',
             'rows',
             'title',
-            'slug',
             'description',
             'internal_notes',
             'rejection_reason',
@@ -615,6 +735,19 @@ class WorksTaxonomyApiTest extends TestCase
                 'total_reports' => 5,
                 'total_views' => 42,
                 'total_likes' => 10,
+                'catalog_categories_total' => 0,
+                'active_catalog_categories' => 0,
+                'disabled_catalog_categories' => 0,
+                'used_catalog_categories' => 0,
+                'unused_catalog_categories' => 0,
+                'legacy_unmapped_category_ids' => 2,
+                'works_with_legacy_unmapped_category' => 3,
+                'tags_total' => 0,
+                'active_tags' => 0,
+                'disabled_tags' => 0,
+                'used_tags' => 0,
+                'unused_tags' => 0,
+                'tag_assignments_total' => 0,
             ]);
     }
 
@@ -706,16 +839,24 @@ class WorksTaxonomyApiTest extends TestCase
         $this->assertTrue($uncategorized['taxonomy_flags']['needs_attention']);
     }
 
-    public function test_tag_support_is_explicitly_unavailable(): void
+    public function test_category_and_tag_support_are_explicitly_available(): void
     {
         $this->actingAsRole('super-admin');
 
         $this->getJson('/api/admin/works/taxonomy')
             ->assertOk()
-            ->assertJsonPath('data.tag_support.available', false)
+            ->assertJsonPath('data.category_support.available', true)
+            ->assertJsonPath('data.category_support.catalog_source', 'work_categories')
+            ->assertJsonPath('data.category_support.work_reference', 'works.category_id')
+            ->assertJsonPath('data.category_support.foreign_key_enforced', false)
+            ->assertJsonPath('data.category_support.legacy_unmapped_values_possible', true)
+            ->assertJsonPath('data.category_support.mapping_complete', true)
+            ->assertJsonPath('data.tag_support.available', true)
+            ->assertJsonPath('data.tag_support.catalog_source', 'work_tags')
+            ->assertJsonPath('data.tag_support.assignments_source', 'work_tag_assignments')
             ->assertJsonPath(
                 'data.tag_support.reason',
-                'لا توجد بنية وسوم مستقلة في قاعدة البيانات الحالية.',
+                'بنية الوسوم المستقلة متاحة للقراءة.',
             );
     }
 
@@ -776,7 +917,6 @@ class WorksTaxonomyApiTest extends TestCase
         return [
             'admin.works.access',
             'admin.works.taxonomy.view',
-            'admin.works.taxonomy.categories.view',
         ];
     }
 
