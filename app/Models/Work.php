@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Work extends Model
@@ -79,6 +80,27 @@ class Work extends Model
     public function reviewer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewer_id');
+    }
+
+    /**
+     * @return BelongsTo<WorkCategory, $this>
+     */
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(WorkCategory::class, 'category_id');
+    }
+
+    /**
+     * @return BelongsToMany<WorkTag, $this>
+     */
+    public function tags(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            WorkTag::class,
+            'work_tag_assignments',
+            'work_id',
+            'work_tag_id',
+        );
     }
 
     /**
