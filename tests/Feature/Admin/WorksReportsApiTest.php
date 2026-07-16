@@ -5,6 +5,7 @@ namespace Tests\Feature\Admin;
 use App\Http\Controllers\Api\Admin\WorksReportsController;
 use App\Models\User;
 use App\Models\Work;
+use App\Models\WorkReport;
 use Database\Seeders\AuthRolesSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
@@ -153,6 +154,18 @@ class WorksReportsApiTest extends TestCase
                 'featured_reported' => 1,
                 'pinned_reported' => 0,
                 'total_reports' => 3,
+                'legacy_reports_total' => 3,
+                'tracked_reports_total' => 0,
+                'combined_report_signal_total' => 3,
+                'pending_tracked_reports' => 0,
+                'under_review_tracked_reports' => 0,
+                'dismissed_tracked_reports' => 0,
+                'archived_tracked_reports' => 0,
+                'open_tracked_reports' => 0,
+                'works_with_legacy_reports' => 1,
+                'works_with_tracked_reports' => 0,
+                'works_with_open_tracked_reports' => 0,
+                'works_with_both_sources' => 0,
             ])
             ->assertJsonPath('data.filters', [
                 'q' => null,
@@ -163,12 +176,18 @@ class WorksReportsApiTest extends TestCase
                 'reviewer_id' => null,
                 'category_id' => null,
                 'min_reports' => 1,
+                'report_source' => 'all',
+                'tracked_status' => null,
                 'is_featured' => null,
                 'is_pinned' => null,
                 'from' => null,
                 'to' => null,
                 'sort' => 'reports_count',
                 'direction' => 'desc',
+                'report_sources' => ['all', 'legacy', 'tracked', 'both'],
+                'tracked_statuses' => WorkReport::STATUSES,
+                'default_report_source' => 'all',
+                'counts_synchronized' => false,
             ]);
 
         $item = $response->json('data.items.0');
@@ -185,6 +204,7 @@ class WorksReportsApiTest extends TestCase
             'media_type',
             'published_at',
             'report_flags',
+            'report_tracking',
             'reports_count',
             'reviewer',
             'slug',
@@ -201,7 +221,7 @@ class WorksReportsApiTest extends TestCase
             collect(array_keys($item['report_flags']))->sort()->values()->all(),
         );
         $this->assertSame(
-            ['filters', 'items', 'pagination', 'summary'],
+            ['filters', 'items', 'pagination', 'summary', 'tracking_support'],
             collect(array_keys($response->json('data')))->sort()->values()->all(),
         );
     }
@@ -759,6 +779,18 @@ class WorksReportsApiTest extends TestCase
                 'featured_reported' => 2,
                 'pinned_reported' => 2,
                 'total_reports' => 21,
+                'legacy_reports_total' => 21,
+                'tracked_reports_total' => 0,
+                'combined_report_signal_total' => 21,
+                'pending_tracked_reports' => 0,
+                'under_review_tracked_reports' => 0,
+                'dismissed_tracked_reports' => 0,
+                'archived_tracked_reports' => 0,
+                'open_tracked_reports' => 0,
+                'works_with_legacy_reports' => 6,
+                'works_with_tracked_reports' => 0,
+                'works_with_open_tracked_reports' => 0,
+                'works_with_both_sources' => 0,
             ]);
     }
 
@@ -802,6 +834,125 @@ class WorksReportsApiTest extends TestCase
             'featured_reported' => 1,
             'pinned_reported' => 0,
             'total_reports' => 7,
+            'legacy_reports_total' => 7,
+            'tracked_reports_total' => 0,
+            'combined_report_signal_total' => 7,
+            'pending_tracked_reports' => 0,
+            'under_review_tracked_reports' => 0,
+            'dismissed_tracked_reports' => 0,
+            'archived_tracked_reports' => 0,
+            'open_tracked_reports' => 0,
+            'works_with_legacy_reports' => 1,
+            'works_with_tracked_reports' => 0,
+            'works_with_open_tracked_reports' => 0,
+            'works_with_both_sources' => 0,
+        ]);
+    }
+
+    public function test_report_source_filters_legacy_tracked_and_both_sources(): void
+    {
+        $this->actingAsRole('super-admin');
+        $legacyOnly = Work::factory()->create(['reports_count' => 2]);
+        $trackedOnly = Work::factory()->create(['reports_count' => 0]);
+        $both = Work::factory()->create(['reports_count' => 3]);
+        Work::factory()->create(['reports_count' => 0]);
+        WorkReport::factory()->create(['work_id' => $trackedOnly->id]);
+        WorkReport::factory()->create(['work_id' => $both->id]);
+
+        $this->assertSourceIds('all', [$legacyOnly->id, $trackedOnly->id, $both->id]);
+        $this->assertSourceIds('legacy', [$legacyOnly->id, $both->id]);
+        $this->assertSourceIds('tracked', [$trackedOnly->id, $both->id]);
+        $this->assertSourceIds('both', [$both->id]);
+    }
+
+    public function test_tracked_status_and_combined_minimum_filter_in_the_database(): void
+    {
+        $this->actingAsRole('super-admin');
+        $matching = Work::factory()->create(['reports_count' => 1]);
+        $wrongStatus = Work::factory()->create(['reports_count' => 1]);
+        WorkReport::factory()->underReview()->create(['work_id' => $matching->id]);
+        WorkReport::factory()->dismissed()->create(['work_id' => $wrongStatus->id]);
+
+        $this->getJson($this->endpoint([
+            'tracked_status' => WorkReport::STATUS_UNDER_REVIEW,
+            'min_reports' => 2,
+        ]))
+            ->assertOk()
+            ->assertJsonPath('data.pagination.total', 1)
+            ->assertJsonPath('data.items.0.id', $matching->id)
+            ->assertJsonPath('data.summary.tracked_reports_total', 1)
+            ->assertJsonPath('data.summary.under_review_tracked_reports', 1)
+            ->assertJsonPath('data.summary.pending_tracked_reports', 0);
+    }
+
+    public function test_tracking_payload_flags_support_and_summary_are_explicit(): void
+    {
+        $this->actingAsRole('super-admin');
+        $work = Work::factory()->create([
+            'visibility_status' => Work::VISIBILITY_PUBLIC,
+            'reports_count' => 3,
+        ]);
+        WorkReport::factory()->create(['work_id' => $work->id]);
+        WorkReport::factory()->underReview()->create(['work_id' => $work->id]);
+
+        $response = $this->getJson('/api/admin/works/reports')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.reports_count', 3)
+            ->assertJsonPath('data.items.0.report_tracking', [
+                'legacy_count' => 3,
+                'tracked_count' => 2,
+                'combined_signal_count' => 5,
+                'pending_count' => 1,
+                'under_review_count' => 1,
+                'dismissed_count' => 0,
+                'archived_count' => 0,
+                'open_count' => 2,
+                'has_legacy_untracked' => true,
+                'has_tracked' => true,
+                'has_open_tracked' => true,
+            ])
+            ->assertJsonPath('data.items.0.report_flags', [
+                'has_reports' => true,
+                'high_reports' => true,
+                'visibility_risk' => true,
+                'needs_attention' => true,
+            ])
+            ->assertJsonPath('data.summary.legacy_reports_total', 3)
+            ->assertJsonPath('data.summary.tracked_reports_total', 2)
+            ->assertJsonPath('data.summary.combined_report_signal_total', 5)
+            ->assertJsonPath('data.summary.open_tracked_reports', 2)
+            ->assertJsonPath('data.summary.works_with_both_sources', 1)
+            ->assertJsonPath('data.tracking_support.counts_are_synchronized', false)
+            ->assertJsonPath('data.tracking_support.combined_count_is_signal_only', true);
+
+        $this->assertSame(3, $work->refresh()->reports_count);
+        $this->assertStringNotContainsString('details', $response->getContent());
+    }
+
+    public function test_new_report_count_sorts_use_stable_database_ordering(): void
+    {
+        $this->actingAsRole('super-admin');
+        $combinedHigh = Work::factory()->create(['reports_count' => 4]);
+        $trackedHigh = Work::factory()->create(['reports_count' => 0]);
+        $openHigh = Work::factory()->create(['reports_count' => 0]);
+        WorkReport::factory()->create(['work_id' => $combinedHigh->id]);
+        WorkReport::factory()->dismissed()->count(3)->create(['work_id' => $trackedHigh->id]);
+        WorkReport::factory()->count(2)->create(['work_id' => $openHigh->id]);
+
+        $this->assertSortedIds('combined_reports_count', 'desc', [
+            $combinedHigh->id,
+            $trackedHigh->id,
+            $openHigh->id,
+        ]);
+        $this->assertSortedIds('tracked_reports_count', 'desc', [
+            $trackedHigh->id,
+            $openHigh->id,
+            $combinedHigh->id,
+        ]);
+        $this->assertSortedIds('open_tracked_reports_count', 'desc', [
+            $openHigh->id,
+            $combinedHigh->id,
+            $trackedHigh->id,
         ]);
     }
 
@@ -885,6 +1036,22 @@ class WorksReportsApiTest extends TestCase
         ]))->assertOk();
 
         $this->assertSame(
+            $expectedIds,
+            collect($response->json('data.items'))->pluck('id')->all(),
+        );
+    }
+
+    /**
+     * @param list<int> $expectedIds
+     */
+    private function assertSourceIds(string $source, array $expectedIds): void
+    {
+        $response = $this->getJson($this->endpoint([
+            'report_source' => $source,
+            'per_page' => 50,
+        ]))->assertOk();
+
+        $this->assertEqualsCanonicalizing(
             $expectedIds,
             collect($response->json('data.items'))->pluck('id')->all(),
         );

@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\Admin\WorksActivityController as AdminWorksActivity
 use App\Http\Controllers\Api\Admin\WorksIndexController as AdminWorksIndexController;
 use App\Http\Controllers\Api\Admin\WorksOverviewController as AdminWorksOverviewController;
 use App\Http\Controllers\Api\Admin\WorksReportsController as AdminWorksReportsController;
+use App\Http\Controllers\Api\Admin\WorksTrackedReportsController as AdminWorksTrackedReportsController;
 use App\Http\Controllers\Api\Admin\WorksReviewActionController as AdminWorksReviewActionController;
 use App\Http\Controllers\Api\Admin\WorksReviewQueueController as AdminWorksReviewQueueController;
 use App\Http\Controllers\Api\Admin\WorksSettingsController as AdminWorksSettingsController;
@@ -62,6 +63,8 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
     Route::patch('/works/{work}/review/reopen', [AdminWorksReviewActionController::class, 'reopen'])->whereNumber('work');
     Route::get('/works/visibility', [AdminWorksVisibilityController::class, 'index']);
     Route::get('/works/reports', [AdminWorksReportsController::class, 'index']);
+    Route::get('/works/reports/{report}', [AdminWorksTrackedReportsController::class, 'show'])->whereNumber('report');
+    Route::get('/works/{work}/reports', [AdminWorksTrackedReportsController::class, 'index'])->whereNumber('work');
     Route::get('/works/taxonomy', [AdminWorksTaxonomyController::class, 'index']);
     Route::get('/works/settings', [AdminWorksSettingsController::class, 'index']);
     Route::patch('/works/{work}/visibility/publish', [AdminWorksVisibilityActionController::class, 'publish'])->whereNumber('work');

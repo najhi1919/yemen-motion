@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Admin;
 
 use App\Models\Work;
+use App\Models\WorkReport;
 use Carbon\Carbon;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -22,6 +23,8 @@ class WorksReportsRequest extends FormRequest
         'reviewer_id',
         'category_id',
         'min_reports',
+        'report_source',
+        'tracked_status',
         'is_featured',
         'is_pinned',
         'from',
@@ -45,6 +48,9 @@ class WorksReportsRequest extends FormRequest
         'status',
         'views_count',
         'likes_count',
+        'combined_reports_count',
+        'tracked_reports_count',
+        'open_tracked_reports_count',
     ];
 
     protected function prepareForValidation(): void
@@ -98,6 +104,8 @@ class WorksReportsRequest extends FormRequest
             'reviewer_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
             'category_id' => ['nullable', 'integer'],
             'min_reports' => ['nullable', 'integer', 'min:1', 'max:100000'],
+            'report_source' => ['nullable', 'string', Rule::in(['all', 'legacy', 'tracked', 'both'])],
+            'tracked_status' => ['nullable', 'string', Rule::in(WorkReport::STATUSES)],
             'is_featured' => ['nullable', 'boolean'],
             'is_pinned' => ['nullable', 'boolean'],
             'from' => ['nullable', 'date'],
