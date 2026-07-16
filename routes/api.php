@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\Admin\WorksTaxonomyCatalogController as AdminWorksT
 use App\Http\Controllers\Api\Admin\WorksTaxonomyCategoryActionController as AdminWorksTaxonomyCategoryActionController;
 use App\Http\Controllers\Api\Admin\WorksTaxonomyController as AdminWorksTaxonomyController;
 use App\Http\Controllers\Api\Admin\WorksTaxonomyTagActionController as AdminWorksTaxonomyTagActionController;
+use App\Http\Controllers\Api\Admin\WorksTaxonomyAssignmentController as AdminWorksTaxonomyAssignmentController;
 use App\Http\Controllers\Api\Admin\WorksVisibilityActionController as AdminWorksVisibilityActionController;
 use App\Http\Controllers\Api\Admin\WorksVisibilityController as AdminWorksVisibilityController;
 use App\Http\Controllers\Api\Audit\PageViewAuditController;
@@ -58,6 +59,8 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
     Route::get('/works/activity', [AdminWorksActivityController::class, 'index']);
     Route::get('/works/overview', [AdminWorksOverviewController::class, 'index']);
     Route::get('/works/review', [AdminWorksReviewQueueController::class, 'index']);
+    Route::patch('/works/taxonomy/assign/category', [AdminWorksTaxonomyAssignmentController::class, 'bulkUpdateCategory']);
+    Route::patch('/works/taxonomy/assign/tags', [AdminWorksTaxonomyAssignmentController::class, 'bulkUpdateTags']);
     Route::patch('/works/{work}/review/start', [AdminWorksReviewActionController::class, 'start'])->whereNumber('work');
     Route::patch('/works/{work}/review/assign-reviewer', [AdminWorksReviewActionController::class, 'assignReviewer'])->whereNumber('work');
     Route::patch('/works/{work}/review/approve', [AdminWorksReviewActionController::class, 'approve'])->whereNumber('work');
@@ -90,6 +93,8 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
     Route::patch('/works/{work}/visibility/unfeature', [AdminWorksVisibilityActionController::class, 'unfeature'])->whereNumber('work');
     Route::patch('/works/{work}/visibility/pin', [AdminWorksVisibilityActionController::class, 'pin'])->whereNumber('work');
     Route::patch('/works/{work}/visibility/unpin', [AdminWorksVisibilityActionController::class, 'unpin'])->whereNumber('work');
+    Route::patch('/works/{work}/taxonomy/category', [AdminWorksTaxonomyAssignmentController::class, 'updateCategory'])->whereNumber('work');
+    Route::patch('/works/{work}/taxonomy/tags', [AdminWorksTaxonomyAssignmentController::class, 'updateTags'])->whereNumber('work');
     Route::get('/works', [AdminWorksIndexController::class, 'index']);
     Route::get('/works/{work}', [AdminWorksShowController::class, 'show'])->whereNumber('work');
 
