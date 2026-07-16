@@ -23,6 +23,7 @@ use App\Http\Controllers\Api\Admin\WorksTaxonomyCategoryActionController as Admi
 use App\Http\Controllers\Api\Admin\WorksTaxonomyController as AdminWorksTaxonomyController;
 use App\Http\Controllers\Api\Admin\WorksTaxonomyTagActionController as AdminWorksTaxonomyTagActionController;
 use App\Http\Controllers\Api\Admin\WorksTaxonomyAssignmentController as AdminWorksTaxonomyAssignmentController;
+use App\Http\Controllers\Api\Admin\WorksTaxonomyTagMergeController as AdminWorksTaxonomyTagMergeController;
 use App\Http\Controllers\Api\Admin\WorksVisibilityActionController as AdminWorksVisibilityActionController;
 use App\Http\Controllers\Api\Admin\WorksVisibilityController as AdminWorksVisibilityController;
 use App\Http\Controllers\Api\Audit\PageViewAuditController;
@@ -81,6 +82,7 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
     Route::patch('/works/taxonomy/categories/{category}', [AdminWorksTaxonomyCategoryActionController::class, 'update'])->whereNumber('category');
     Route::get('/works/taxonomy/tags', [AdminWorksTaxonomyCatalogController::class, 'tags']);
     Route::post('/works/taxonomy/tags', [AdminWorksTaxonomyTagActionController::class, 'store']);
+    Route::patch('/works/taxonomy/tags/merge', [AdminWorksTaxonomyTagMergeController::class, 'merge']);
     Route::patch('/works/taxonomy/tags/{tag}/disable', [AdminWorksTaxonomyTagActionController::class, 'disable'])->whereNumber('tag');
     Route::patch('/works/taxonomy/tags/{tag}', [AdminWorksTaxonomyTagActionController::class, 'update'])->whereNumber('tag');
     Route::get('/works/taxonomy', [AdminWorksTaxonomyController::class, 'index']);
