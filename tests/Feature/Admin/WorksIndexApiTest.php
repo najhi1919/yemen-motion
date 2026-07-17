@@ -282,7 +282,7 @@ class WorksIndexApiTest extends TestCase
         $uncategorized = Work::factory()->create(['category_id' => null, 'created_at' => now()->subMinute()]);
         $legacy = Work::factory()->create(['category_id' => $legacyCategoryId, 'created_at' => now()]);
 
-        $response = $this->getJson('/api/admin/works?sort=id&direction=asc')
+        $response = $this->getJson('/api/admin/works?sort=created_at&direction=asc')
             ->assertOk();
         $items = collect($response->json('data.items'))->keyBy('id');
 

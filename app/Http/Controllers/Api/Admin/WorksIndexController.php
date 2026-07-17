@@ -10,6 +10,7 @@ use App\Models\WorkCategory;
 use App\Models\WorkTag;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Http\JsonResponse;
 
 class WorksIndexController extends Controller
@@ -53,7 +54,7 @@ class WorksIndexController extends Controller
         }
 
         if ($taxonomyAccess['can_view_tags']) {
-            $relations['tags'] = fn (Builder $query) => $query
+            $relations['tags'] = fn (BelongsToMany $query) => $query
                 ->select(['work_tags.id', 'name_ar', 'name_en', 'slug', 'disabled_at', 'sort_order'])
                 ->orderBy('sort_order')
                 ->orderBy('work_tags.id');

@@ -8,7 +8,7 @@ use App\Models\User;
 use App\Models\Work;
 use App\Models\WorkCategory;
 use App\Models\WorkTag;
-use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Http\JsonResponse;
 
 class WorksShowController extends Controller
@@ -46,7 +46,7 @@ class WorksShowController extends Controller
         }
 
         if ($taxonomyAccess['can_view_tags']) {
-            $work->load(['tags' => fn (Builder $query) => $query
+            $work->load(['tags' => fn (BelongsToMany $query) => $query
                 ->select(['work_tags.id', 'name_ar', 'name_en', 'slug', 'disabled_at', 'sort_order'])
                 ->orderBy('sort_order')
                 ->orderBy('work_tags.id')]);
