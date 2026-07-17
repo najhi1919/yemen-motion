@@ -1,6 +1,6 @@
 # PROJECT_MAP — يمن موشن (Yemen Motion)
 
-> آخر تحديث: 2026-06-15  
+> آخر تحديث: 2026-07-18
 > البيئة: PHP 8.4.21 / Node 24.15.0 / Composer 2.9.4  
 > OS: Linux  
 > **المرجع المعماري والبنائي الرسمي — الإصدار النهائي 2.0**  
@@ -8,7 +8,7 @@
 
 ---
 
-## 0. CURRENT IMPLEMENTATION STATUS — 2026-06-30
+## 0. CURRENT IMPLEMENTATION STATUS — 2026-07-18
 
 > هذا القسم يصف موضع التنفيذ الحالي فقط، ولا يغيّر المواصفات المعمارية أو خطة البناء الأصلية في هذا الملف.
 
@@ -21,7 +21,9 @@
 
 آخر نقطة مستقرة موثقة:
 
-- `90be252 fix: scope dashboard activity feed by permission`
+- `a9354d4 feat: add bulk works taxonomy assignment ui`
+
+هذه النقطة موجودة على `main`، وهي آخر baseline نظيف ومدفوع معتمد لمجموعة إدارة الأعمال الداخلية الحالية. تغلق هذه المجموعة الإسناد الفردي والجماعي للتصنيفات والوسوم، مع بقاء حدود المنصة العامة موضحة في القسم `0.31`.
 
 ### 0.3 Completed UI Foundation Work
 
@@ -184,7 +186,7 @@ frontend npm run build: Build complete
 
 #### ملاحظات
 
-هذه الخطوة لا تعني اكتمال Production Dashboard Core بالكامل. هي أول ربط وظيفي حقيقي داخل Dashboard Core اعتمادًا على الوحدات المبنية فعليًا حتى الآن: Users / Roles / Permissions. الأقسام التشغيلية الأكبر مثل Works / Orders / Wallet / Contests لم تُبنَ models/migrations/APIs الخاصة بها بعد، لذلك لا تُعامل كبيانات إنتاجية.
+هذه الخطوة لا تعني اكتمال Production Dashboard Core بالكامل. كانت عند إغلاقها أول ربط وظيفي حقيقي داخل Dashboard Core اعتمادًا على الوحدات المبنية آنذاك: Users / Roles / Permissions. بُنيت لاحقًا منظومة الإدارة الداخلية الأساسية لـWorks كما يوثق القسم `0.31`، بينما بقيت Orders / Wallet / Contests وتجربة Works العامة ضمن Roadmap.
 
 
 ### 0.8 Completed Dashboard Frontend Presentation Cleanup — 2026-07-06
@@ -210,7 +212,7 @@ Phase 2 Completion — Dashboard Core APIs & Real Data Integration
   - roles
   - permissions
   - access
-- توضيح أن الأقسام التشغيلية غير المبنية بعد تبقى بقيمة صفر أو حالة قيد البناء، مثل:
+- توضيح أن الأقسام التشغيلية التي لم تكن مبنية عند إغلاق هذه الخطوة تبقى بقيمة صفر أو حالة قيد البناء، مثل:
   - orders
   - works
   - contests
@@ -239,7 +241,7 @@ frontend npm run build: Build complete
 
 #### ملاحظات
 
-هذه الخطوة لا تعني اكتمال Production Dashboard Core بالكامل. هي تصحيح عرض الواجهة حتى يطابق الحالة الحالية: بيانات حقيقية جزئية من API للوحدات المبنية، وبيانات صفرية أو قيد البناء للأقسام التي لم تُبنَ مصادرها بعد.
+هذه الخطوة لا تعني اكتمال Production Dashboard Core بالكامل. كانت تصحيحًا لعرض الواجهة وفق المصادر المتاحة وقتها. أصبحت إدارة Works الداخلية مبنية لاحقًا وفق القسم `0.31`، من دون أن يعني ذلك اكتمال Dashboard Production أو منصة Works العامة.
 
 
 ### 0.9 Completed Admin Dashboard Static Quick Stats Cleanup — 2026-07-06
@@ -337,7 +339,7 @@ git diff --check: passed
 
 #### ملاحظات
 
-هذه ليست منظومة Activity Log كاملة. هي Foundation آمنة ومحدودة تعتمد فقط على الجداول المبنية فعليًا حتى الآن. بناء Activity Feed تشغيلي كامل للأعمال والطلبات والبلاغات ينتظر اكتمال مصادرها: Works / Orders / Reports / Support.
+هذه ليست منظومة Activity Log كاملة. هي Foundation آمنة ومحدودة تعتمد على المصادر المتاحة عند إغلاق الخطوة. أصبحت مصادر وإجراءات Works الداخلية موجودة لاحقًا، لكن دمجها في Activity المعتمد على `audit_events` ما زال غير مبني، وهو المرحلة التالية المسجلة في القسم `0.31`.
 
 
 ### 0.11 Completed User Role Assignment Backend Contract — 2026-07-06
@@ -1093,7 +1095,7 @@ activities
 #### Why tracking comes first
 
 - تحتاج Reports وAnalytics إلى بيانات محفوظة ومنظمة ومتسقة قبل أن تنتج نتائج تاريخية مفيدة.
-- لم تكتمل بعد أغلب الوحدات التشغيلية، ومنها orders وworks وwallet وpayments.
+- لم تكن أغلب الوحدات التشغيلية مكتملة عند هذا القرار. اكتملت لاحقًا منظومة Works الإدارية الداخلية الأساسية فقط، بينما بقيت تجربة Works العامة وorders وwallet وpayments ضمن Roadmap.
 - قد يؤدي بناء واجهات تقارير كاملة الآن إلى شاشات ناقصة أو إلى استنتاجات مبنية على مصادر غير مكتملة.
 - يؤدي تأجيل التسجيل إلى فقدان أحداث مبكرة مهمة لا يمكن إعادة تكوينها بدقة لاحقًا.
 - لذلك تكون الأولوية لحفظ الأحداث المهمة من الآن، ثم بناء واجهات البحث والعرض والتحليل فوق البيانات المتراكمة عند نضج الوحدات.
@@ -1359,7 +1361,7 @@ activities
 
 ### 0.28 Works Management UX Scope Baseline — 2026-07-13
 
-هذا القسم يثبت قرار تجربة المستخدم والمعمارية الداخلية المعتمد للتنفيذ القادم في إدارة الأعمال، ولا يعني أن القسم أو مساراته قد نُفذت برمجيًا.
+هذا القسم يثبت قرار تجربة المستخدم والمعمارية الداخلية الذي سبق التنفيذ. لم تكن المسارات منفذة عند اعتماد هذا القرار، ثم بُنيت منظومة الإدارة الداخلية الأساسية كما يوثق القسم `0.31`.
 
 #### Main route and contextual Sidebar
 
@@ -1408,7 +1410,7 @@ activities
 
 ### 0.29 Works Management Permission Matrix Baseline — 2026-07-13
 
-تحدد هذه المصفوفة عقد الصلاحيات المعتمد للتنفيذ القادم في `/admin/works`، ولا تعني أن الصلاحيات أو صفحات إدارة الأعمال منفذة حاليًا.
+تحدد هذه المصفوفة عقد الصلاحيات الذي سبق التنفيذ في `/admin/works`. أصبحت الصلاحيات مسجلة ومزروعة ومطبقة على العقود والواجهات المبنية كما يوثق القسم `0.31`، مع بقاء الصلاحيات المرتبطة بميزات Roadmap دون تنفيذ وظيفي.
 
 #### Internal-only access contract
 
@@ -1579,7 +1581,7 @@ admin.works.search.reports
 
 ### 0.30 Admin Works Read-only MVP Baseline — 2026-07-15
 
-أغلقت هذه المرحلة baseline القراءة والتنظيم لقسم إدارة الأعمال. أصبحت الأسطح الإدارية الثمانية متصلة بعقود Backend حقيقية وآمنة، مع بقاء جميع عمليات التغيير خارج النطاق الحالي.
+أغلقت هذه المرحلة baseline القراءة والتنظيم لقسم إدارة الأعمال. أصبحت الأسطح الإدارية الثمانية متصلة بعقود Backend حقيقية وآمنة، وكانت جميع عمليات التغيير خارج نطاق مرحلة القراءة فقط آنذاك.
 
 آخر baseline معتمد لهذه المرحلة:
 
@@ -1617,7 +1619,7 @@ GET /api/admin/works/activity
 GET /api/admin/works/settings
 ```
 
-هذه العقود مخصصة للقراءة والتنظيم. لا تحتوي المرحلة على action endpoints للنشر أو إلغاء النشر، أو الإخفاء أو الاستعادة، أو التمييز أو إلغائه، أو التثبيت أو إلغائه، أو الاعتماد أو الرفض أو طلب التعديلات. كما لا تحتوي على مراجعة البلاغات أو تجاهلها أو أرشفتها، ولا إنشاء أو تحديث أو تعطيل أو دمج التصنيفات والوسوم أو الإسناد الجماعي، ولا تعديل الإعدادات، ولا hard delete.
+كانت هذه العقود مخصصة للقراءة والتنظيم عند إغلاق baseline القراءة فقط. أضيفت لاحقًا إجراءات المراجعة والظهور والبلاغات وإدارة Taxonomy والإسناد الفردي والجماعي كما يوثق القسم `0.31`. لم تُضف إعدادات محفوظة أو hard delete.
 
 #### Authorization baseline
 
@@ -1637,8 +1639,8 @@ GET /api/admin/works/settings
 
 #### Intentional derived-data boundaries
 
-- يعتمد قسم البلاغات مؤقتًا على `works.reports_count`؛ لا يوجد جدول بلاغات أعمال مستقل ضمن هذا baseline.
-- يعتمد قسم التصنيفات مؤقتًا على `works.category_id`؛ لا يوجد دعم فعلي لجدول tags أو علاقات وسوم حقيقية بعد.
+- أصبح قسم البلاغات يجمع بين جدول `work_reports` المتتبع والعداد التاريخي `works.reports_count`، والمصدران غير متزامنين تلقائيًا.
+- أصبحت Taxonomy تعتمد على `work_categories` و`work_tags` و`work_tag_assignments`، مع إبقاء `works.category_id` متوافقًا مع القيم القديمة غير المربوطة.
 - يعتمد سجل الأعمال على lifecycle timestamps في جدول `works`، ولا يقرأ `audit_events` ولا يملك جدول activity مستقلًا.
 - تعتمد إعدادات الأعمال على static defaults وregistered permissions، ولا يوجد persistent settings table أو endpoint للحفظ والتعديل.
 
@@ -1653,14 +1655,160 @@ WorksPermissionRegistryTest: 3 passed / 13 assertions
 WorksAccessGateTest: 11 passed / 50 assertions
 ```
 
-#### Next proposed sequence
+#### Superseded next sequence
+
+أُنجزت لاحقًا إجراءات Visibility وReview وReports ومراحل Taxonomy التي كانت مقترحة بعد baseline القراءة فقط. يسجل القسم `0.31` حالة الإغلاق الحالية والمرحلة التالية المعتمدة.
+
+---
+
+### 0.31 Completed Internal Works Management Foundation — 2026-07-18
+
+اكتملت منظومة الإدارة الداخلية الأساسية للأعمال حتى baseline التالي:
 
 ```text
-YM-WORKS-VISIBILITY-ACTIONS-API-001
-YM-WORKS-VISIBILITY-ACTIONS-UI-001
+a9354d4 feat: add bulk works taxonomy assignment ui
 ```
 
-بعد ذلك تُحسم مهام Review Actions وReports Actions وTaxonomy schema أو actions وفق القرار اللاحق، دون اعتبار أي منها منفذًا ضمن baseline القراءة الحالي.
+هذه النقطة موجودة على `main`، وهي آخر baseline نظيف ومدفوع ومتزامن معتمد لهذه المجموعة. هذا الإغلاق يصف:
+
+```text
+Internal Works Management Foundation
+```
+
+ولا يصف:
+
+```text
+Complete Public Works Platform
+```
+
+#### Works Core
+
+- أصبحت الصفحتان `/admin/works` و`/admin/works/all` متصلتين ببيانات حقيقية.
+- اكتملت عقود القراءة الأساسية:
+
+```text
+GET /api/admin/works/access
+GET /api/admin/works/overview
+GET /api/admin/works
+GET /api/admin/works/{work}
+```
+
+- تدعم القوائم البحث والفلاتر والفرز والترقيم، وتعيد استجابات آمنة حسب صلاحية الحقول.
+- تعرض الواجهات تفاصيل العمل داخل Detail Drawers، ولا تعيد raw models أو حقولًا حساسة غير مصرح بها.
+
+#### Review and Visibility
+
+- اكتملت Review Queue وظيفيًا مع سبعة إجراءات: `start`, و`assign reviewer`, و`approve`, و`request changes`, و`reject`, و`publish after approval`, و`reopen`.
+- اكتملت قائمة Visibility وظيفيًا مع ثمانية إجراءات: `publish`, و`unpublish`, و`hide`, و`restore`, و`feature`, و`unfeature`, و`pin`, و`unpin`.
+- تستخدم الإجراءات صلاحيات مستقلة، وtransactions، وكشف no-op، وتسجيل Audit آمن.
+- ملفات اختبارات Review وVisibility موجودة، لكن لا تسجل هذه الوثيقة تشغيلًا حديثًا جديدًا لها.
+
+#### Reports
+
+- أضيف مخطط `work_reports` وسجلات البلاغات المتتبعة مع بقاء `works.reports_count` مصدرًا تاريخيًا مستقلًا.
+- المصدران غير متزامنين تلقائيًا، وتعرض الواجهة هذا الحد بوضوح.
+- اكتملت قوائم الأعمال المبلّغ عنها، وقوائم البلاغات المتتبعة، والتفاصيل، وإجراءات `review`, و`dismiss`, و`archive`.
+- اكتملت Reports UI وربطها بعقود القراءة والإجراءات.
+
+الـ commits المرجعية المختصرة:
+
+```text
+4e1995e feat: add works reports schema
+51d0bf4 feat: add tracked works reports api
+190701a feat: add works reports actions api
+710b1e5 feat: add works reports action controls
+26accd9 fix: restore works reports ui parity
+```
+
+#### Taxonomy
+
+- أضيفت جداول `work_categories` و`work_tags` و`work_tag_assignments`.
+- حُجزت معرّفات التصنيفات الجديدة فوق قيم `works.category_id` القديمة.
+- اكتملت Catalog APIs وإنشاء وتحديث وتعطيل التصنيفات والوسوم وTag Merge.
+- اكتملت Taxonomy Management UI وIndex/Show taxonomy snapshots.
+- اكتمل إسناد التصنيف والوسوم فرديًا وجماعيًا من صفحة `/admin/works/all`.
+- يحافظ الإسناد الجماعي على حد `100` عمل، وحد `50` وسمًا، وreplacement semantics، ومنع no-op، وخطوات Confirmation.
+
+الـ commits المرجعية المختصرة:
+
+```text
+66d23ae feat: add works taxonomy schema
+376657a feat: add works taxonomy catalog api
+caa7413 feat: add works taxonomy assignments
+d25e93c feat: add works taxonomy tag merge
+5a75153 feat: add works taxonomy management ui
+19f279b feat: expose works taxonomy snapshots
+ef69c1a feat: add individual works taxonomy assignment ui
+a9354d4 feat: add bulk works taxonomy assignment ui
+```
+
+#### Activity and Settings boundaries
+
+- Activity يملك API وصفحة حقيقية، لكن المصدر الحالي مشتق من lifecycle timestamps في `works` ولا يقرأ `audit_events` بعد؛ لذلك يبقى مكتملًا جزئيًا.
+- Settings يملك `GET` وصفيًا حقيقيًا يعرض نموذج الوصول والصلاحيات والقدرات الحالية.
+- لا توجد إعدادات Works محفوظة، ولا settings model أو update API؛ لذلك تبقى Settings أساسًا غير مكتمل.
+
+#### Verification baseline
+
+النتائج الحديثة المثبتة لهذه المجموعة فقط:
+
+```text
+Frontend Build: Build complete
+WorksTaxonomyAssignmentApiTest: 24 tests / 290 assertions
+WorksIndexApiTest: 35 tests / 196 assertions
+Individual Taxonomy Assignment visual check: passed
+Bulk Taxonomy Assignment visual check: passed
+git diff --check: passed before the latest commits
+Final baseline: clean and synchronized after a9354d4
+```
+
+لا تنسب هذه الوثيقة نتيجة تشغيل حديثة لبقية ملفات الاختبارات.
+
+#### Current Works status
+
+مكتمل ومغلق:
+
+- Works Core read/index/show.
+- Reports.
+- Taxonomy.
+- Individual Taxonomy Assignment.
+- Bulk Taxonomy Assignment.
+
+مكتمل وظيفيًا ويحتاج توثيق إغلاق أو تحققًا نهائيًا أوسع:
+
+- Review.
+- Visibility.
+- Works Permissions.
+
+مكتمل جزئيًا:
+
+- Activity.
+- Audit read integration.
+- Settings.
+
+غير مبني ويبقى ضمن Roadmap:
+
+- General Works CRUD وإنشاء وتعديل محتوى الأعمال ووسائطه.
+- Public/client/designer Works experience والعرض العام.
+- إنشاء البلاغات من واجهة المستخدم.
+- التعليقات والإعجابات والمفضلة.
+- إعدادات Works المحفوظة وواجهات تحديثها.
+- Topbar Works search.
+- Activity المبني على `audit_events`.
+
+#### Next approved phase
+
+المرحلة التالية المعتمدة:
+
+```text
+Works Activity Audit Integration
+```
+
+وتقسم لاحقًا إلى:
+
+1. Audit query foundation.
+2. Activity API and tests.
+3. Activity UI integration.
 
 ---
 
