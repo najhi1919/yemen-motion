@@ -12,7 +12,7 @@
         <div>
           <div class="ym-taxonomy-chips">
             <span class="ym-taxonomy-chip is-brand">Yemen Motion</span>
-            <span class="ym-taxonomy-chip is-readonly">{{ copy.readonly }}</span>
+            <span class="ym-taxonomy-chip is-readonly">{{ actionBadge }}</span>
           </div>
           <p class="ym-taxonomy-kicker">{{ copy.kicker }}</p>
           <h1>{{ copy.title }}</h1>
@@ -56,13 +56,21 @@
     </section>
 
     <template v-else>
+      <nav class="ym-taxonomy-tabs" :aria-label="copy.tabsLabel">
+        <button type="button" :class="{ 'is-active': activeTab === 'overview' }" :aria-current="activeTab === 'overview' ? 'page' : undefined" @click="activeTab = 'overview'">{{ copy.overviewTab }}</button>
+        <button v-if="canViewCategories" type="button" :class="{ 'is-active': activeTab === 'categories' }" :aria-current="activeTab === 'categories' ? 'page' : undefined" @click="activeTab = 'categories'">{{ copy.categoriesTab }}</button>
+        <button v-if="canViewTags" type="button" :class="{ 'is-active': activeTab === 'tags' }" :aria-current="activeTab === 'tags' ? 'page' : undefined" @click="activeTab = 'tags'">{{ copy.tagsTab }}</button>
+      </nav>
+
       <aside class="ym-taxonomy-notice" role="note">
-        <span>{{ copy.readonly }}</span>
+        <span>{{ actionBadge }}</span>
         <div>
-          <strong>{{ copy.noticeTitle }}</strong>
-          <p>{{ copy.notice }}</p>
+          <strong>{{ hasAnyAction ? copy.managementNoticeTitle : copy.readOnlyNoticeTitle }}</strong>
+          <p>{{ hasAnyAction ? copy.managementNotice : copy.readOnlyNotice }}</p>
         </div>
       </aside>
+
+      <div v-show="activeTab === 'overview'" class="ym-taxonomy-tab-panel">
 
       <section
         v-if="summary"
@@ -84,6 +92,19 @@
           <small>{{ card.hint }}</small>
         </article>
       </section>
+
+      <aside v-if="categorySupport && tagSupport" class="ym-taxonomy-support-grid" :aria-label="copy.supportLabel">
+        <section>
+          <strong>{{ copy.categorySupportTitle }}</strong>
+          <span>{{ categorySupport.mapping_complete ? copy.mappingComplete : copy.mappingHasLegacy }}</span>
+          <code dir="ltr">{{ categorySupport.catalog_source }} · {{ categorySupport.work_reference }}</code>
+        </section>
+        <section>
+          <strong>{{ copy.tagSupportTitle }}</strong>
+          <span>{{ tagSupport.available ? copy.supportAvailable : copy.supportUnavailable }}</span>
+          <code dir="ltr">{{ tagSupport.catalog_source }} · {{ tagSupport.assignments_source }}</code>
+        </section>
+      </aside>
 
       <aside
         v-if="tagSupport && !tagSupport.available"
@@ -416,14 +437,11 @@
                 }"
               >
                 <td class="is-label">
-                  <strong>{{ bucket.label }}</strong>
-                  <small>
-                    {{
-                      bucket.taxonomy_flags.uncategorized
-                        ? copy.uncategorizedHint
-                        : copy.categorizedHint
-                    }}
-                  </small>
+                  <strong>{{ bucketDisplayName(bucket) }}</strong>
+                  <code v-if="bucket.category" dir="ltr">{{ bucket.category.slug }}</code>
+                  <span v-if="bucket.category_tracking.is_legacy_unmapped" class="ym-taxonomy-flag is-attention">{{ copy.legacyUnmapped }}</span>
+                  <span v-else-if="bucket.category_tracking.is_uncategorized" class="ym-taxonomy-flag is-uncategorized">{{ copy.uncategorized }}</span>
+                  <span v-else-if="bucket.category" class="ym-taxonomy-flag" :class="bucket.category.is_active ? 'is-published' : 'is-hidden'">{{ bucket.category.is_active ? copy.categoryActive : copy.categoryDisabled }}</span>
                 </td>
                 <td>
                   <code v-if="bucket.category_id !== null" dir="ltr">
@@ -548,10 +566,39 @@
           </nav>
         </footer>
       </section>
+      </div>
+
+      <WorksTaxonomyCatalogPanel
+        v-if="canViewCategories"
+        v-show="activeTab === 'categories'"
+        entity-type="category"
+        :locale="currentLocale"
+        :active="activeTab === 'categories'"
+        :can-create="canCreateCategories"
+        :can-update="canUpdateCategories"
+        :can-disable="canDisableCategories"
+        :permission-revision="authorizationSignature"
+        @changed="refreshOverviewAfterAction"
+        @authorization-error="handleCatalogAuthorizationError"
+      />
+      <WorksTaxonomyCatalogPanel
+        v-if="canViewTags"
+        v-show="activeTab === 'tags'"
+        entity-type="tag"
+        :locale="currentLocale"
+        :active="activeTab === 'tags'"
+        :can-create="canCreateTags"
+        :can-update="canUpdateTags"
+        :can-disable="canDisableTags"
+        :can-merge="canMergeTags"
+        :permission-revision="authorizationSignature"
+        @changed="refreshOverviewAfterAction"
+        @authorization-error="handleCatalogAuthorizationError"
+      />
     </template>
 
     <div
-      v-if="drawerOpen && selectedBucket"
+      v-if="activeTab === 'overview' && drawerOpen && selectedBucket"
       class="ym-taxonomy-detail-backdrop"
       role="presentation"
       @click.self="closeSummary"
@@ -618,6 +665,32 @@
                 <dd v-else>{{ copy.uncategorized }}</dd>
               </div>
               <div>
+                <dt>{{ copy.linkState }}</dt>
+                <dd v-if="selectedBucket.category_tracking.is_legacy_unmapped">{{ copy.legacyUnmapped }}</dd>
+                <dd v-else-if="selectedBucket.category_tracking.is_uncategorized">{{ copy.uncategorized }}</dd>
+                <dd v-else>{{ copy.catalogLinked }}</dd>
+              </div>
+              <div v-if="selectedBucket.category">
+                <dt>{{ copy.arabicName }}</dt>
+                <dd>{{ selectedBucket.category.name_ar }}</dd>
+              </div>
+              <div v-if="selectedBucket.category">
+                <dt>{{ copy.englishName }}</dt>
+                <dd dir="ltr">{{ selectedBucket.category.name_en }}</dd>
+              </div>
+              <div v-if="selectedBucket.category">
+                <dt>{{ copy.slugLabel }}</dt>
+                <dd><code dir="ltr">{{ selectedBucket.category.slug }}</code></dd>
+              </div>
+              <div v-if="selectedBucket.category">
+                <dt>{{ copy.categoryState }}</dt>
+                <dd>{{ selectedBucket.category.is_active ? copy.categoryActive : copy.categoryDisabled }}</dd>
+              </div>
+              <div v-if="selectedBucket.category_tracking.is_legacy_unmapped && categorySupport">
+                <dt>{{ copy.supportReason }}</dt>
+                <dd>{{ currentLocale === 'ar' ? categorySupport.reason : copy.legacyReason }}</dd>
+              </div>
+              <div>
                 <dt>{{ copy.latestWorkAt }}</dt>
                 <dd>
                   <time :datetime="selectedBucket.latest_work_at || undefined">
@@ -662,6 +735,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import WorksTaxonomyCatalogPanel from '~/components/works/taxonomy/WorksTaxonomyCatalogPanel.vue'
 import { useApiClient } from '~/composables/useApiClient'
 import { useAuthStore } from '~/stores/authStore'
 
@@ -685,9 +759,27 @@ interface TaxonomyFlags {
   needs_attention: boolean
 }
 
+interface SafeCategory {
+  id: number
+  name_ar: string
+  name_en: string
+  slug: string
+  disabled_at: string | null
+  is_active: boolean
+  sort_order: number
+}
+
+interface CategoryTracking {
+  catalog_record_exists: boolean
+  is_legacy_unmapped: boolean
+  is_uncategorized: boolean
+}
+
 interface TaxonomyBucket {
   category_id: number | null
   label: string
+  category: SafeCategory | null
+  category_tracking: CategoryTracking
   works_count: number
   published_count: number
   hidden_count: number
@@ -723,10 +815,35 @@ interface TaxonomySummary {
   total_reports: number
   total_views: number
   total_likes: number
+  catalog_categories_total: number
+  active_catalog_categories: number
+  disabled_catalog_categories: number
+  used_catalog_categories: number
+  unused_catalog_categories: number
+  legacy_unmapped_category_ids: number
+  works_with_legacy_unmapped_category: number
+  tags_total: number
+  active_tags: number
+  disabled_tags: number
+  used_tags: number
+  unused_tags: number
+  tag_assignments_total: number
 }
 
 interface TagSupport {
   available: boolean
+  reason: string
+  catalog_source: string
+  assignments_source: string
+}
+
+interface CategorySupport {
+  available: boolean
+  catalog_source: string
+  work_reference: string
+  foreign_key_enforced: boolean
+  legacy_unmapped_values_possible: boolean
+  mapping_complete: boolean
   reason: string
 }
 
@@ -735,6 +852,7 @@ interface TaxonomyData {
   pagination: TaxonomyPagination
   summary: TaxonomySummary
   filters: Record<string, unknown>
+  category_support: CategorySupport
   tag_support: TagSupport
 }
 
@@ -767,10 +885,15 @@ const currentLocale = useState<Locale>('ym-dashboard-locale', () => 'ar')
 
 const copyMap = {
   ar: {
-    readonly: 'قراءة تنظيمية فقط',
+    readonly: 'قراءة حسب الصلاحيات',
+    directManagement: 'إدارة مباشرة',
+    tabsLabel: 'أقسام إدارة التصنيفات والوسوم',
+    overviewTab: 'النظرة العامة',
+    categoriesTab: 'كتالوج التصنيفات',
+    tagsTab: 'كتالوج الوسوم',
     kicker: 'إدارة تصنيفات الأعمال',
     title: 'التصنيفات والوسوم',
-    descriptionBefore: 'قراءة تنظيمية لتجميعات التصنيف المبنية من قيمة',
+    descriptionBefore: 'مركز إدارة كتالوجات التصنيف والوسوم مع نظرة التجميعات المبنية من قيمة',
     descriptionAfter: 'الحالية في الأعمال، دون عرض صفوف الأعمال المفردة.',
     totalCategories: 'إجمالي التجميعات',
     categoryBuckets: 'تجميعات التصنيف الحالية',
@@ -779,8 +902,10 @@ const copyMap = {
     authLoadingCopy: 'ننتظر اكتمال تهيئة جلسة المستخدم قبل إرسال أي طلب بيانات.',
     forbiddenTitle: 'الوصول إلى التصنيفات والوسوم غير متاح',
     forbiddenCopy: 'لا يملك هذا الحساب الصلاحيات المطلوبة لقراءة تصنيفات الأعمال. لم تتم محاولة تحميل البيانات.',
-    noticeTitle: 'لا توجد إجراءات تنفيذية في هذه المرحلة',
-    notice: 'هذه الصفحة للقراءة والتنظيم فقط؛ لا تتضمن إنشاء أو تعديل أو دمج أو تعطيل أو تعيين جماعي أو حذف التصنيفات والوسوم.',
+    managementNoticeTitle: 'الإجراءات تظهر حسب صلاحيات الحساب',
+    managementNotice: 'استخدم التبويبات لإدارة الكتالوجات. إسناد التصنيفات والوسوم إلى الأعمال سيبقى ضمن صفحة كل الأعمال في المهمة التالية.',
+    readOnlyNoticeTitle: 'وصول للقراءة حسب الصلاحيات',
+    readOnlyNotice: 'يمكن لهذا الحساب قراءة الأقسام المصرح بها، ولا تظهر له أسماء أو أزرار الإجراءات غير المصرح بها.',
     summaryLabel: 'ملخص تصنيفات الأعمال المطابقة للفلاتر',
     summaryTotalCategories: 'إجمالي التجميعات',
     summaryTotalCategoriesHint: 'كل تجميعات التصنيف المطابقة',
@@ -808,8 +933,23 @@ const copyMap = {
     totalViewsHint: 'كل المشاهدات ضمن النطاق',
     totalLikes: 'مجموع الإعجابات',
     totalLikesHint: 'كل الإعجابات ضمن النطاق',
-    tagsUnavailableTitle: 'دعم الوسوم غير متاح حاليًا',
-    tagsUnavailableCopy: 'لن تظهر وسوم وهمية أو أدوات لإضافة الوسوم أو دمجها.',
+    catalogCategories: 'سجلات كتالوج التصنيفات',
+    catalogCategoriesHint: 'إجمالي التصنيفات المعرفة في الكتالوج',
+    legacyCategoryIds: 'قيم قديمة غير مربوطة',
+    legacyCategoryIdsHint: 'معرفات لا يقابلها سجل كتالوج',
+    catalogTags: 'وسوم الكتالوج',
+    catalogTagsHint: 'إجمالي الوسوم الفعالة والمعطلة',
+    tagAssignments: 'إسنادات الوسوم',
+    tagAssignmentsHint: 'إجمالي صفوف إسناد الوسوم الحالية',
+    categorySupportTitle: 'دعم كتالوج التصنيفات',
+    supportLabel: 'حالة دعم كتالوجات التصنيفات والوسوم',
+    tagSupportTitle: 'دعم كتالوج الوسوم',
+    mappingComplete: 'كل القيم الحالية مرتبطة بسجلات كتالوج.',
+    mappingHasLegacy: 'توجد قيم قديمة غير مربوطة ويجري تمييزها بوضوح.',
+    supportAvailable: 'واجهة الكتالوج والإسنادات متاحة.',
+    supportUnavailable: 'تعذر التحقق من دعم الوسوم.',
+    tagsUnavailableTitle: 'تعذر التحقق من دعم الوسوم',
+    tagsUnavailableCopy: 'أعد تحميل النظرة العامة للتحقق من حالة كتالوج الوسوم.',
     filtersTitle: 'بحث وفلاتر التصنيفات',
     filtersCopy: 'ضيّق التجميعات باستخدام معاملات التصنيفات المعتمدة فقط.',
     search: 'البحث',
@@ -865,6 +1005,17 @@ const copyMap = {
     needsAttentionFlag: 'يحتاج انتباه',
     readAction: 'إجراء القراءة',
     uncategorized: 'غير مصنف',
+    legacyUnmapped: 'قيمة قديمة غير مربوطة',
+    categoryActive: 'تصنيف فعال',
+    categoryDisabled: 'تصنيف معطل',
+    catalogLinked: 'مرتبط بسجل كتالوج',
+    linkState: 'حالة الربط',
+    arabicName: 'الاسم العربي',
+    englishName: 'الاسم الإنجليزي',
+    slugLabel: 'slug',
+    categoryState: 'حالة التصنيف',
+    supportReason: 'سبب دعم القيم القديمة',
+    legacyReason: 'قد توجد قيم category_id قديمة لا يقابلها سجل في work_categories.',
     uncategorizedHint: 'تجميع يحتاج إلى ترتيب تصنيفي',
     categorizedHint: 'تجميع مبني من معرّف التصنيف الحالي',
     classified: 'مصنف',
@@ -895,10 +1046,15 @@ const copyMap = {
     taxonomyFlagsCopy: 'تعكس هذه العلامات حالة التجميع المحسوبة في استجابة الخادم.'
   },
   en: {
-    readonly: 'Organizational read only',
+    readonly: 'Permission-based reading',
+    directManagement: 'Direct management',
+    tabsLabel: 'Taxonomy management sections',
+    overviewTab: 'Overview',
+    categoriesTab: 'Category catalog',
+    tagsTab: 'Tag catalog',
     kicker: 'Works taxonomy management',
     title: 'Categories and Tags',
-    descriptionBefore: 'An organizational view of category buckets derived from the current',
+    descriptionBefore: 'Manage category and tag catalogs alongside buckets derived from the current',
     descriptionAfter: 'value on works, without displaying individual work rows.',
     totalCategories: 'Total buckets',
     categoryBuckets: 'Current category buckets',
@@ -907,8 +1063,10 @@ const copyMap = {
     authLoadingCopy: 'Waiting for user-session initialization before making any data request.',
     forbiddenTitle: 'Categories and tags access is unavailable',
     forbiddenCopy: 'This account lacks the permissions required to read works taxonomy. No data request was made.',
-    noticeTitle: 'No operational actions are available at this stage',
-    notice: 'This page is read-only and does not create, edit, merge, disable, bulk assign, or delete categories or tags.',
+    managementNoticeTitle: 'Actions follow account permissions',
+    managementNotice: 'Use the tabs to manage catalogs. Assigning taxonomy to works remains planned for the All Works page in the next task.',
+    readOnlyNoticeTitle: 'Permission-based read access',
+    readOnlyNotice: 'This account can read authorized sections; unauthorized action names and controls remain hidden.',
     summaryLabel: 'Summary of works taxonomy matching the filters',
     summaryTotalCategories: 'Total buckets',
     summaryTotalCategoriesHint: 'All matching category buckets',
@@ -936,8 +1094,23 @@ const copyMap = {
     totalViewsHint: 'All views in the current scope',
     totalLikes: 'Total likes',
     totalLikesHint: 'All likes in the current scope',
-    tagsUnavailableTitle: 'Tag support is currently unavailable',
-    tagsUnavailableCopy: 'No placeholder tags or tag create and merge tools are shown.',
+    catalogCategories: 'Category catalog records',
+    catalogCategoriesHint: 'All categories defined in the catalog',
+    legacyCategoryIds: 'Unmapped legacy values',
+    legacyCategoryIdsHint: 'Identifiers without a catalog record',
+    catalogTags: 'Catalog tags',
+    catalogTagsHint: 'All active and disabled tags',
+    tagAssignments: 'Tag assignments',
+    tagAssignmentsHint: 'All current tag assignment rows',
+    categorySupportTitle: 'Category catalog support',
+    supportLabel: 'Category and tag catalog support status',
+    tagSupportTitle: 'Tag catalog support',
+    mappingComplete: 'All current values map to catalog records.',
+    mappingHasLegacy: 'Unmapped legacy values exist and are identified separately.',
+    supportAvailable: 'Catalog and assignment APIs are available.',
+    supportUnavailable: 'Tag support could not be verified.',
+    tagsUnavailableTitle: 'Could not verify tag support',
+    tagsUnavailableCopy: 'Reload the overview to verify the tag catalog status.',
     filtersTitle: 'Taxonomy search and filters',
     filtersCopy: 'Narrow the buckets using only the approved taxonomy parameters.',
     search: 'Search',
@@ -993,6 +1166,17 @@ const copyMap = {
     needsAttentionFlag: 'Needs attention',
     readAction: 'Read action',
     uncategorized: 'Uncategorized',
+    legacyUnmapped: 'Unmapped legacy value',
+    categoryActive: 'Active category',
+    categoryDisabled: 'Disabled category',
+    catalogLinked: 'Linked to catalog record',
+    linkState: 'Link state',
+    arabicName: 'Arabic name',
+    englishName: 'English name',
+    slugLabel: 'Slug',
+    categoryState: 'Category state',
+    supportReason: 'Legacy support reason',
+    legacyReason: 'Legacy category_id values may not have a matching work_categories record.',
     uncategorizedHint: 'A bucket that needs taxonomy organization',
     categorizedHint: 'A bucket derived from the current category identifier',
     classified: 'Categorized',
@@ -1026,15 +1210,29 @@ const copyMap = {
 
 const copy = computed(() => copyMap[currentLocale.value])
 const authPending = computed(() => !authStore.isInitialized)
+const isSuperAdmin = computed(() => authStore.role === 'super-admin')
+const isInternalRole = computed(() => ['admin', 'staff'].includes(authStore.role || ''))
+const hasPermission = (permission: string): boolean => isSuperAdmin.value || authStore.permissions.includes(permission)
 const hasTaxonomyAccess = computed(() => {
   if (!authStore.isInitialized || !authStore.isAuthenticated) return false
-  if (authStore.role === 'super-admin') return true
-  if (!['admin', 'staff'].includes(authStore.role || '')) return false
+  if (isSuperAdmin.value) return true
+  if (!isInternalRole.value) return false
 
   return authStore.permissions.includes('admin.works.access')
     && authStore.permissions.includes('admin.works.taxonomy.view')
-    && authStore.permissions.includes('admin.works.taxonomy.categories.view')
 })
+const canViewCategories = computed(() => hasTaxonomyAccess.value && hasPermission('admin.works.taxonomy.categories.view'))
+const canCreateCategories = computed(() => canViewCategories.value && hasPermission('admin.works.taxonomy.categories.create'))
+const canUpdateCategories = computed(() => canViewCategories.value && hasPermission('admin.works.taxonomy.categories.update'))
+const canDisableCategories = computed(() => canViewCategories.value && hasPermission('admin.works.taxonomy.categories.disable'))
+const canViewTags = computed(() => hasTaxonomyAccess.value && hasPermission('admin.works.taxonomy.tags.view'))
+const canCreateTags = computed(() => canViewTags.value && hasPermission('admin.works.taxonomy.tags.create'))
+const canUpdateTags = computed(() => canViewTags.value && hasPermission('admin.works.taxonomy.tags.update'))
+const canDisableTags = computed(() => canViewTags.value && hasPermission('admin.works.taxonomy.tags.disable'))
+const canMergeTags = computed(() => canViewTags.value && hasPermission('admin.works.taxonomy.merge_tags'))
+const hasAnyAction = computed(() => canCreateCategories.value || canUpdateCategories.value || canDisableCategories.value || canCreateTags.value || canUpdateTags.value || canDisableTags.value || canMergeTags.value)
+const actionBadge = computed(() => hasAnyAction.value ? copy.value.directManagement : copy.value.readonly)
+const activeTab = ref<'overview' | 'categories' | 'tags'>('overview')
 const serverForbidden = ref(false)
 const forbidden = computed(() => (
   authStore.isInitialized && (!hasTaxonomyAccess.value || serverForbidden.value)
@@ -1049,6 +1247,7 @@ const pagination = reactive<TaxonomyPagination>({
 })
 const summary = ref<TaxonomySummary | null>(null)
 const tagSupport = ref<TagSupport | null>(null)
+const categorySupport = ref<CategorySupport | null>(null)
 
 function defaultFilters(): TaxonomyFilters {
   return {
@@ -1126,7 +1325,11 @@ const summaryCards = computed(() => {
     { key: 'hidden_categories', label: copy.value.hiddenCategories, value: current?.hidden_categories ?? 0, hint: copy.value.hiddenCategoriesHint, color: '#64748b' },
     { key: 'total_reports', label: copy.value.totalReports, value: current?.total_reports ?? 0, hint: copy.value.totalReportsHint, color: '#e11d48' },
     { key: 'total_views', label: copy.value.totalViews, value: current?.total_views ?? 0, hint: copy.value.totalViewsHint, color: '#0ea5e9' },
-    { key: 'total_likes', label: copy.value.totalLikes, value: current?.total_likes ?? 0, hint: copy.value.totalLikesHint, color: '#ec4899' }
+    { key: 'total_likes', label: copy.value.totalLikes, value: current?.total_likes ?? 0, hint: copy.value.totalLikesHint, color: '#ec4899' },
+    { key: 'catalog_categories_total', label: copy.value.catalogCategories, value: current?.catalog_categories_total ?? 0, hint: copy.value.catalogCategoriesHint, color: '#7c3aed' },
+    { key: 'legacy_unmapped_category_ids', label: copy.value.legacyCategoryIds, value: current?.legacy_unmapped_category_ids ?? 0, hint: copy.value.legacyCategoryIdsHint, color: '#f59e0b' },
+    { key: 'tags_total', label: copy.value.catalogTags, value: current?.tags_total ?? 0, hint: copy.value.catalogTagsHint, color: '#0d9488' },
+    { key: 'tag_assignments_total', label: copy.value.tagAssignments, value: current?.tag_assignments_total ?? 0, hint: copy.value.tagAssignmentsHint, color: '#2563eb' }
   ]
 })
 
@@ -1182,6 +1385,14 @@ function formatDateTime(value: string | null): string {
     dateStyle: 'medium',
     timeStyle: 'short'
   }).format(date)
+}
+
+function bucketDisplayName(bucket: TaxonomyBucket): string {
+  if (bucket.category) {
+    return currentLocale.value === 'ar' ? bucket.category.name_ar : bucket.category.name_en
+  }
+
+  return bucket.label
 }
 
 function statusLabel(status: WorkStatus): string {
@@ -1260,6 +1471,15 @@ function errorStatus(requestError: unknown): number | null {
   return null
 }
 
+function requestErrorMessage(requestError: unknown): string | null {
+  if (!requestError || typeof requestError !== 'object') return null
+  const candidate = requestError as { data?: unknown; response?: { _data?: unknown } }
+  const data = candidate.data ?? candidate.response?._data
+  if (!data || typeof data !== 'object') return null
+  const message = (data as { message?: unknown }).message
+  return typeof message === 'string' ? message : null
+}
+
 function validateFilters(): boolean {
   filterError.value = null
   const categoryId = filters.category_id.trim()
@@ -1336,6 +1556,7 @@ async function fetchTaxonomy(): Promise<void> {
     items.value = response.data.items
     Object.assign(pagination, response.data.pagination)
     summary.value = response.data.summary
+    categorySupport.value = response.data.category_support
     tagSupport.value = response.data.tag_support
     page.value = response.data.pagination.current_page
     hasLoaded.value = true
@@ -1359,11 +1580,11 @@ async function fetchTaxonomy(): Promise<void> {
     }
 
     if (status === 422) {
-      filterError.value = copy.value.validationError
+      filterError.value = requestErrorMessage(requestError) || copy.value.validationError
       return
     }
 
-    error.value = copy.value.genericError
+    error.value = requestErrorMessage(requestError) || copy.value.genericError
   } finally {
     if (
       requestAccessRevision === accessRevision
@@ -1428,6 +1649,16 @@ function openSummary(bucket: TaxonomyBucket): void {
   drawerOpen.value = true
 }
 
+function refreshOverviewAfterAction(): void {
+  if (hasTaxonomyAccess.value) void fetchTaxonomy()
+}
+
+function handleCatalogAuthorizationError(): void {
+  activeTab.value = 'overview'
+  closeSummary()
+  if (authStore.isAuthenticated) void authStore.fetchUser()
+}
+
 function closeSummary(): void {
   drawerOpen.value = false
   selectedBucket.value = null
@@ -1436,6 +1667,7 @@ function closeSummary(): void {
 function clearTaxonomyData(): void {
   items.value = []
   summary.value = null
+  categorySupport.value = null
   tagSupport.value = null
   Object.assign(pagination, {
     current_page: 1,
@@ -1483,9 +1715,16 @@ function syncTaxonomyAccessState(): void {
 
 watch(
   authorizationSignature,
-  () => syncTaxonomyAccessState(),
+  () => {
+    if (activeTab.value === 'categories' && !canViewCategories.value) activeTab.value = 'overview'
+    if (activeTab.value === 'tags' && !canViewTags.value) activeTab.value = 'overview'
+    closeSummary()
+    syncTaxonomyAccessState()
+  },
   { flush: 'post' }
 )
+
+watch(activeTab, () => closeSummary())
 
 onMounted(() => {
   pageMounted = true
@@ -1496,6 +1735,65 @@ onMounted(() => {
 <style scoped>
 .ym-taxonomy-page {
   color: var(--ym-text);
+}
+
+.ym-taxonomy-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  border: 1px solid var(--ym-card-border);
+  border-radius: 20px;
+  background: var(--ym-card-bg);
+  box-shadow: var(--ym-card-shadow);
+  padding: 0.55rem;
+}
+
+.ym-taxonomy-tabs button {
+  min-height: 42px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--ym-muted);
+  font-size: 13px;
+  font-weight: 900;
+  padding: 0.65rem 1rem;
+}
+
+.ym-taxonomy-tabs button.is-active {
+  border-color: rgba(139, 92, 246, 0.35);
+  background: rgba(139, 92, 246, 0.12);
+  color: var(--ym-text);
+}
+
+.ym-taxonomy-tabs button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.18);
+}
+
+.ym-taxonomy-tab-panel {
+  display: grid;
+  gap: 1.75rem;
+}
+
+.ym-taxonomy-support-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.ym-taxonomy-support-grid section {
+  display: grid;
+  gap: 0.35rem;
+  border: 1px solid var(--ym-soft-border);
+  border-radius: 18px;
+  background: var(--ym-card-bg);
+  padding: 0.9rem;
+}
+
+.ym-taxonomy-support-grid span,
+.ym-taxonomy-support-grid code {
+  color: var(--ym-muted);
+  font-size: 11px;
 }
 
 .ym-taxonomy-hero,
@@ -2491,6 +2789,7 @@ onMounted(() => {
   }
 
   .ym-taxonomy-summary-grid,
+  .ym-taxonomy-support-grid,
   .ym-taxonomy-filter-grid,
   .ym-taxonomy-detail-grid,
   .ym-taxonomy-detail-grid.is-counts,
