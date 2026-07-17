@@ -6,6 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\WorksShowRequest;
 use App\Models\User;
 use App\Models\Work;
+use App\Models\WorkCategory;
+use App\Models\WorkTag;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 
 class WorksShowController extends Controller
@@ -20,6 +23,15 @@ class WorksShowController extends Controller
             'can_view_metadata' => $isSuperAdmin || (bool) $viewer?->can('admin.works.metadata.view'),
             'can_view_private_notes' => $isSuperAdmin || (bool) $viewer?->can('admin.works.private_notes.view'),
         ];
+        $isInternal = (bool) $viewer?->hasAnyRole(['admin', 'staff']);
+        $taxonomyAccess = [
+            'can_view_category' => $isSuperAdmin || ($isInternal
+                && (bool) $viewer?->can('admin.works.taxonomy.view')
+                && (bool) $viewer?->can('admin.works.taxonomy.categories.view')),
+            'can_view_tags' => $isSuperAdmin || ($isInternal
+                && (bool) $viewer?->can('admin.works.taxonomy.view')
+                && (bool) $viewer?->can('admin.works.taxonomy.tags.view')),
+        ];
 
         // لا نحمّل مراجع المستخدمين إلا إذا سمحت الصلاحية بعرضها.
         if ($fieldAccess['can_view_designer']) {
@@ -29,10 +41,26 @@ class WorksShowController extends Controller
             ]);
         }
 
+        if ($taxonomyAccess['can_view_category']) {
+            $work->load('category:id,name_ar,name_en,slug,disabled_at,sort_order');
+        }
+
+        if ($taxonomyAccess['can_view_tags']) {
+            $work->load(['tags' => fn (Builder $query) => $query
+                ->select(['work_tags.id', 'name_ar', 'name_en', 'slug', 'disabled_at', 'sort_order'])
+                ->orderBy('sort_order')
+                ->orderBy('work_tags.id')]);
+        }
+
         return response()->json([
             'success' => true,
             'data' => [
                 'work' => $this->workPayload($work),
+                'taxonomy' => $this->taxonomyPayload(
+                    $work,
+                    $taxonomyAccess['can_view_category'],
+                    $taxonomyAccess['can_view_tags'],
+                ),
                 'relations' => [
                     'designer' => $fieldAccess['can_view_designer']
                         ? $this->userReference($work->designer)
@@ -55,6 +83,7 @@ class WorksShowController extends Controller
                     ]
                     : null,
                 'field_access' => $fieldAccess,
+                'taxonomy_access' => $taxonomyAccess,
             ],
             'message' => 'تم جلب تفاصيل العمل بنجاح',
             'errors' => null,
@@ -91,6 +120,64 @@ class WorksShowController extends Controller
             'archived_at' => $work->archived_at?->toJSON(),
             'updated_at' => $work->updated_at?->toJSON(),
             'created_at' => $work->created_at?->toJSON(),
+        ];
+    }
+
+    /**
+     * @return array{category: array<string, mixed>|null, category_tracking: array<string, bool>|null, tags: list<array<string, mixed>>|null}
+     */
+    private function taxonomyPayload(Work $work, bool $canViewCategory, bool $canViewTags): array
+    {
+        /** @var WorkCategory|null $category */
+        $category = $canViewCategory ? $work->getRelation('category') : null;
+        $categoryId = $work->category_id !== null ? (int) $work->category_id : null;
+
+        /** @var list<array<string, mixed>>|null $tags */
+        $tags = $canViewTags
+            ? $work->getRelation('tags')
+                ->map(fn (WorkTag $tag): array => $this->safeTag($tag))
+                ->values()
+                ->all()
+            : null;
+
+        return [
+            'category' => $canViewCategory && $category ? $this->safeCategory($category) : null,
+            'category_tracking' => $canViewCategory
+                ? [
+                    'catalog_record_exists' => $category !== null,
+                    'is_legacy_unmapped' => $categoryId !== null && $category === null,
+                    'is_uncategorized' => $categoryId === null,
+                ]
+                : null,
+            'tags' => $tags,
+        ];
+    }
+
+    /** @return array{id: int, name_ar: string, name_en: string, slug: string, disabled_at: string|null, is_active: bool, sort_order: int} */
+    private function safeCategory(WorkCategory $category): array
+    {
+        return [
+            'id' => (int) $category->id,
+            'name_ar' => $category->name_ar,
+            'name_en' => $category->name_en,
+            'slug' => $category->slug,
+            'disabled_at' => $category->disabled_at?->toJSON(),
+            'is_active' => $category->isActive(),
+            'sort_order' => (int) $category->sort_order,
+        ];
+    }
+
+    /** @return array{id: int, name_ar: string, name_en: string, slug: string, disabled_at: string|null, is_active: bool, sort_order: int} */
+    private function safeTag(WorkTag $tag): array
+    {
+        return [
+            'id' => (int) $tag->id,
+            'name_ar' => $tag->name_ar,
+            'name_en' => $tag->name_en,
+            'slug' => $tag->slug,
+            'disabled_at' => $tag->disabled_at?->toJSON(),
+            'is_active' => $tag->isActive(),
+            'sort_order' => (int) $tag->sort_order,
         ];
     }
 

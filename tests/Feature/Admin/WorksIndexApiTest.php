@@ -4,6 +4,8 @@ namespace Tests\Feature\Admin;
 
 use App\Models\User;
 use App\Models\Work;
+use App\Models\WorkCategory;
+use App\Models\WorkTag;
 use Database\Seeders\AuthRolesSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -149,6 +151,7 @@ class WorksIndexApiTest extends TestCase
             'status',
             'submitted_at',
             'summary',
+            'taxonomy',
             'title',
             'updated_at',
             'views_count',
@@ -156,6 +159,146 @@ class WorksIndexApiTest extends TestCase
         ], collect(array_keys($item))->sort()->values()->all());
         $this->assertSame(['id', 'name'], array_keys($item['designer']));
         $this->assertSame(['id', 'name'], array_keys($item['reviewer']));
+        $this->assertSame([
+            'category' => null,
+            'category_tracking' => [
+                'catalog_record_exists' => false,
+                'is_legacy_unmapped' => true,
+                'is_uncategorized' => false,
+            ],
+            'tags' => [],
+        ], $item['taxonomy']);
+        $this->assertSame([
+            'can_view_category' => true,
+            'can_view_tags' => true,
+        ], $response->json('data.taxonomy_access'));
+    }
+
+    public function test_super_admin_receives_safe_category_and_ordered_active_and_disabled_tags(): void
+    {
+        $this->actingAsRole('super-admin');
+        $category = WorkCategory::factory()->disabled()->create(['sort_order' => 8]);
+        $work = Work::factory()->create(['category_id' => $category->id]);
+        $later = WorkTag::factory()->create(['sort_order' => 20]);
+        $sameOrderHigherId = WorkTag::factory()->disabled()->create(['sort_order' => 5]);
+        $sameOrderLowerId = WorkTag::factory()->create(['sort_order' => 5]);
+        $work->tags()->attach([$later->id, $sameOrderHigherId->id, $sameOrderLowerId->id]);
+
+        $response = $this->getJson('/api/admin/works')
+            ->assertOk()
+            ->assertJsonPath('data.taxonomy_access', [
+                'can_view_category' => true,
+                'can_view_tags' => true,
+            ])
+            ->assertJsonPath('data.items.0.taxonomy.category.id', $category->id)
+            ->assertJsonPath('data.items.0.taxonomy.category.is_active', false)
+            ->assertJsonPath('data.items.0.taxonomy.category_tracking', [
+                'catalog_record_exists' => true,
+                'is_legacy_unmapped' => false,
+                'is_uncategorized' => false,
+            ]);
+
+        $taxonomy = $response->json('data.items.0.taxonomy');
+        $expectedTagIds = collect([$later, $sameOrderHigherId, $sameOrderLowerId])
+            ->sortBy(fn (WorkTag $tag): string => sprintf('%010d-%010d', $tag->sort_order, $tag->id))
+            ->pluck('id')
+            ->values()
+            ->all();
+
+        $this->assertSame($expectedTagIds, array_column($taxonomy['tags'], 'id'));
+        $this->assertContains(false, array_column($taxonomy['tags'], 'is_active'));
+        $this->assertSame(
+            ['disabled_at', 'id', 'is_active', 'name_ar', 'name_en', 'slug', 'sort_order'],
+            collect(array_keys($taxonomy['category']))->sort()->values()->all(),
+        );
+
+        foreach ($taxonomy['tags'] as $tag) {
+            $this->assertSame(
+                ['disabled_at', 'id', 'is_active', 'name_ar', 'name_en', 'slug', 'sort_order'],
+                collect(array_keys($tag))->sort()->values()->all(),
+            );
+        }
+    }
+
+    public function test_taxonomy_sections_are_independently_permission_scoped_in_index(): void
+    {
+        $category = WorkCategory::factory()->create();
+        $tag = WorkTag::factory()->create();
+        $work = Work::factory()->create(['category_id' => $category->id]);
+        $work->tags()->attach($tag);
+
+        $this->actingAsRole('admin', [...$this->listPermissions(),
+            'admin.works.taxonomy.view',
+            'admin.works.taxonomy.categories.view',
+        ]);
+        $this->getJson('/api/admin/works')
+            ->assertOk()
+            ->assertJsonPath('data.taxonomy_access.can_view_category', true)
+            ->assertJsonPath('data.taxonomy_access.can_view_tags', false)
+            ->assertJsonPath('data.items.0.taxonomy.category.id', $category->id)
+            ->assertJsonPath('data.items.0.taxonomy.tags', null);
+
+        $this->actingAsRole('staff', [...$this->listPermissions(),
+            'admin.works.taxonomy.view',
+            'admin.works.taxonomy.tags.view',
+        ]);
+        $this->getJson('/api/admin/works')
+            ->assertOk()
+            ->assertJsonPath('data.taxonomy_access.can_view_category', false)
+            ->assertJsonPath('data.taxonomy_access.can_view_tags', true)
+            ->assertJsonPath('data.items.0.taxonomy.category', null)
+            ->assertJsonPath('data.items.0.taxonomy.category_tracking', null)
+            ->assertJsonPath('data.items.0.taxonomy.tags.0.id', $tag->id);
+    }
+
+    public function test_index_without_taxonomy_view_does_not_hide_work_or_expose_taxonomy(): void
+    {
+        Work::factory()->create();
+        $this->actingAsRole('admin', [...$this->listPermissions(),
+            'admin.works.update.category',
+            'admin.works.update.tags',
+            'admin.works.taxonomy.bulk_assign',
+        ]);
+
+        $this->getJson('/api/admin/works')
+            ->assertOk()
+            ->assertJsonPath('data.pagination.total', 1)
+            ->assertJsonPath('data.taxonomy_access', [
+                'can_view_category' => false,
+                'can_view_tags' => false,
+            ])
+            ->assertJsonPath('data.items.0.taxonomy', [
+                'category' => null,
+                'category_tracking' => null,
+                'tags' => null,
+            ]);
+    }
+
+    public function test_index_distinguishes_uncategorized_and_legacy_and_returns_empty_tags_when_authorized(): void
+    {
+        $this->actingAsRole('super-admin');
+        $category = WorkCategory::factory()->create();
+        $legacyCategoryId = $category->id + 100_000;
+        $uncategorized = Work::factory()->create(['category_id' => null, 'created_at' => now()->subMinute()]);
+        $legacy = Work::factory()->create(['category_id' => $legacyCategoryId, 'created_at' => now()]);
+
+        $response = $this->getJson('/api/admin/works?sort=id&direction=asc')
+            ->assertOk();
+        $items = collect($response->json('data.items'))->keyBy('id');
+
+        $this->assertSame([
+            'catalog_record_exists' => false,
+            'is_legacy_unmapped' => false,
+            'is_uncategorized' => true,
+        ], $items[$uncategorized->id]['taxonomy']['category_tracking']);
+        $this->assertSame([
+            'catalog_record_exists' => false,
+            'is_legacy_unmapped' => true,
+            'is_uncategorized' => false,
+        ], $items[$legacy->id]['taxonomy']['category_tracking']);
+        $this->assertSame($legacyCategoryId, $items[$legacy->id]['category_id']);
+        $this->assertSame([], $items[$uncategorized->id]['taxonomy']['tags']);
+        $this->assertSame([], $items[$legacy->id]['taxonomy']['tags']);
     }
 
     public function test_response_does_not_expose_sensitive_work_or_user_fields(): void

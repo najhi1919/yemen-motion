@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\WorksIndexRequest;
 use App\Models\User;
 use App\Models\Work;
+use App\Models\WorkCategory;
+use App\Models\WorkTag;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -14,6 +16,17 @@ class WorksIndexController extends Controller
 {
     public function index(WorksIndexRequest $request): JsonResponse
     {
+        $viewer = $request->user();
+        $isSuperAdmin = (bool) $viewer?->hasRole('super-admin');
+        $isInternal = (bool) $viewer?->hasAnyRole(['admin', 'staff']);
+        $taxonomyAccess = [
+            'can_view_category' => $isSuperAdmin || ($isInternal
+                && (bool) $viewer?->can('admin.works.taxonomy.view')
+                && (bool) $viewer?->can('admin.works.taxonomy.categories.view')),
+            'can_view_tags' => $isSuperAdmin || ($isInternal
+                && (bool) $viewer?->can('admin.works.taxonomy.view')
+                && (bool) $viewer?->can('admin.works.taxonomy.tags.view')),
+        ];
         $validated = $request->validated();
         $queryText = trim((string) ($validated['q'] ?? ''));
         $sort = (string) ($validated['sort'] ?? 'created_at');
@@ -30,6 +43,22 @@ class WorksIndexController extends Controller
             : null;
 
         // نحدد الأعمدة والعلاقات صراحة حتى لا تتسرب الحقول الداخلية من النماذج.
+        $relations = [
+            'designer:id,name',
+            'reviewer:id,name',
+        ];
+
+        if ($taxonomyAccess['can_view_category']) {
+            $relations[] = 'category:id,name_ar,name_en,slug,disabled_at,sort_order';
+        }
+
+        if ($taxonomyAccess['can_view_tags']) {
+            $relations['tags'] = fn (Builder $query) => $query
+                ->select(['work_tags.id', 'name_ar', 'name_en', 'slug', 'disabled_at', 'sort_order'])
+                ->orderBy('sort_order')
+                ->orderBy('work_tags.id');
+        }
+
         $works = Work::query()
             ->select([
                 'id',
@@ -54,10 +83,7 @@ class WorksIndexController extends Controller
                 'updated_at',
                 'created_at',
             ])
-            ->with([
-                'designer:id,name',
-                'reviewer:id,name',
-            ])
+            ->with($relations)
             ->when($queryText !== '', function (Builder $query) use ($queryText): void {
                 $query->where(function (Builder $searchQuery) use ($queryText): void {
                     $searchQuery
@@ -106,7 +132,11 @@ class WorksIndexController extends Controller
             ->orderBy($sort, $direction)
             ->orderBy('id', $direction)
             ->paginate($perPage)
-            ->through(fn (Work $work): array => $this->workPayload($work));
+            ->through(fn (Work $work): array => $this->workPayload(
+                $work,
+                $taxonomyAccess['can_view_category'],
+                $taxonomyAccess['can_view_tags'],
+            ));
 
         return response()->json([
             'success' => true,
@@ -134,6 +164,7 @@ class WorksIndexController extends Controller
                     'sort' => $sort,
                     'direction' => $direction,
                 ],
+                'taxonomy_access' => $taxonomyAccess,
             ],
             'message' => 'تم جلب قائمة الأعمال بنجاح',
             'errors' => null,
@@ -160,7 +191,7 @@ class WorksIndexController extends Controller
      *
      * @return array<string, mixed>
      */
-    private function workPayload(Work $work): array
+    private function workPayload(Work $work, bool $canViewCategory, bool $canViewTags): array
     {
         return [
             'id' => $work->id,
@@ -184,6 +215,65 @@ class WorksIndexController extends Controller
             'published_at' => $work->published_at?->toJSON(),
             'updated_at' => $work->updated_at?->toJSON(),
             'created_at' => $work->created_at?->toJSON(),
+            'taxonomy' => $this->taxonomyPayload($work, $canViewCategory, $canViewTags),
+        ];
+    }
+
+    /**
+     * @return array{category: array<string, mixed>|null, category_tracking: array<string, bool>|null, tags: list<array<string, mixed>>|null}
+     */
+    private function taxonomyPayload(Work $work, bool $canViewCategory, bool $canViewTags): array
+    {
+        /** @var WorkCategory|null $category */
+        $category = $canViewCategory ? $work->getRelation('category') : null;
+        $categoryId = $work->category_id !== null ? (int) $work->category_id : null;
+
+        /** @var list<array<string, mixed>>|null $tags */
+        $tags = $canViewTags
+            ? $work->getRelation('tags')
+                ->map(fn (WorkTag $tag): array => $this->safeTag($tag))
+                ->values()
+                ->all()
+            : null;
+
+        return [
+            'category' => $canViewCategory && $category ? $this->safeCategory($category) : null,
+            'category_tracking' => $canViewCategory
+                ? [
+                    'catalog_record_exists' => $category !== null,
+                    'is_legacy_unmapped' => $categoryId !== null && $category === null,
+                    'is_uncategorized' => $categoryId === null,
+                ]
+                : null,
+            'tags' => $tags,
+        ];
+    }
+
+    /** @return array{id: int, name_ar: string, name_en: string, slug: string, disabled_at: string|null, is_active: bool, sort_order: int} */
+    private function safeCategory(WorkCategory $category): array
+    {
+        return [
+            'id' => (int) $category->id,
+            'name_ar' => $category->name_ar,
+            'name_en' => $category->name_en,
+            'slug' => $category->slug,
+            'disabled_at' => $category->disabled_at?->toJSON(),
+            'is_active' => $category->isActive(),
+            'sort_order' => (int) $category->sort_order,
+        ];
+    }
+
+    /** @return array{id: int, name_ar: string, name_en: string, slug: string, disabled_at: string|null, is_active: bool, sort_order: int} */
+    private function safeTag(WorkTag $tag): array
+    {
+        return [
+            'id' => (int) $tag->id,
+            'name_ar' => $tag->name_ar,
+            'name_en' => $tag->name_en,
+            'slug' => $tag->slug,
+            'disabled_at' => $tag->disabled_at?->toJSON(),
+            'is_active' => $tag->isActive(),
+            'sort_order' => (int) $tag->sort_order,
         ];
     }
 
