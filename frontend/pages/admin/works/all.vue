@@ -1,5 +1,5 @@
 <template>
-  <div class="ym-works-all-page space-y-7">
+  <div class="ym-works-all-page space-y-7" :dir="currentLocale === 'ar' ? 'rtl' : 'ltr'">
     <section class="ym-works-all-hero">
       <div class="ym-works-all-hero__glow is-one" />
       <div class="ym-works-all-hero__glow is-two" />
@@ -9,11 +9,13 @@
         <div>
           <div class="ym-works-all-chips">
             <span class="ym-works-all-chip is-brand">Yemen Motion</span>
-            <span class="ym-works-all-chip is-readonly">{{ copy.readonly }}</span>
+            <span class="ym-works-all-chip is-readonly">{{ managementBadge }}</span>
           </div>
           <p class="ym-works-all-kicker">{{ copy.kicker }}</p>
           <h1>{{ copy.title }}</h1>
-          <p class="ym-works-all-description">{{ copy.description }}</p>
+          <p class="ym-works-all-description">
+            {{ canManageIndividualTaxonomy ? copy.managementDescription : copy.readOnlyDescription }}
+          </p>
         </div>
 
         <div class="ym-works-all-hero__summary">
@@ -38,8 +40,8 @@
 
     <template v-else>
       <aside class="ym-works-all-notice" role="note">
-        <span>{{ copy.readonly }}</span>
-        <p>{{ copy.notice }}</p>
+        <span>{{ managementBadge }}</span>
+        <p>{{ canManageIndividualTaxonomy ? copy.managementNotice : copy.readOnlyNotice }}</p>
       </aside>
 
       <section class="ym-works-all-summary-grid" :aria-label="copy.pageSummary">
@@ -193,7 +195,7 @@
         <header class="ym-works-all-table-card__head">
           <div>
             <h2>{{ copy.tableTitle }}</h2>
-            <p>{{ copy.tableCopy }}</p>
+            <p>{{ canManageIndividualTaxonomy ? copy.managementTableCopy : copy.readOnlyTableCopy }}</p>
           </div>
           <div class="ym-works-all-table-state">
             <span>{{ copy.currentPage }}</span>
@@ -242,7 +244,7 @@
                 <th>{{ copy.mediaType }}</th>
                 <th>{{ copy.designer }}</th>
                 <th>{{ copy.reviewer }}</th>
-                <th>{{ copy.category }}</th>
+                <th class="is-taxonomy">{{ copy.taxonomy }}</th>
                 <th>{{ copy.featured }}</th>
                 <th>{{ copy.pinned }}</th>
                 <th>
@@ -287,7 +289,7 @@
                     <span aria-hidden="true">{{ sortIndicator('updated_at') }}</span>
                   </button>
                 </th>
-                <th class="is-action">{{ copy.readAction }}</th>
+                <th class="is-action">{{ copy.actions }}</th>
               </tr>
             </thead>
             <tbody>
@@ -324,7 +326,42 @@
                   </span>
                   <span v-else>—</span>
                 </td>
-                <td><span dir="ltr">{{ work.category_id ?? '—' }}</span></td>
+                <td class="is-taxonomy">
+                  <div class="ym-work-taxonomy-cell">
+                    <div class="ym-work-taxonomy-category">
+                      <template v-if="work.taxonomy.category">
+                        <strong>{{ taxonomyName(work.taxonomy.category) }}</strong>
+                        <code dir="ltr">{{ work.taxonomy.category.slug }}</code>
+                        <span class="ym-work-taxonomy-state" :class="work.taxonomy.category.is_active ? 'is-active' : 'is-disabled'">
+                          {{ work.taxonomy.category.is_active ? copy.activeTaxonomy : copy.disabledTaxonomy }}
+                        </span>
+                      </template>
+                      <template v-else-if="work.taxonomy.category_tracking?.is_legacy_unmapped">
+                        <span class="ym-work-taxonomy-state is-legacy">{{ copy.legacyUnmapped }}</span>
+                        <code dir="ltr">#{{ work.category_id }}</code>
+                      </template>
+                      <span v-else-if="work.taxonomy.category_tracking?.is_uncategorized" class="ym-work-taxonomy-state is-empty">
+                        {{ copy.uncategorized }}
+                      </span>
+                      <span v-else class="ym-work-taxonomy-unavailable">{{ copy.taxonomyUnavailable }}</span>
+                    </div>
+                    <div v-if="work.taxonomy.tags !== null" class="ym-work-taxonomy-tags">
+                      <span
+                        v-for="tag in work.taxonomy.tags.slice(0, 3)"
+                        :key="tag.id"
+                        class="ym-work-taxonomy-tag"
+                        :class="{ 'is-disabled': !tag.is_active }"
+                      >
+                        {{ taxonomyName(tag) }}
+                      </span>
+                      <span v-if="work.taxonomy.tags.length > 3" class="ym-work-taxonomy-more" dir="ltr">
+                        +{{ work.taxonomy.tags.length - 3 }}
+                      </span>
+                      <small v-if="work.taxonomy.tags.length === 0">{{ copy.noTags }}</small>
+                    </div>
+                    <small v-else class="ym-work-taxonomy-unavailable">{{ copy.tagsUnavailable }}</small>
+                  </div>
+                </td>
                 <td>
                   <span class="ym-works-all-badge is-boolean" :class="work.is_featured ? 'is-yes' : 'is-no'">
                     {{ booleanLabel(work.is_featured) }}
@@ -347,15 +384,26 @@
                 <td><time :datetime="work.created_at || undefined">{{ formatDateTime(work.created_at) }}</time></td>
                 <td><time :datetime="work.updated_at || undefined">{{ formatDateTime(work.updated_at) }}</time></td>
                 <td class="is-action">
-                  <button
-                    type="button"
-                    class="ym-works-all-details-button"
-                    :disabled="!canViewDetails"
-                    :title="canViewDetails ? copy.viewDetailsHint : copy.detailsPermissionRequired"
-                    @click="openDetails(work)"
-                  >
-                    {{ copy.viewDetails }}
-                  </button>
+                  <div class="ym-works-all-row-actions">
+                    <button
+                      type="button"
+                      class="ym-works-all-details-button"
+                      :disabled="!canViewDetails"
+                      :aria-label="copy.viewDetailsHint"
+                      @click="openDetails(work)"
+                    >
+                      {{ copy.viewDetails }}
+                    </button>
+                    <button
+                      v-if="canManageIndividualTaxonomy"
+                      type="button"
+                      class="ym-works-all-taxonomy-button"
+                      :aria-label="copy.manageTaxonomyFor(work.title)"
+                      @click="openTaxonomyAssignment(work)"
+                    >
+                      {{ copy.manageTaxonomy }}
+                    </button>
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -494,7 +542,7 @@
                   <dt>{{ copy.deliveryDays }}</dt>
                   <dd>{{ detail.work.delivery_days === null ? '—' : formatNumber(detail.work.delivery_days) }}</dd>
                 </div>
-                <div>
+                <div v-if="detail.taxonomy_access.can_view_category">
                   <dt>{{ copy.categoryId }}</dt>
                   <dd dir="ltr">{{ detail.work.category_id ?? '—' }}</dd>
                 </div>
@@ -523,6 +571,56 @@
                   <dd>{{ formatNumber(detail.work.likes_count) }}</dd>
                 </div>
               </dl>
+            </section>
+
+            <section class="ym-work-detail-section is-taxonomy">
+              <header class="ym-work-detail-taxonomy-head">
+                <div>
+                  <h3>{{ copy.taxonomy }}</h3>
+                  <p>{{ copy.detailTaxonomyCopy }}</p>
+                </div>
+                <button
+                  v-if="canManageIndividualTaxonomy && assignmentWorkForDetail"
+                  type="button"
+                  class="ym-works-all-taxonomy-button"
+                  @click="openTaxonomyAssignment(assignmentWorkForDetail)"
+                >
+                  {{ copy.manageTaxonomy }}
+                </button>
+              </header>
+
+              <div class="ym-work-detail-taxonomy">
+                <article>
+                  <span>{{ copy.category }}</span>
+                  <template v-if="detail.taxonomy.category">
+                    <strong>{{ taxonomyName(detail.taxonomy.category) }}</strong>
+                    <small>{{ detail.taxonomy.category.name_ar }} · {{ detail.taxonomy.category.name_en }}</small>
+                    <code dir="ltr">{{ detail.taxonomy.category.slug }}</code>
+                    <b :class="detail.taxonomy.category.is_active ? 'is-active' : 'is-disabled'">
+                      {{ detail.taxonomy.category.is_active ? copy.activeTaxonomy : copy.disabledTaxonomy }}
+                    </b>
+                  </template>
+                  <template v-else-if="detail.taxonomy.category_tracking?.is_legacy_unmapped">
+                    <b class="is-legacy">{{ copy.legacyUnmapped }}</b>
+                    <code dir="ltr">#{{ detail.work.category_id }}</code>
+                  </template>
+                  <b v-else-if="detail.taxonomy.category_tracking?.is_uncategorized" class="is-empty">{{ copy.uncategorized }}</b>
+                  <p v-else>{{ copy.taxonomyUnavailable }}</p>
+                </article>
+
+                <article>
+                  <span>{{ copy.tags }}</span>
+                  <div v-if="detail.taxonomy.tags !== null && detail.taxonomy.tags.length" class="ym-work-detail-tag-list">
+                    <span v-for="tag in detail.taxonomy.tags" :key="tag.id" :class="{ 'is-disabled': !tag.is_active }">
+                      <strong>{{ taxonomyName(tag) }}</strong>
+                      <code dir="ltr">{{ tag.slug }}</code>
+                      <small>{{ tag.is_active ? copy.activeTaxonomy : copy.disabledTaxonomy }}</small>
+                    </span>
+                  </div>
+                  <p v-else-if="detail.taxonomy.tags !== null">{{ copy.noTags }}</p>
+                  <p v-else>{{ copy.tagsUnavailable }}</p>
+                </article>
+              </div>
             </section>
 
             <section class="ym-work-detail-section">
@@ -605,11 +703,24 @@
           </div>
         </section>
     </div>
+
+    <WorksTaxonomyAssignmentDrawer
+      :open="assignmentOpen"
+      :work="assignmentWork"
+      :locale="currentLocale"
+      :can-update-category="canUpdateAssignedCategory"
+      :can-update-tags="canUpdateAssignedTags"
+      :permission-revision="assignmentPermissionRevision"
+      @close="closeTaxonomyAssignment"
+      @changed="handleTaxonomyAssignmentChanged"
+      @authorization-error="handleTaxonomyAuthorizationError"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import WorksTaxonomyAssignmentDrawer from '~/components/works/taxonomy/WorksTaxonomyAssignmentDrawer.vue'
 import { useApiClient } from '~/composables/useApiClient'
 import { useAuthStore } from '~/stores/authStore'
 
@@ -626,6 +737,33 @@ type WorkSortKey = 'created_at' | 'updated_at' | 'title' | 'status' | 'submitted
 interface UserReference {
   id: number
   name: string
+}
+
+interface SafeTaxonomyEntity {
+  id: number
+  name_ar: string
+  name_en: string
+  slug: string
+  disabled_at: string | null
+  is_active: boolean
+  sort_order: number
+}
+
+interface CategoryTracking {
+  catalog_record_exists: boolean
+  is_legacy_unmapped: boolean
+  is_uncategorized: boolean
+}
+
+interface WorkTaxonomySnapshot {
+  category: SafeTaxonomyEntity | null
+  category_tracking: CategoryTracking | null
+  tags: SafeTaxonomyEntity[] | null
+}
+
+interface TaxonomyAccess {
+  can_view_category: boolean
+  can_view_tags: boolean
 }
 
 interface WorkListItem {
@@ -650,6 +788,7 @@ interface WorkListItem {
   published_at: string | null
   updated_at: string | null
   created_at: string | null
+  taxonomy: WorkTaxonomySnapshot
 }
 
 interface WorksPagination {
@@ -663,6 +802,7 @@ interface WorksIndexData {
   items: WorkListItem[]
   pagination: WorksPagination
   filters: Record<string, unknown>
+  taxonomy_access: TaxonomyAccess
 }
 
 interface WorksIndexResponse {
@@ -701,6 +841,7 @@ interface WorkDetailBase {
 
 interface WorkDetailData {
   work: WorkDetailBase
+  taxonomy: WorkTaxonomySnapshot
   relations: {
     designer: UserReference | null
     reviewer: UserReference | null
@@ -720,6 +861,7 @@ interface WorkDetailData {
     can_view_metadata: boolean
     can_view_private_notes: boolean
   }
+  taxonomy_access: TaxonomyAccess
 }
 
 interface WorkDetailResponse {
@@ -753,17 +895,20 @@ const currentLocale = useState<Locale>('ym-dashboard-locale', () => 'ar')
 
 const copyMap = {
   ar: {
-    readonly: 'قراءة وتفاصيل فقط',
+    individualAvailable: 'إسناد فردي متاح',
+    permissionRead: 'قراءة حسب الصلاحيات',
     kicker: 'إدارة المحتوى الإبداعي',
     title: 'كل الأعمال',
-    description: 'قائمة إدارية آمنة للبحث والفرز والتصفية وقراءة تفاصيل الأعمال المسجلة، دون تنفيذ تغييرات على دورة العمل.',
+    managementDescription: 'قائمة إدارية آمنة تعرض التصنيف والوسوم الحالية، وتتيح الإسناد الفردي حسب صلاحيات الحساب.',
+    readOnlyDescription: 'قائمة إدارية آمنة تعرض بيانات الأعمال والتصنيف والوسوم التي يسمح الحساب بقراءتها.',
     totalWorks: 'إجمالي النتائج',
     safeRecords: 'سجلات آمنة من API الأعمال',
     authLoadingTitle: 'جارٍ التحقق من صلاحية قائمة الأعمال',
     authLoadingCopy: 'ننتظر اكتمال تهيئة جلسة المستخدم قبل إرسال أي طلب بيانات.',
     forbiddenTitle: 'الوصول إلى كل الأعمال غير متاح',
     forbiddenCopy: 'لا يملك هذا الحساب الصلاحيات المطلوبة لقراءة قائمة الأعمال. لم تتم محاولة تحميل البيانات.',
-    notice: 'هذه الصفحة للقراءة والفرز والتفاصيل فقط. لا تتضمن اعتمادًا أو نشرًا أو إخفاءً أو أرشفة أو حذفًا.',
+    managementNotice: 'الإسناد الفردي للتصنيف والوسوم متاح هنا. الإسناد الجماعي وبقية إجراءات دورة العمل غير موجودة في هذه المهمة وستضاف لاحقًا.',
+    readOnlyNotice: 'يعرض هذا الحساب البيانات المصرح بقراءتها فقط، ولا تظهر له أدوات غير مصرح بها.',
     pageSummary: 'ملخص نتائج صفحة الأعمال الحالية',
     total: 'إجمالي النتائج',
     totalHint: 'كل النتائج المطابقة للفلاتر',
@@ -803,7 +948,8 @@ const copyMap = {
     invalidIdentifiers: 'معرّفات المصمم والمراجع والتصنيف يجب أن تكون أعدادًا صحيحة صالحة.',
     validationError: 'تعذر تطبيق الفلاتر. تحقق من البحث والقيم والتواريخ.',
     tableTitle: 'قائمة الأعمال',
-    tableCopy: 'اضغط على رؤوس الأعمدة القابلة للفرز، وافتح التفاصيل من إجراء القراءة الوحيد.',
+    managementTableCopy: 'اقرأ التصنيف والوسوم الحالية، واستخدم التفاصيل أو الإسناد الفردي وفق صلاحيات الحساب.',
+    readOnlyTableCopy: 'اقرأ بيانات الأعمال والتصنيف والوسوم التي يسمح بها نطاق الحساب.',
     currentPage: 'الصفحة الحالية',
     loadingTitle: 'جارٍ تحميل الأعمال',
     loadingCopy: 'يتم جلب القائمة الآمنة وفق الفلاتر الحالية...',
@@ -816,6 +962,15 @@ const copyMap = {
     designer: 'المصمم',
     reviewer: 'المراجع',
     category: 'التصنيف',
+    taxonomy: 'التصنيف والوسوم',
+    tags: 'الوسوم',
+    activeTaxonomy: 'فعال',
+    disabledTaxonomy: 'معطل',
+    uncategorized: 'غير مصنف',
+    legacyUnmapped: 'قيمة قديمة غير مربوطة',
+    taxonomyUnavailable: 'غير متاح حسب الصلاحية',
+    tagsUnavailable: 'غير متاحة حسب الصلاحية',
+    noTags: 'لا توجد وسوم',
     reports: 'البلاغات',
     views: 'المشاهدات',
     likes: 'الإعجابات',
@@ -823,10 +978,12 @@ const copyMap = {
     publishedAt: 'تاريخ النشر',
     createdAt: 'تاريخ الإنشاء',
     updatedAt: 'آخر تحديث',
-    readAction: 'إجراء القراءة',
+    actions: 'الإجراءات',
     viewDetails: 'عرض التفاصيل',
     viewDetailsHint: 'فتح تفاصيل العمل الآمنة',
     detailsPermissionRequired: 'تحتاج صلاحية عرض تفاصيل الأعمال',
+    manageTaxonomy: 'إدارة التصنيف والوسوم',
+    manageTaxonomyFor: (title: string) => `إدارة التصنيف والوسوم للعمل ${title}`,
     paginationTotal: 'إجمالي النتائج',
     visibleNow: 'عنصر ظاهر الآن',
     paginationLabel: 'التنقل بين صفحات الأعمال',
@@ -843,6 +1000,7 @@ const copyMap = {
     detailsForbidden: 'تفاصيل هذا العمل غير متاحة حسب صلاحيات الحساب.',
     detailsNotFound: 'لم يعد هذا العمل موجودًا أو لم يعد متاحًا.',
     noSummary: 'لا يوجد ملخص مسجل لهذا العمل.',
+    detailTaxonomyCopy: 'الحالة الحالية كما أعادها الخادم، بما في ذلك العناصر المعطلة المرتبطة قديمًا.',
     accessIndicators: 'نطاق الحقول المتاح',
     accessIndicatorsCopy: 'تعكس هذه المؤشرات الصلاحيات التي طبّقها الخادم على استجابة التفاصيل.',
     canViewDesigner: 'المصمم والمراجع',
@@ -877,17 +1035,20 @@ const copyMap = {
     hiddenVisibility: 'مخفي'
   },
   en: {
-    readonly: 'Read and details only',
+    individualAvailable: 'Individual assignment available',
+    permissionRead: 'Permission-based read',
     kicker: 'Creative content management',
     title: 'All Works',
-    description: 'A safe administrative list for searching, sorting, filtering, and reading recorded work details without changing the workflow.',
+    managementDescription: 'A safe administrative list that displays current categories and tags and enables individual assignment when authorized.',
+    readOnlyDescription: 'A safe administrative list showing work data, categories, and tags that this account may read.',
     totalWorks: 'Total results',
     safeRecords: 'Safe records from the Works API',
     authLoadingTitle: 'Checking works list access',
     authLoadingCopy: 'Waiting for the user session to initialize before requesting data.',
     forbiddenTitle: 'All Works access is unavailable',
     forbiddenCopy: 'This account lacks the required permissions to read the works list. No data request was made.',
-    notice: 'This page is limited to reading, sorting, and details. It does not approve, publish, hide, archive, restore, or delete works.',
+    managementNotice: 'Individual category and tag assignment is available here. Bulk assignment and other lifecycle actions are outside this task and will be added later.',
+    readOnlyNotice: 'This account sees only data it may read; unauthorized tools are not shown.',
     pageSummary: 'Current works page summary',
     total: 'Total results',
     totalHint: 'All results matching the filters',
@@ -927,7 +1088,8 @@ const copyMap = {
     invalidIdentifiers: 'Designer, reviewer, and category identifiers must be valid integers.',
     validationError: 'The filters could not be applied. Check the search, values, and dates.',
     tableTitle: 'Works list',
-    tableCopy: 'Use sortable column headers and open details through the only read action.',
+    managementTableCopy: 'Read current categories and tags, then use details or individual assignment according to account permissions.',
+    readOnlyTableCopy: 'Read work, category, and tag data available to this account.',
     currentPage: 'Current page',
     loadingTitle: 'Loading works',
     loadingCopy: 'Fetching the safe list using the current filters...',
@@ -940,6 +1102,15 @@ const copyMap = {
     designer: 'Designer',
     reviewer: 'Reviewer',
     category: 'Category',
+    taxonomy: 'Category and tags',
+    tags: 'Tags',
+    activeTaxonomy: 'Active',
+    disabledTaxonomy: 'Disabled',
+    uncategorized: 'Uncategorized',
+    legacyUnmapped: 'Unmapped legacy value',
+    taxonomyUnavailable: 'Unavailable for this permission scope',
+    tagsUnavailable: 'Unavailable for this permission scope',
+    noTags: 'No tags',
     reports: 'Reports',
     views: 'Views',
     likes: 'Likes',
@@ -947,10 +1118,12 @@ const copyMap = {
     publishedAt: 'Published at',
     createdAt: 'Created at',
     updatedAt: 'Updated at',
-    readAction: 'Read action',
+    actions: 'Actions',
     viewDetails: 'View details',
     viewDetailsHint: 'Open safe work details',
     detailsPermissionRequired: 'Work detail permission is required',
+    manageTaxonomy: 'Manage category and tags',
+    manageTaxonomyFor: (title: string) => `Manage category and tags for ${title}`,
     paginationTotal: 'Total results',
     visibleNow: 'items visible now',
     paginationLabel: 'Works pagination',
@@ -967,6 +1140,7 @@ const copyMap = {
     detailsForbidden: 'This work detail is unavailable for the current account permissions.',
     detailsNotFound: 'This work no longer exists or is no longer available.',
     noSummary: 'No summary has been recorded for this work.',
+    detailTaxonomyCopy: 'The current server-provided state, including previously linked disabled entities.',
     accessIndicators: 'Available field scope',
     accessIndicatorsCopy: 'These indicators reflect the permissions enforced by the server response.',
     canViewDesigner: 'Designer and reviewer',
@@ -1013,12 +1187,39 @@ const hasWorksListAccess = computed(() => {
     && authStore.permissions.includes('admin.works.all.view')
     && authStore.permissions.includes('admin.works.list')
 })
+const taxonomyAccess = reactive<TaxonomyAccess>({
+  can_view_category: false,
+  can_view_tags: false
+})
+const isSuperAdmin = computed(() => authStore.role === 'super-admin')
 const canViewDetails = computed(() => (
   hasWorksListAccess.value
   && (
     authStore.role === 'super-admin'
     || authStore.permissions.includes('admin.works.detail.view')
   )
+))
+const canViewAssignedCategory = computed(() => taxonomyAccess.can_view_category)
+const canViewAssignedTags = computed(() => taxonomyAccess.can_view_tags)
+const canUpdateAssignedCategory = computed(() => (
+  isSuperAdmin.value
+  || (
+    canViewAssignedCategory.value
+    && authStore.permissions.includes('admin.works.update.category')
+  )
+))
+const canUpdateAssignedTags = computed(() => (
+  isSuperAdmin.value
+  || (
+    canViewAssignedTags.value
+    && authStore.permissions.includes('admin.works.update.tags')
+  )
+))
+const canManageIndividualTaxonomy = computed(() => (
+  canUpdateAssignedCategory.value || canUpdateAssignedTags.value
+))
+const managementBadge = computed(() => (
+  canManageIndividualTaxonomy.value ? copy.value.individualAvailable : copy.value.permissionRead
 ))
 const serverForbidden = ref(false)
 const forbidden = computed(() => (
@@ -1066,6 +1267,8 @@ const detail = ref<WorkDetailData | null>(null)
 const detailLoading = ref(false)
 const detailError = ref<string | null>(null)
 const drawerTitleId = 'ym-work-detail-title'
+const assignmentOpen = ref(false)
+const assignmentWork = ref<WorkListItem | null>(null)
 
 let pageMounted = false
 let loadedAuthorizationSignature: string | null = null
@@ -1079,6 +1282,15 @@ const authorizationSignature = computed(() => [
   authStore.role || '',
   [...authStore.permissions].sort().join(',')
 ].join('|'))
+const assignmentPermissionRevision = computed(() => [
+  authorizationSignature.value,
+  taxonomyAccess.can_view_category ? 'category-visible' : 'category-hidden',
+  taxonomyAccess.can_view_tags ? 'tags-visible' : 'tags-hidden'
+].join('|'))
+const assignmentWorkForDetail = computed(() => {
+  if (!detail.value) return null
+  return items.value.find(work => work.id === detail.value?.work.id) ?? null
+})
 
 const statusOptions = computed(() => [
   { value: 'draft' as const, label: statusLabel('draft') },
@@ -1161,6 +1373,10 @@ function booleanLabel(value: boolean): string {
 
 function accessLabel(value: boolean): string {
   return value ? copy.value.allowed : copy.value.unavailable
+}
+
+function taxonomyName(entity: SafeTaxonomyEntity): string {
+  return currentLocale.value === 'ar' ? entity.name_ar : entity.name_en
 }
 
 function statusLabel(status: WorkStatus): string {
@@ -1303,7 +1519,12 @@ async function fetchWorks(): Promise<void> {
 
     items.value = response.data.items
     Object.assign(pagination, response.data.pagination)
+    Object.assign(taxonomyAccess, response.data.taxonomy_access)
     page.value = response.data.pagination.current_page
+    if (assignmentOpen.value && assignmentWork.value) {
+      const refreshedWork = response.data.items.find(work => work.id === assignmentWork.value?.id)
+      if (refreshedWork) assignmentWork.value = refreshedWork
+    }
     serverForbidden.value = false
   } catch (requestError: unknown) {
     if (
@@ -1319,6 +1540,11 @@ async function fetchWorks(): Promise<void> {
     if (status === 401 || status === 403) {
       serverForbidden.value = true
       items.value = []
+      Object.assign(taxonomyAccess, {
+        can_view_category: false,
+        can_view_tags: false
+      })
+      closeTaxonomyAssignment()
       return
     }
 
@@ -1389,6 +1615,35 @@ function openDetails(work: WorkListItem): void {
   detail.value = null
   detailError.value = null
   void fetchWorkDetails(work.id)
+}
+
+function openTaxonomyAssignment(work: WorkListItem): void {
+  if (!canManageIndividualTaxonomy.value) return
+  assignmentWork.value = work
+  assignmentOpen.value = true
+}
+
+function closeTaxonomyAssignment(): void {
+  assignmentOpen.value = false
+  assignmentWork.value = null
+}
+
+async function handleTaxonomyAssignmentChanged(payload: {
+  work_id: number
+  section: 'category' | 'tags'
+  changed: boolean
+}): Promise<void> {
+  if (!payload.changed) return
+  const refreshes: Promise<void>[] = [fetchWorks()]
+  if (drawerOpen.value && selectedWorkId.value === payload.work_id && canViewDetails.value) {
+    refreshes.push(fetchWorkDetails(payload.work_id))
+  }
+  await Promise.all(refreshes)
+}
+
+function handleTaxonomyAuthorizationError(): void {
+  closeTaxonomyAssignment()
+  if (authStore.isAuthenticated) void authStore.fetchUser()
 }
 
 async function fetchWorkDetails(workId: number): Promise<void> {
@@ -1477,6 +1732,11 @@ function clearPageState(): void {
   loading.value = false
   error.value = null
   filterError.value = null
+  Object.assign(taxonomyAccess, {
+    can_view_category: false,
+    can_view_tags: false
+  })
+  closeTaxonomyAssignment()
   closeDetails()
 }
 
@@ -1507,7 +1767,33 @@ function syncWorksAccessState(): void {
 
 watch(
   authorizationSignature,
-  () => syncWorksAccessState(),
+  () => {
+    if (!isSuperAdmin.value) {
+      const hasTaxonomyView = authStore.permissions.includes('admin.works.taxonomy.view')
+      if (!hasTaxonomyView || !authStore.permissions.includes('admin.works.taxonomy.categories.view')) {
+        taxonomyAccess.can_view_category = false
+        for (const work of items.value) {
+          work.taxonomy.category = null
+          work.taxonomy.category_tracking = null
+        }
+        if (detail.value) {
+          detail.value.taxonomy.category = null
+          detail.value.taxonomy.category_tracking = null
+          detail.value.taxonomy_access.can_view_category = false
+        }
+      }
+      if (!hasTaxonomyView || !authStore.permissions.includes('admin.works.taxonomy.tags.view')) {
+        taxonomyAccess.can_view_tags = false
+        for (const work of items.value) work.taxonomy.tags = null
+        if (detail.value) {
+          detail.value.taxonomy.tags = null
+          detail.value.taxonomy_access.can_view_tags = false
+        }
+      }
+    }
+    if (!canManageIndividualTaxonomy.value) closeTaxonomyAssignment()
+    syncWorksAccessState()
+  },
   { flush: 'post' }
 )
 
@@ -1892,7 +2178,7 @@ onMounted(() => {
 
 .ym-works-all-table {
   width: 100%;
-  min-width: 2340px;
+  min-width: 2580px;
   border-collapse: collapse;
   background: color-mix(in srgb, var(--ym-card-bg) 88%, transparent);
 }
@@ -1941,6 +2227,83 @@ onMounted(() => {
 .ym-works-all-person strong,
 .ym-works-all-person small {
   display: block;
+}
+
+.ym-works-all-table th.is-taxonomy,
+.ym-works-all-table td.is-taxonomy {
+  width: 280px;
+  min-width: 280px;
+}
+
+.ym-work-taxonomy-cell,
+.ym-work-taxonomy-category {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.ym-work-taxonomy-category strong {
+  color: var(--ym-text);
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.ym-work-taxonomy-category code {
+  color: #8b5cf6;
+  font-size: 9px;
+  overflow-wrap: anywhere;
+}
+
+.ym-work-taxonomy-state {
+  width: max-content;
+  border-radius: 999px;
+  background: var(--ym-control-bg);
+  color: var(--ym-muted);
+  font-size: 9px;
+  font-weight: 950;
+  padding: 0.25rem 0.45rem;
+}
+
+.ym-work-taxonomy-state.is-active {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+}
+
+.ym-work-taxonomy-state.is-disabled,
+.ym-work-taxonomy-state.is-legacy {
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+}
+
+.ym-work-taxonomy-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  border-top: 1px solid var(--ym-soft-border);
+  margin-top: 0.3rem;
+  padding-top: 0.45rem;
+}
+
+.ym-work-taxonomy-tag,
+.ym-work-taxonomy-more {
+  border: 1px solid rgba(139, 92, 246, 0.26);
+  border-radius: 999px;
+  background: rgba(139, 92, 246, 0.08);
+  color: var(--ym-text);
+  font-size: 9px;
+  font-weight: 850;
+  padding: 0.25rem 0.4rem;
+}
+
+.ym-work-taxonomy-tag.is-disabled {
+  border-color: rgba(245, 158, 11, 0.3);
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+}
+
+.ym-work-taxonomy-unavailable,
+.ym-work-taxonomy-tags small {
+  color: var(--ym-muted);
+  font-size: 10px;
 }
 
 .ym-works-all-table td.is-title strong {
@@ -2104,6 +2467,26 @@ onMounted(() => {
   font-weight: 950;
   padding: 0.55rem 0.7rem;
   transition: background 160ms ease, transform 160ms ease;
+}
+
+.ym-works-all-row-actions {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.ym-works-all-taxonomy-button {
+  min-height: 38px;
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  border-radius: 12px;
+  background: rgba(139, 92, 246, 0.12);
+  color: #a78bfa;
+  font-size: 11px;
+  font-weight: 950;
+  padding: 0.55rem 0.7rem;
+}
+
+.ym-works-all-taxonomy-button:hover {
+  background: rgba(139, 92, 246, 0.2);
 }
 
 .ym-works-all-details-button:hover:not(:disabled) {
@@ -2343,6 +2726,88 @@ onMounted(() => {
   margin: 0.25rem 0 0;
 }
 
+.ym-work-detail-taxonomy-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.ym-work-detail-taxonomy {
+  display: grid;
+  grid-template-columns: 1fr 1.3fr;
+  gap: 0.7rem;
+}
+
+.ym-work-detail-taxonomy > article {
+  display: grid;
+  align-content: start;
+  gap: 0.35rem;
+  border: 1px solid var(--ym-soft-border);
+  border-radius: 16px;
+  background: var(--ym-control-bg);
+  padding: 0.8rem;
+}
+
+.ym-work-detail-taxonomy > article > span,
+.ym-work-detail-taxonomy > article > small,
+.ym-work-detail-taxonomy > article > p {
+  color: var(--ym-muted);
+  font-size: 10px;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.ym-work-detail-taxonomy > article > strong {
+  font-size: 12px;
+}
+
+.ym-work-detail-taxonomy > article > code {
+  color: #8b5cf6;
+  font-size: 10px;
+}
+
+.ym-work-detail-taxonomy > article > b {
+  width: max-content;
+  border-radius: 999px;
+  font-size: 10px;
+  padding: 0.28rem 0.5rem;
+}
+
+.ym-work-detail-taxonomy .is-active {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+}
+
+.ym-work-detail-taxonomy .is-disabled,
+.ym-work-detail-taxonomy .is-legacy {
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+}
+
+.ym-work-detail-tag-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.ym-work-detail-tag-list > span {
+  display: grid;
+  gap: 0.18rem;
+  border: 1px solid rgba(139, 92, 246, 0.24);
+  border-radius: 12px;
+  padding: 0.55rem;
+}
+
+.ym-work-detail-tag-list > span.is-disabled {
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.ym-work-detail-tag-list code,
+.ym-work-detail-tag-list small {
+  color: var(--ym-muted);
+  font-size: 9px;
+}
+
 .ym-work-detail-access-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2546,8 +3011,13 @@ onMounted(() => {
   .ym-work-detail-access-grid,
   .ym-work-detail-grid,
   .ym-work-detail-grid.is-lifecycle,
-  .ym-work-detail-people {
+  .ym-work-detail-people,
+  .ym-work-detail-taxonomy {
     grid-template-columns: 1fr;
+  }
+
+  .ym-work-detail-taxonomy-head {
+    display: grid;
   }
 
   .ym-works-all-filter-grid label.is-search {
