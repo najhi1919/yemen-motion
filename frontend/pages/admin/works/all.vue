@@ -14,7 +14,7 @@
           <p class="ym-works-all-kicker">{{ copy.kicker }}</p>
           <h1>{{ copy.title }}</h1>
           <p class="ym-works-all-description">
-            {{ canManageIndividualTaxonomy ? copy.managementDescription : copy.readOnlyDescription }}
+            {{ taxonomyDescription }}
           </p>
         </div>
 
@@ -41,7 +41,7 @@
     <template v-else>
       <aside class="ym-works-all-notice" role="note">
         <span>{{ managementBadge }}</span>
-        <p>{{ canManageIndividualTaxonomy ? copy.managementNotice : copy.readOnlyNotice }}</p>
+        <p>{{ taxonomyNotice }}</p>
       </aside>
 
       <section class="ym-works-all-summary-grid" :aria-label="copy.pageSummary">
@@ -195,7 +195,7 @@
         <header class="ym-works-all-table-card__head">
           <div>
             <h2>{{ copy.tableTitle }}</h2>
-            <p>{{ canManageIndividualTaxonomy ? copy.managementTableCopy : copy.readOnlyTableCopy }}</p>
+            <p>{{ taxonomyTableCopy }}</p>
           </div>
           <div class="ym-works-all-table-state">
             <span>{{ copy.currentPage }}</span>
@@ -228,6 +228,16 @@
           <table class="ym-works-all-table">
             <thead>
               <tr>
+                <th v-if="canManageBulkTaxonomy" class="is-selection">
+                  <input
+                    ref="currentPageCheckbox"
+                    type="checkbox"
+                    :checked="allCurrentPageSelected"
+                    :aria-label="copy.selectCurrentPage"
+                    :disabled="items.length === 0"
+                    @change="toggleCurrentPage"
+                  />
+                </th>
                 <th class="is-title">
                   <button type="button" class="ym-works-all-sort" @click="changeSort('title')">
                     {{ copy.workTitle }}
@@ -294,6 +304,15 @@
             </thead>
             <tbody>
               <tr v-for="work in items" :key="work.id">
+                <td v-if="canManageBulkTaxonomy" class="is-selection">
+                  <input
+                    type="checkbox"
+                    :checked="isWorkSelected(work.id)"
+                    :disabled="!isWorkSelected(work.id) && selectionAtLimit"
+                    :aria-label="copy.selectWork(work.title)"
+                    @change="toggleWork(work)"
+                  />
+                </td>
                 <td class="is-title">
                   <strong :dir="textDirection(work.title)">{{ work.title }}</strong>
                   <code dir="ltr">{{ work.slug }}</code>
@@ -409,6 +428,26 @@
             </tbody>
           </table>
         </div>
+
+        <p v-if="selectionMessage" class="ym-works-all-selection-message" role="status">
+          {{ selectionMessage }}
+        </p>
+        <p v-if="bulkRefreshWarning" class="ym-works-all-selection-message is-warning" role="alert">
+          {{ bulkRefreshWarning }}
+          <button type="button" @click="retryBulkRefresh">{{ copy.retry }}</button>
+        </p>
+
+        <WorksTaxonomyBulkSelectionBar
+          v-if="canManageBulkTaxonomy"
+          :selected-count="selectedCount"
+          :current-page-selected-count="currentPageSelectedCount"
+          :max-selection="MAX_BULK_SELECTION"
+          :locale="currentLocale"
+          :can-assign-category="canBulkAssignCategory"
+          :can-assign-tags="canBulkAssignTags"
+          @open="openBulkAssignment"
+          @clear="clearBulkSelection"
+        />
 
         <footer class="ym-works-all-pagination">
           <div>
@@ -715,12 +754,26 @@
       @changed="handleTaxonomyAssignmentChanged"
       @authorization-error="handleTaxonomyAuthorizationError"
     />
+
+    <WorksTaxonomyBulkAssignmentDrawer
+      :open="bulkAssignmentOpen"
+      :works="sortedSelectedWorks"
+      :locale="currentLocale"
+      :can-assign-category="canBulkAssignCategory"
+      :can-assign-tags="canBulkAssignTags"
+      :permission-revision="bulkPermissionRevision"
+      @close="closeBulkAssignment"
+      @changed="handleBulkAssignmentChanged"
+      @authorization-error="handleBulkAuthorizationError"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import WorksTaxonomyAssignmentDrawer from '~/components/works/taxonomy/WorksTaxonomyAssignmentDrawer.vue'
+import WorksTaxonomyBulkAssignmentDrawer from '~/components/works/taxonomy/WorksTaxonomyBulkAssignmentDrawer.vue'
+import WorksTaxonomyBulkSelectionBar from '~/components/works/taxonomy/WorksTaxonomyBulkSelectionBar.vue'
 import { useApiClient } from '~/composables/useApiClient'
 import { useAuthStore } from '~/stores/authStore'
 
@@ -812,6 +865,37 @@ interface WorksIndexResponse {
   errors?: Record<string, string[]> | null
 }
 
+interface BulkSummary {
+  requested: number
+  changed: number
+  unchanged: number
+}
+
+interface BulkCategoryItem {
+  work_id: number
+  previous_category_id: number | null
+  category_id: number | null
+  changed: boolean
+}
+
+interface BulkTagsItem {
+  work_id: number
+  previous_tag_ids: number[]
+  tag_ids: number[]
+  added_tag_ids: number[]
+  removed_tag_ids: number[]
+  changed: boolean
+}
+
+interface BulkAssignmentChanged {
+  section: 'category' | 'tags'
+  changed: boolean
+  summary: BulkSummary
+  items: BulkCategoryItem[] | BulkTagsItem[]
+  category?: SafeTaxonomyEntity | null
+  tags?: SafeTaxonomyEntity[]
+}
+
 interface WorkDetailBase {
   id: number
   title: string
@@ -895,11 +979,15 @@ const currentLocale = useState<Locale>('ym-dashboard-locale', () => 'ar')
 
 const copyMap = {
   ar: {
+    individualAndBulkAvailable: 'إسناد فردي وجماعي',
+    bulkAvailable: 'إسناد جماعي متاح',
     individualAvailable: 'إسناد فردي متاح',
     permissionRead: 'قراءة حسب الصلاحيات',
     kicker: 'إدارة المحتوى الإبداعي',
     title: 'كل الأعمال',
-    managementDescription: 'قائمة إدارية آمنة تعرض التصنيف والوسوم الحالية، وتتيح الإسناد الفردي حسب صلاحيات الحساب.',
+    managementDescription: 'قائمة إدارية آمنة تعرض التصنيف والوسوم الحالية، وتتيح التحديد والإسناد الفردي أو الجماعي حسب صلاحيات الحساب.',
+    bulkDescription: 'قائمة إدارية آمنة تعرض التصنيف والوسوم الحالية، وتتيح تحديد الأعمال والإسناد الجماعي حسب صلاحيات الحساب.',
+    individualDescription: 'قائمة إدارية آمنة تعرض التصنيف والوسوم الحالية، وتتيح الإسناد الفردي حسب صلاحيات الحساب.',
     readOnlyDescription: 'قائمة إدارية آمنة تعرض بيانات الأعمال والتصنيف والوسوم التي يسمح الحساب بقراءتها.',
     totalWorks: 'إجمالي النتائج',
     safeRecords: 'سجلات آمنة من API الأعمال',
@@ -907,7 +995,9 @@ const copyMap = {
     authLoadingCopy: 'ننتظر اكتمال تهيئة جلسة المستخدم قبل إرسال أي طلب بيانات.',
     forbiddenTitle: 'الوصول إلى كل الأعمال غير متاح',
     forbiddenCopy: 'لا يملك هذا الحساب الصلاحيات المطلوبة لقراءة قائمة الأعمال. لم تتم محاولة تحميل البيانات.',
-    managementNotice: 'الإسناد الفردي للتصنيف والوسوم متاح هنا. الإسناد الجماعي وبقية إجراءات دورة العمل غير موجودة في هذه المهمة وستضاف لاحقًا.',
+    managementNotice: 'تظهر أدوات تحديد الأعمال والإسناد الفردي أو الجماعي حسب الصلاحيات المتاحة. بقية إجراءات دورة العمل خارج هذه الصفحة.',
+    bulkNotice: 'تظهر أدوات تحديد الأعمال والإسناد الجماعي حسب الصلاحيات المتاحة. بقية إجراءات دورة العمل خارج هذه الصفحة.',
+    individualNotice: 'يظهر الإسناد الفردي حسب الصلاحيات المتاحة. بقية إجراءات دورة العمل خارج هذه الصفحة.',
     readOnlyNotice: 'يعرض هذا الحساب البيانات المصرح بقراءتها فقط، ولا تظهر له أدوات غير مصرح بها.',
     pageSummary: 'ملخص نتائج صفحة الأعمال الحالية',
     total: 'إجمالي النتائج',
@@ -948,7 +1038,9 @@ const copyMap = {
     invalidIdentifiers: 'معرّفات المصمم والمراجع والتصنيف يجب أن تكون أعدادًا صحيحة صالحة.',
     validationError: 'تعذر تطبيق الفلاتر. تحقق من البحث والقيم والتواريخ.',
     tableTitle: 'قائمة الأعمال',
-    managementTableCopy: 'اقرأ التصنيف والوسوم الحالية، واستخدم التفاصيل أو الإسناد الفردي وفق صلاحيات الحساب.',
+    managementTableCopy: 'اقرأ الحالة الحالية، واستخدم التفاصيل أو الإسناد الفردي أو الجماعي وفق صلاحيات الحساب.',
+    bulkTableCopy: 'اقرأ الحالة الحالية، وحدد الأعمال لإدارتها جماعيًا وفق صلاحيات الحساب.',
+    individualTableCopy: 'اقرأ الحالة الحالية، واستخدم التفاصيل أو الإسناد الفردي وفق صلاحيات الحساب.',
     readOnlyTableCopy: 'اقرأ بيانات الأعمال والتصنيف والوسوم التي يسمح بها نطاق الحساب.',
     currentPage: 'الصفحة الحالية',
     loadingTitle: 'جارٍ تحميل الأعمال',
@@ -959,6 +1051,11 @@ const copyMap = {
     emptyTitle: 'لا توجد أعمال مطابقة',
     emptyCopy: 'جرّب تعديل الفلاتر أو إعادة ضبطها لعرض نتائج أخرى.',
     workTitle: 'العنوان',
+    selectCurrentPage: 'تحديد أعمال الصفحة الحالية',
+    selectWork: (title: string) => `تحديد العمل ${title}`,
+    selectionLimitReached: 'وصل التحديد إلى الحد الأقصى: 100 عمل.',
+    selectionPageWouldExceed: 'لا يمكن تحديد الصفحة الحالية لأن الإجمالي سيتجاوز الحد الأقصى 100. لم يتغير التحديد.',
+    refreshAfterBulkFailed: 'نجحت العملية الجماعية، لكن تعذر تحديث قائمة الصفحة الحالية. يمكنك إعادة المحاولة.',
     designer: 'المصمم',
     reviewer: 'المراجع',
     category: 'التصنيف',
@@ -1035,11 +1132,15 @@ const copyMap = {
     hiddenVisibility: 'مخفي'
   },
   en: {
+    individualAndBulkAvailable: 'Individual and bulk assignment',
+    bulkAvailable: 'Bulk assignment available',
     individualAvailable: 'Individual assignment available',
     permissionRead: 'Permission-based read',
     kicker: 'Creative content management',
     title: 'All Works',
-    managementDescription: 'A safe administrative list that displays current categories and tags and enables individual assignment when authorized.',
+    managementDescription: 'A safe administrative list showing current categories and tags, with selection and individual or bulk assignment according to permissions.',
+    bulkDescription: 'A safe administrative list showing current categories and tags, with work selection and bulk assignment according to permissions.',
+    individualDescription: 'A safe administrative list showing current categories and tags, with individual assignment according to permissions.',
     readOnlyDescription: 'A safe administrative list showing work data, categories, and tags that this account may read.',
     totalWorks: 'Total results',
     safeRecords: 'Safe records from the Works API',
@@ -1047,7 +1148,9 @@ const copyMap = {
     authLoadingCopy: 'Waiting for the user session to initialize before requesting data.',
     forbiddenTitle: 'All Works access is unavailable',
     forbiddenCopy: 'This account lacks the required permissions to read the works list. No data request was made.',
-    managementNotice: 'Individual category and tag assignment is available here. Bulk assignment and other lifecycle actions are outside this task and will be added later.',
+    managementNotice: 'Work selection and individual or bulk assignment appear according to permissions. Other lifecycle actions remain outside this page.',
+    bulkNotice: 'Work selection and bulk assignment appear according to permissions. Other lifecycle actions remain outside this page.',
+    individualNotice: 'Individual assignment appears according to permissions. Other lifecycle actions remain outside this page.',
     readOnlyNotice: 'This account sees only data it may read; unauthorized tools are not shown.',
     pageSummary: 'Current works page summary',
     total: 'Total results',
@@ -1088,7 +1191,9 @@ const copyMap = {
     invalidIdentifiers: 'Designer, reviewer, and category identifiers must be valid integers.',
     validationError: 'The filters could not be applied. Check the search, values, and dates.',
     tableTitle: 'Works list',
-    managementTableCopy: 'Read current categories and tags, then use details or individual assignment according to account permissions.',
+    managementTableCopy: 'Read current state, then use details or individual or bulk assignment according to account permissions.',
+    bulkTableCopy: 'Read current state and select works for bulk management according to account permissions.',
+    individualTableCopy: 'Read current state, then use details or individual assignment according to account permissions.',
     readOnlyTableCopy: 'Read work, category, and tag data available to this account.',
     currentPage: 'Current page',
     loadingTitle: 'Loading works',
@@ -1099,6 +1204,11 @@ const copyMap = {
     emptyTitle: 'No matching works',
     emptyCopy: 'Change or reset the filters to see other results.',
     workTitle: 'Title',
+    selectCurrentPage: 'Select works on the current page',
+    selectWork: (title: string) => `Select work ${title}`,
+    selectionLimitReached: 'The selection has reached the maximum of 100 works.',
+    selectionPageWouldExceed: 'The current page cannot be selected because the total would exceed 100. The selection was not changed.',
+    refreshAfterBulkFailed: 'The bulk operation succeeded, but the current list could not be refreshed. You can retry.',
     designer: 'Designer',
     reviewer: 'Reviewer',
     category: 'Category',
@@ -1218,9 +1328,47 @@ const canUpdateAssignedTags = computed(() => (
 const canManageIndividualTaxonomy = computed(() => (
   canUpdateAssignedCategory.value || canUpdateAssignedTags.value
 ))
-const managementBadge = computed(() => (
-  canManageIndividualTaxonomy.value ? copy.value.individualAvailable : copy.value.permissionRead
+const canBulkAssignCategory = computed(() => (
+  isSuperAdmin.value
+  || (
+    canViewAssignedCategory.value
+    && authStore.permissions.includes('admin.works.taxonomy.bulk_assign')
+    && authStore.permissions.includes('admin.works.bulk.category_update')
+  )
 ))
+const canBulkAssignTags = computed(() => (
+  isSuperAdmin.value
+  || (
+    canViewAssignedTags.value
+    && authStore.permissions.includes('admin.works.taxonomy.bulk_assign')
+    && authStore.permissions.includes('admin.works.bulk.tags_update')
+  )
+))
+const canManageBulkTaxonomy = computed(() => canBulkAssignCategory.value || canBulkAssignTags.value)
+const managementBadge = computed(() => {
+  if (canManageIndividualTaxonomy.value && canManageBulkTaxonomy.value) return copy.value.individualAndBulkAvailable
+  if (canManageBulkTaxonomy.value) return copy.value.bulkAvailable
+  if (canManageIndividualTaxonomy.value) return copy.value.individualAvailable
+  return copy.value.permissionRead
+})
+const taxonomyDescription = computed(() => {
+  if (canManageIndividualTaxonomy.value && canManageBulkTaxonomy.value) return copy.value.managementDescription
+  if (canManageBulkTaxonomy.value) return copy.value.bulkDescription
+  if (canManageIndividualTaxonomy.value) return copy.value.individualDescription
+  return copy.value.readOnlyDescription
+})
+const taxonomyNotice = computed(() => {
+  if (canManageIndividualTaxonomy.value && canManageBulkTaxonomy.value) return copy.value.managementNotice
+  if (canManageBulkTaxonomy.value) return copy.value.bulkNotice
+  if (canManageIndividualTaxonomy.value) return copy.value.individualNotice
+  return copy.value.readOnlyNotice
+})
+const taxonomyTableCopy = computed(() => {
+  if (canManageIndividualTaxonomy.value && canManageBulkTaxonomy.value) return copy.value.managementTableCopy
+  if (canManageBulkTaxonomy.value) return copy.value.bulkTableCopy
+  if (canManageIndividualTaxonomy.value) return copy.value.individualTableCopy
+  return copy.value.readOnlyTableCopy
+})
 const serverForbidden = ref(false)
 const forbidden = computed(() => (
   authStore.isInitialized && (!hasWorksListAccess.value || serverForbidden.value)
@@ -1269,6 +1417,12 @@ const detailError = ref<string | null>(null)
 const drawerTitleId = 'ym-work-detail-title'
 const assignmentOpen = ref(false)
 const assignmentWork = ref<WorkListItem | null>(null)
+const MAX_BULK_SELECTION = 100
+const selectedWorks = ref<Map<number, WorkListItem>>(new Map())
+const currentPageCheckbox = ref<HTMLInputElement | null>(null)
+const selectionMessage = ref('')
+const bulkRefreshWarning = ref('')
+const bulkAssignmentOpen = ref(false)
 
 let pageMounted = false
 let loadedAuthorizationSignature: string | null = null
@@ -1287,6 +1441,20 @@ const assignmentPermissionRevision = computed(() => [
   taxonomyAccess.can_view_category ? 'category-visible' : 'category-hidden',
   taxonomyAccess.can_view_tags ? 'tags-visible' : 'tags-hidden'
 ].join('|'))
+const bulkPermissionRevision = computed(() => [
+  authorizationSignature.value,
+  taxonomyAccess.can_view_category ? 'category-visible' : 'category-hidden',
+  taxonomyAccess.can_view_tags ? 'tags-visible' : 'tags-hidden',
+  canBulkAssignCategory.value ? 'bulk-category-allowed' : 'bulk-category-denied',
+  canBulkAssignTags.value ? 'bulk-tags-allowed' : 'bulk-tags-denied'
+].join('|'))
+const selectedCount = computed(() => selectedWorks.value.size)
+const currentPageSelectedCount = computed(() => items.value.filter(work => selectedWorks.value.has(work.id)).length)
+const allCurrentPageSelected = computed(() => items.value.length > 0 && currentPageSelectedCount.value === items.value.length)
+const selectionAtLimit = computed(() => selectedCount.value >= MAX_BULK_SELECTION)
+const currentPageUnselectedCount = computed(() => items.value.length - currentPageSelectedCount.value)
+const canSelectCurrentPage = computed(() => selectedCount.value + currentPageUnselectedCount.value <= MAX_BULK_SELECTION)
+const sortedSelectedWorks = computed(() => [...selectedWorks.value.values()].sort((a, b) => a.id - b.id))
 const assignmentWorkForDetail = computed(() => {
   if (!detail.value) return null
   return items.value.find(work => work.id === detail.value?.work.id) ?? null
@@ -1490,8 +1658,81 @@ function buildListQuery(): Record<string, string | number> {
   return query
 }
 
-async function fetchWorks(): Promise<void> {
-  if (!authStore.isInitialized || !hasWorksListAccess.value) return
+function cloneWorkSnapshot(work: WorkListItem): WorkListItem {
+  return {
+    ...work,
+    taxonomy: {
+      category: work.taxonomy.category ? { ...work.taxonomy.category } : null,
+      category_tracking: work.taxonomy.category_tracking ? { ...work.taxonomy.category_tracking } : null,
+      tags: work.taxonomy.tags ? work.taxonomy.tags.map(tag => ({ ...tag })) : work.taxonomy.tags
+    }
+  }
+}
+
+function isWorkSelected(workId: number): boolean {
+  return selectedWorks.value.has(workId)
+}
+
+function replaceSelection(next: Map<number, WorkListItem>): void {
+  selectedWorks.value = next
+}
+
+function toggleWork(work: WorkListItem): void {
+  if (!canManageBulkTaxonomy.value) return
+  const next = new Map(selectedWorks.value)
+  if (next.has(work.id)) {
+    next.delete(work.id)
+    selectionMessage.value = ''
+  } else {
+    if (next.size >= MAX_BULK_SELECTION) {
+      selectionMessage.value = copy.value.selectionLimitReached
+      return
+    }
+    next.set(work.id, cloneWorkSnapshot(work))
+    selectionMessage.value = next.size >= MAX_BULK_SELECTION ? copy.value.selectionLimitReached : ''
+  }
+  replaceSelection(next)
+}
+
+function toggleCurrentPage(): void {
+  if (!canManageBulkTaxonomy.value || !items.value.length) return
+  const next = new Map(selectedWorks.value)
+  if (allCurrentPageSelected.value) {
+    for (const work of items.value) next.delete(work.id)
+    selectionMessage.value = ''
+    replaceSelection(next)
+    return
+  }
+  if (!canSelectCurrentPage.value) {
+    selectionMessage.value = copy.value.selectionPageWouldExceed
+    return
+  }
+  for (const work of items.value) next.set(work.id, cloneWorkSnapshot(work))
+  selectionMessage.value = next.size >= MAX_BULK_SELECTION ? copy.value.selectionLimitReached : ''
+  replaceSelection(next)
+}
+
+function clearBulkSelection(): void {
+  replaceSelection(new Map())
+  selectionMessage.value = ''
+  bulkRefreshWarning.value = ''
+  closeBulkAssignment()
+}
+
+function refreshSelectedSnapshots(visibleWorks: WorkListItem[]): void {
+  if (!selectedWorks.value.size) return
+  const next = new Map(selectedWorks.value)
+  let changed = false
+  for (const work of visibleWorks) {
+    if (!next.has(work.id)) continue
+    next.set(work.id, cloneWorkSnapshot(work))
+    changed = true
+  }
+  if (changed) replaceSelection(next)
+}
+
+async function fetchWorks(): Promise<boolean> {
+  if (!authStore.isInitialized || !hasWorksListAccess.value) return false
 
   const requestAccessRevision = accessRevision
   const currentRequestRevision = ++listRequestRevision
@@ -1508,31 +1749,33 @@ async function fetchWorks(): Promise<void> {
       || currentRequestRevision !== listRequestRevision
       || !hasWorksListAccess.value
     ) {
-      return
+      return false
     }
 
     if (!response.success || !response.data) {
       items.value = []
       error.value = copy.value.genericError
-      return
+      return false
     }
 
     items.value = response.data.items
     Object.assign(pagination, response.data.pagination)
     Object.assign(taxonomyAccess, response.data.taxonomy_access)
+    refreshSelectedSnapshots(response.data.items)
     page.value = response.data.pagination.current_page
     if (assignmentOpen.value && assignmentWork.value) {
       const refreshedWork = response.data.items.find(work => work.id === assignmentWork.value?.id)
       if (refreshedWork) assignmentWork.value = refreshedWork
     }
     serverForbidden.value = false
+    return true
   } catch (requestError: unknown) {
     if (
       requestAccessRevision !== accessRevision
       || currentRequestRevision !== listRequestRevision
       || !hasWorksListAccess.value
     ) {
-      return
+      return false
     }
 
     const status = errorStatus(requestError)
@@ -1545,15 +1788,17 @@ async function fetchWorks(): Promise<void> {
         can_view_tags: false
       })
       closeTaxonomyAssignment()
-      return
+      clearBulkSelection()
+      return false
     }
 
     if (status === 422) {
       filterError.value = copy.value.validationError
-      return
+      return false
     }
 
     error.value = copy.value.genericError
+    return false
   } finally {
     if (requestAccessRevision === accessRevision && currentRequestRevision === listRequestRevision) {
       loading.value = false
@@ -1609,6 +1854,8 @@ function changePage(nextPage: number): void {
 function openDetails(work: WorkListItem): void {
   if (!canViewDetails.value) return
 
+  closeBulkAssignment()
+  closeTaxonomyAssignment()
   drawerOpen.value = true
   selectedWorkId.value = work.id
   selectedWorkTitle.value = work.title
@@ -1619,6 +1866,8 @@ function openDetails(work: WorkListItem): void {
 
 function openTaxonomyAssignment(work: WorkListItem): void {
   if (!canManageIndividualTaxonomy.value) return
+  closeBulkAssignment()
+  closeDetails()
   assignmentWork.value = work
   assignmentOpen.value = true
 }
@@ -1626,6 +1875,76 @@ function openTaxonomyAssignment(work: WorkListItem): void {
 function closeTaxonomyAssignment(): void {
   assignmentOpen.value = false
   assignmentWork.value = null
+}
+
+function openBulkAssignment(): void {
+  if (
+    !canManageBulkTaxonomy.value
+    || selectedCount.value < 1
+    || selectedCount.value > MAX_BULK_SELECTION
+  ) {
+    return
+  }
+  closeTaxonomyAssignment()
+  closeDetails()
+  bulkRefreshWarning.value = ''
+  bulkAssignmentOpen.value = true
+}
+
+function closeBulkAssignment(): void {
+  bulkAssignmentOpen.value = false
+}
+
+async function handleBulkAssignmentChanged(payload: BulkAssignmentChanged): Promise<void> {
+  const next = new Map(selectedWorks.value)
+  if (payload.section === 'category') {
+    const category = payload.category ?? null
+    for (const item of payload.items as BulkCategoryItem[]) {
+      const work = next.get(item.work_id)
+      if (!work) continue
+      work.category_id = item.category_id
+      work.taxonomy.category = category ? { ...category } : null
+      work.taxonomy.category_tracking = {
+        catalog_record_exists: category !== null,
+        is_legacy_unmapped: false,
+        is_uncategorized: item.category_id === null
+      }
+      next.set(item.work_id, cloneWorkSnapshot(work))
+    }
+  } else {
+    const tags = (payload.tags ?? []).map(tag => ({ ...tag }))
+    for (const item of payload.items as BulkTagsItem[]) {
+      const work = next.get(item.work_id)
+      if (!work) continue
+      work.taxonomy.tags = tags.map(tag => ({ ...tag }))
+      next.set(item.work_id, cloneWorkSnapshot(work))
+    }
+  }
+  replaceSelection(next)
+
+  for (const work of items.value) {
+    const selected = next.get(work.id)
+    if (!selected) continue
+    work.category_id = selected.category_id
+    work.taxonomy = cloneWorkSnapshot(selected).taxonomy
+  }
+
+  bulkRefreshWarning.value = ''
+  const refreshed = await fetchWorks()
+  if (!refreshed) bulkRefreshWarning.value = copy.value.refreshAfterBulkFailed
+}
+
+function handleBulkAuthorizationError(): void {
+  closeBulkAssignment()
+  clearBulkSelection()
+  if (authStore.isAuthenticated) void authStore.fetchUser()
+}
+
+function retryBulkRefresh(): void {
+  bulkRefreshWarning.value = ''
+  void fetchWorks().then((refreshed) => {
+    if (!refreshed) bulkRefreshWarning.value = copy.value.refreshAfterBulkFailed
+  })
 }
 
 async function handleTaxonomyAssignmentChanged(payload: {
@@ -1737,6 +2056,7 @@ function clearPageState(): void {
     can_view_tags: false
   })
   closeTaxonomyAssignment()
+  clearBulkSelection()
   closeDetails()
 }
 
@@ -1793,6 +2113,27 @@ watch(
     }
     if (!canManageIndividualTaxonomy.value) closeTaxonomyAssignment()
     syncWorksAccessState()
+  },
+  { flush: 'post' }
+)
+
+watch(
+  [allCurrentPageSelected, currentPageSelectedCount],
+  async ([allSelected, selectedOnPage]) => {
+    await nextTick()
+    if (currentPageCheckbox.value) {
+      currentPageCheckbox.value.indeterminate = !allSelected && selectedOnPage > 0
+    }
+  },
+  { flush: 'post' }
+)
+
+watch(
+  [canBulkAssignCategory, canBulkAssignTags],
+  ([canCategory, canTags], [couldCategory, couldTags]) => {
+    if (!canCategory && !canTags && (couldCategory || couldTags || selectedCount.value > 0)) {
+      clearBulkSelection()
+    }
   },
   { flush: 'post' }
 )
@@ -2215,6 +2556,30 @@ onMounted(() => {
   border-bottom: 0;
 }
 
+.ym-works-all-table th.is-selection,
+.ym-works-all-table td.is-selection {
+  width: 58px;
+  min-width: 58px;
+  text-align: center;
+}
+
+.ym-works-all-table .is-selection input {
+  width: 19px;
+  height: 19px;
+  accent-color: #8b5cf6;
+  cursor: pointer;
+}
+
+.ym-works-all-table .is-selection input:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.ym-works-all-table .is-selection input:focus-visible {
+  outline: 3px solid color-mix(in srgb, #8b5cf6 42%, transparent);
+  outline-offset: 3px;
+}
+
 .ym-works-all-table th.is-title,
 .ym-works-all-table td.is-title {
   width: 310px;
@@ -2571,6 +2936,33 @@ onMounted(() => {
   justify-content: space-between;
   gap: 1rem;
   margin-top: 1rem;
+}
+
+.ym-works-all-selection-message {
+  margin: 14px 0 0;
+  padding: 11px 13px;
+  border: 1px solid rgba(139, 92, 246, 0.34);
+  border-radius: 13px;
+  color: #a78bfa;
+  background: rgba(139, 92, 246, 0.1);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.ym-works-all-selection-message.is-warning {
+  border-color: rgba(245, 158, 11, 0.36);
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.ym-works-all-selection-message button {
+  margin-inline-start: 8px;
+  border: 0;
+  color: inherit;
+  background: none;
+  font-weight: 950;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 .ym-works-all-pagination > div {
