@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <div v-if="open && entity" class="ym-confirm-overlay" role="presentation" @click.self="requestClose">
-      <section class="ym-confirm-dialog" role="dialog" aria-modal="true" :aria-labelledby="titleId" :dir="locale === 'ar' ? 'rtl' : 'ltr'" tabindex="-1" @keydown.esc="requestClose">
+      <section ref="dialogRef" class="ym-confirm-dialog" role="dialog" aria-modal="true" :aria-labelledby="titleId" :dir="locale === 'ar' ? 'rtl' : 'ltr'" tabindex="-1" @keydown.esc="requestClose">
         <header><span>{{ text.eyebrow }}</span><h2 :id="titleId">{{ text.title }}</h2></header>
         <div class="ym-confirm-identity"><strong>{{ locale === 'ar' ? entity.name_ar : entity.name_en }}</strong><code dir="ltr">{{ entity.slug }}</code><small>{{ text.works }}: {{ formatNumber(entity.works_count) }}</small></div>
         <p>{{ text.warning }}</p>
@@ -12,12 +12,14 @@
   </Teleport>
 </template>
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 interface Entity { id:number; name_ar:string; name_en:string; slug:string; works_count:number }
 const props=defineProps<{open:boolean;entity:Entity|null;entityType:'category'|'tag';locale:'ar'|'en';loading:boolean;error:string|null}>()
 const emit=defineEmits<{close:[];confirm:[]}>()
+const dialogRef=ref<HTMLElement|null>(null)
 const titleId=`ym-disable-${props.entityType}-title`
 const text=computed(()=>props.locale==='ar'?{eyebrow:'تأكيد التعطيل',title:props.entityType==='category'?'تعطيل التصنيف':'تعطيل الوسم',works:'الأعمال المرتبطة',warning:props.entityType==='category'?'ستبقى الأعمال مرتبطة بهذا التصنيف. لن يُحذف التصنيف أو أي عمل.':'ستبقى إسنادات الأعمال الحالية مرتبطة بهذا الوسم. لن يُحذف الوسم أو تُفصل الأعمال.',cancel:'إلغاء',confirm:'تعطيل',working:'جارٍ التعطيل'}:{eyebrow:'Disable confirmation',title:props.entityType==='category'?'Disable category':'Disable tag',works:'Linked works',warning:props.entityType==='category'?'Works remain linked to this category. Neither the category nor works are deleted.':'Existing work assignments remain linked to this tag. Neither the tag nor assignments are deleted.',cancel:'Cancel',confirm:'Disable',working:'Disabling'})
+watch(()=>props.open,async open=>{if(open){await nextTick();dialogRef.value?.focus()}})
 function requestClose(){if(!props.loading)emit('close')}function formatNumber(v:number){return new Intl.NumberFormat(props.locale==='ar'?'ar-YE':'en-US').format(v)}
 </script>
 <style scoped>

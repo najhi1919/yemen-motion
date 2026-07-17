@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <div v-if="open" class="ym-merge-overlay" role="presentation" @click.self="requestClose">
-      <section class="ym-merge-dialog" role="dialog" aria-modal="true" aria-labelledby="ym-tag-merge-title" :dir="locale === 'ar' ? 'rtl' : 'ltr'" tabindex="-1" @keydown.esc="requestClose">
+      <section ref="dialogRef" class="ym-merge-dialog" role="dialog" aria-modal="true" aria-labelledby="ym-tag-merge-title" :dir="locale === 'ar' ? 'rtl' : 'ltr'" tabindex="-1" @keydown.esc="requestClose">
         <header>
           <div><span>{{ text.eyebrow }}</span><h2 id="ym-tag-merge-title">{{ text.title }}</h2><p>{{ text.intro }}</p></div>
           <button type="button" :aria-label="text.close" :disabled="busy" @click="requestClose">×</button>
@@ -68,7 +68,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import { useApiClient } from '~/composables/useApiClient'
 
 interface TagItem { id:number;name_ar:string;name_en:string;slug:string;disabled_at:string|null;is_active:boolean;sort_order:number;works_count:number }
@@ -78,6 +78,7 @@ interface MergeResponse { success:boolean;data:{summary:MergeSummary;changed:boo
 const props=defineProps<{open:boolean;locale:'ar'|'en'}>()
 const emit=defineEmits<{close:[];merged:[message:string];authorizationError:[]}>()
 const {apiFetch}=useApiClient()
+const dialogRef=ref<HTMLElement|null>(null)
 const step=ref<'select'|'confirm'|'result'>('select'),target=ref<TagItem|null>(null),targetId=ref<number|null>(null),sources=ref<TagItem[]>([]),targetQuery=ref(''),sourceQuery=ref(''),targetResults=ref<TagItem[]>([]),sourceResults=ref<TagItem[]>([]),targetLoading=ref(false),sourceLoading=ref(false),loading=ref(false),targetError=ref<string|null>(null),sourceError=ref<string|null>(null),targetFieldError=ref<string|null>(null),sourceFieldError=ref<string|null>(null),formError=ref<string|null>(null),result=ref<MergeSummary|null>(null),resultMessage=ref('')
 let revision=0,targetSearchRevision=0,sourceSearchRevision=0,targetTimer:ReturnType<typeof setTimeout>|null=null,sourceTimer:ReturnType<typeof setTimeout>|null=null,resetting=false
 const copies={ar:{eyebrow:'دمج آمن',title:'دمج وسوم الأعمال',intro:'انقل إسنادات عدة وسوم إلى هدف فعال واحد دون عرض الأعمال.',close:'إغلاق حوار الدمج',target:'الوسم الهدف',targetHint:'وسم فعال واحد فقط',sources:'الوسوم المصدر',sourcesHint:'من 1 إلى 25 وسمًا، فعالًا أو معطلًا',searchTarget:'بحث الهدف',searchSources:'بحث المصادر',twoChars:'اكتب حرفين على الأقل للبحث.',searching:'جارٍ البحث…',retry:'إعادة المحاولة',works:'الأعمال',noResults:'لا توجد نتائج مطابقة.',active:'فعال',disabled:'معطل',selectedSources:'المصادر المحددة',removeSource:(n:string)=>`إزالة ${n}`,cancel:'إلغاء',review:'مراجعة الدمج',sourceCount:'عدد المصادر',confirmTitle:'هذا الإجراء لا يحذف الوسوم',disableWarning:'ستُعطّل المصادر الفعالة، وستبقى المصادر المعطلة على حالها.',transferWarning:'ستُنقل الإسنادات إلى الهدف وتزال إسنادات المصادر مع طي التكرارات.',back:'رجوع',confirm:'تنفيذ الدمج',merging:'جارٍ الدمج…',resultCopy:'اكتملت العملية ويمكن مراجعة الحسابات الآمنة أدناه.',done:'تم',generic:'تعذر إكمال العملية. حاول مرة أخرى.',required:'اختر هدفًا ومصدرًا واحدًا على الأقل.',requested:'المصادر المطلوبة',disabledCount:'المصادر المعطلة',affected:'الأعمال المتأثرة',removed:'إسنادات المصادر المزالة',added:'إسنادات الهدف المضافة',collapsed:'التكرارات المطوية'},en:{eyebrow:'Safe merge',title:'Merge work tags',intro:'Move assignments from multiple tags into one active target without exposing works.',close:'Close merge dialog',target:'Target tag',targetHint:'One active tag only',sources:'Source tags',sourcesHint:'Choose 1–25 active or disabled tags',searchTarget:'Search target',searchSources:'Search sources',twoChars:'Enter at least two characters to search.',searching:'Searching…',retry:'Retry',works:'Works',noResults:'No matching results.',active:'Active',disabled:'Disabled',selectedSources:'Selected sources',removeSource:(n:string)=>`Remove ${n}`,cancel:'Cancel',review:'Review merge',sourceCount:'Source count',confirmTitle:'This operation does not delete tags',disableWarning:'Active sources are disabled; already-disabled sources remain unchanged.',transferWarning:'Assignments move to the target and source assignments are removed with duplicates collapsed.',back:'Back',confirm:'Merge tags',merging:'Merging…',resultCopy:'The operation completed. Review its safe aggregate counts below.',done:'Done',generic:'Could not complete the operation. Try again.',required:'Choose a target and at least one source.',requested:'Sources requested',disabledCount:'Sources disabled',affected:'Affected works',removed:'Source assignments removed',added:'Target assignments added',collapsed:'Duplicates collapsed'}}
@@ -85,7 +86,7 @@ const text=computed(()=>copies[props.locale])
 const busy=computed(()=>loading.value||targetLoading.value||sourceLoading.value)
 const visibleSourceResults=computed(()=>sourceResults.value.filter(tag=>tag.id!==target.value?.id))
 const summaryItems=computed(()=>result.value?[{key:'requested',label:text.value.requested,value:result.value.source_tags_requested},{key:'disabled',label:text.value.disabledCount,value:result.value.source_tags_disabled},{key:'affected',label:text.value.affected,value:result.value.affected_works},{key:'removed',label:text.value.removed,value:result.value.source_assignments_removed},{key:'added',label:text.value.added,value:result.value.target_assignments_added},{key:'collapsed',label:text.value.collapsed,value:result.value.duplicate_assignments_collapsed}]:[])
-watch(()=>props.open,(open)=>{revision++;if(open){reset();void searchTargets();void searchSources()}})
+watch(()=>props.open,async open=>{revision++;if(open){reset();void searchTargets();void searchSources();await nextTick();dialogRef.value?.focus()}})
 watch(targetQuery,q=>scheduleSearch('target',q))
 watch(sourceQuery,q=>scheduleSearch('source',q))
 onUnmounted(()=>{revision++;targetSearchRevision++;sourceSearchRevision++;if(targetTimer)clearTimeout(targetTimer);if(sourceTimer)clearTimeout(sourceTimer)})
