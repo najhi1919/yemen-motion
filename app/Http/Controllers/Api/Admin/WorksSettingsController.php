@@ -1,10 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Exceptions\WorksSettingsVersionConflictException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\WorksSettingsRequest;
+use App\Http\Requests\Admin\WorksSettingsUpdateRequest;
 use App\Models\Work;
+use App\Models\WorkSetting;
+use App\Services\Audit\AuditEventLogger;
 use App\Services\Works\WorksSettingsStore;
 use Illuminate\Http\JsonResponse;
 
@@ -99,6 +105,7 @@ class WorksSettingsController extends Controller
 
     public function __construct(
         private readonly WorksSettingsStore $settingsStore,
+        private readonly AuditEventLogger $auditEventLogger,
     ) {}
 
     public function index(WorksSettingsRequest $request): JsonResponse
@@ -109,7 +116,7 @@ class WorksSettingsController extends Controller
                 'settings_support' => [
                     'persistent_settings_available' => true,
                     'source' => 'work_settings',
-                    'reason' => 'توجد طبقة تخزين دائمة لإعدادات الأعمال، لكن واجهات الحفظ والتعديل لم تُبنَ بعد.',
+                    'reason' => 'تتوفر طبقة التخزين الدائمة وواجهة التحديث الآمنة لإعدادات الأعمال.',
                 ],
                 'stored_settings' => $this->settingsStore->getGlobalSettings(),
                 'access_model' => [
@@ -122,15 +129,72 @@ class WorksSettingsController extends Controller
                 'permission_registry' => $this->permissionRegistry(),
                 'current_user_capabilities' => $this->currentUserCapabilities($request),
                 'management_support' => [
-                    'settings_mutation_available' => false,
+                    'settings_mutation_available' => true,
                     'workflow_mutation_available' => false,
-                    'review_sla_mutation_available' => false,
-                    'direct_publish_trust_mutation_available' => false,
-                    'media_limits_mutation_available' => false,
-                    'reason' => 'واجهات الحفظ والتعديل غير مبنية في هذه المرحلة.',
+                    'review_sla_mutation_available' => true,
+                    'direct_publish_trust_mutation_available' => true,
+                    'media_limits_mutation_available' => true,
+                    'reason' => 'تتوفر واجهة تحديث آمنة لإعدادات مهلة المراجعة وثقة النشر المباشر وحدود الوسائط، بينما تعديل حالات سير العمل غير متاح.',
                 ],
             ],
             'message' => 'تم جلب إعدادات وصلاحيات الأعمال بنجاح',
+            'errors' => null,
+        ]);
+    }
+
+    public function update(WorksSettingsUpdateRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
+        $values = $validated['values'];
+        $actor = $request->user();
+
+        try {
+            $result = $this->settingsStore->updateGlobalSettings(
+                (int) $validated['version'],
+                is_array($values) ? $values : [],
+                (int) $actor->getKey(),
+                function (WorkSetting $setting, array $auditContext) use ($actor): void {
+                    $this->auditEventLogger->record([
+                        'event_type' => 'works.settings.updated',
+                        'category' => 'works',
+                        'severity' => 'info',
+                        'actor_type' => 'user',
+                        'actor_id' => $actor->getKey(),
+                        'actor_role' => $actor->roles->first()?->name,
+                        'target_type' => 'work_setting',
+                        'target_id' => $setting->getKey(),
+                        'action' => 'update',
+                        'outcome' => 'success',
+                        'metadata' => [
+                            'scope' => WorkSetting::SCOPE_GLOBAL,
+                            'previous_version' => $auditContext['previous_version'],
+                            'current_version' => $auditContext['current_version'],
+                            'changed_keys' => $auditContext['changed_keys'],
+                        ],
+                    ]);
+                },
+            );
+        } catch (WorksSettingsVersionConflictException $exception) {
+            return response()->json([
+                'success' => false,
+                'data' => [
+                    'current_version' => $exception->currentVersion,
+                ],
+                'message' => 'تغيرت إعدادات الأعمال منذ آخر قراءة. أعد تحميل القيم ثم حاول مجددًا.',
+                'errors' => [
+                    'version' => [
+                        'إصدار إعدادات الأعمال لم يعد حديثًا.',
+                    ],
+                ],
+            ], 409);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $result,
+            'message' => $result['changed']
+                ? 'تم تحديث إعدادات الأعمال بنجاح'
+                : 'لم تتغير إعدادات الأعمال لأن القيم المرسلة مطابقة للقيم الحالية.',
             'errors' => null,
         ]);
     }

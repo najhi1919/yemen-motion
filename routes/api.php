@@ -87,6 +87,7 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
     Route::patch('/works/taxonomy/tags/{tag}', [AdminWorksTaxonomyTagActionController::class, 'update'])->whereNumber('tag');
     Route::get('/works/taxonomy', [AdminWorksTaxonomyController::class, 'index']);
     Route::get('/works/settings', [AdminWorksSettingsController::class, 'index']);
+    Route::patch('/works/settings', [AdminWorksSettingsController::class, 'update']);
     Route::patch('/works/{work}/visibility/publish', [AdminWorksVisibilityActionController::class, 'publish'])->whereNumber('work');
     Route::patch('/works/{work}/visibility/unpublish', [AdminWorksVisibilityActionController::class, 'unpublish'])->whereNumber('work');
     Route::patch('/works/{work}/visibility/hide', [AdminWorksVisibilityActionController::class, 'hide'])->whereNumber('work');

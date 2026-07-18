@@ -55,7 +55,7 @@ class WorksSettingsApiTest extends TestCase
             ->assertJsonPath('data.settings_support', [
                 'persistent_settings_available' => true,
                 'source' => 'work_settings',
-                'reason' => 'توجد طبقة تخزين دائمة لإعدادات الأعمال، لكن واجهات الحفظ والتعديل لم تُبنَ بعد.',
+                'reason' => 'تتوفر طبقة التخزين الدائمة وواجهة التحديث الآمنة لإعدادات الأعمال.',
             ])
             ->assertJsonPath('data.stored_settings.scope', WorkSetting::SCOPE_GLOBAL)
             ->assertJsonPath('data.stored_settings.version', 1)
@@ -76,12 +76,12 @@ class WorksSettingsApiTest extends TestCase
                 'client_designer_forbidden_even_if_granted' => true,
             ])
             ->assertJsonPath('data.management_support', [
-                'settings_mutation_available' => false,
+                'settings_mutation_available' => true,
                 'workflow_mutation_available' => false,
-                'review_sla_mutation_available' => false,
-                'direct_publish_trust_mutation_available' => false,
-                'media_limits_mutation_available' => false,
-                'reason' => 'واجهات الحفظ والتعديل غير مبنية في هذه المرحلة.',
+                'review_sla_mutation_available' => true,
+                'direct_publish_trust_mutation_available' => true,
+                'media_limits_mutation_available' => true,
+                'reason' => 'تتوفر واجهة تحديث آمنة لإعدادات مهلة المراجعة وثقة النشر المباشر وحدود الوسائط، بينما تعديل حالات سير العمل غير متاح.',
             ]);
 
         $this->assertSame(
@@ -443,16 +443,21 @@ class WorksSettingsApiTest extends TestCase
         $this->getJson('/api/admin/works/not-a-number')->assertNotFound();
     }
 
-    public function test_no_settings_mutation_routes_exist(): void
+    public function test_only_get_and_patch_settings_routes_exist(): void
     {
         $settingsRoutes = collect(Route::getRoutes()->getRoutes())
             ->filter(fn ($route): bool => $route->uri() === 'api/admin/works/settings'
                 || str_starts_with($route->uri(), 'api/admin/works/settings/'));
 
-        $this->assertCount(1, $settingsRoutes);
-        $this->assertSame(['GET', 'HEAD'], $settingsRoutes->first()->methods());
+        $this->assertCount(2, $settingsRoutes);
+        $this->assertTrue($settingsRoutes->contains(
+            fn ($route): bool => $route->methods() === ['GET', 'HEAD'],
+        ));
+        $this->assertTrue($settingsRoutes->contains(
+            fn ($route): bool => $route->methods() === ['PATCH'],
+        ));
         $this->assertFalse($settingsRoutes->contains(
-            fn ($route): bool => array_intersect(['POST', 'PUT', 'PATCH', 'DELETE'], $route->methods()) !== [],
+            fn ($route): bool => array_intersect(['POST', 'PUT', 'DELETE'], $route->methods()) !== [],
         ));
     }
 
