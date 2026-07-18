@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\Admin\Reports\UserReportController as AdminUserRepo
 use App\Http\Controllers\Api\Admin\StaffController as AdminStaffController;
 use App\Http\Controllers\Api\Admin\WorksAccessController as AdminWorksAccessController;
 use App\Http\Controllers\Api\Admin\WorksActivityController as AdminWorksActivityController;
+use App\Http\Controllers\Api\Admin\WorksAuthoringController as AdminWorksAuthoringController;
 use App\Http\Controllers\Api\Admin\WorksIndexController as AdminWorksIndexController;
 use App\Http\Controllers\Api\Admin\WorksOverviewController as AdminWorksOverviewController;
 use App\Http\Controllers\Api\Admin\WorksReportsController as AdminWorksReportsController;
@@ -98,6 +99,8 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
     Route::patch('/works/{work}/visibility/unpin', [AdminWorksVisibilityActionController::class, 'unpin'])->whereNumber('work');
     Route::patch('/works/{work}/taxonomy/category', [AdminWorksTaxonomyAssignmentController::class, 'updateCategory'])->whereNumber('work');
     Route::patch('/works/{work}/taxonomy/tags', [AdminWorksTaxonomyAssignmentController::class, 'updateTags'])->whereNumber('work');
+    Route::post('/works', [AdminWorksAuthoringController::class, 'store']);
+    Route::patch('/works/{work}', [AdminWorksAuthoringController::class, 'update'])->whereNumber('work');
     Route::get('/works', [AdminWorksIndexController::class, 'index']);
     Route::get('/works/{work}', [AdminWorksShowController::class, 'show'])->whereNumber('work');
 
