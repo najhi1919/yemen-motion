@@ -37,6 +37,18 @@ class Work extends Model
 
     public const VISIBILITY_PUBLIC = 'public';
 
+    public const MEDIA_TYPE_IMAGE = 'image';
+
+    public const MEDIA_TYPE_VIDEO = 'video';
+
+    public const MEDIA_TYPE_GALLERY = 'gallery';
+
+    public const MEDIA_TYPES = [
+        self::MEDIA_TYPE_IMAGE,
+        self::MEDIA_TYPE_VIDEO,
+        self::MEDIA_TYPE_GALLERY,
+    ];
+
     protected $guarded = ['id'];
 
     /**
@@ -48,6 +60,7 @@ class Work extends Model
             'designer_id' => 'integer',
             'reviewer_id' => 'integer',
             'category_id' => 'integer',
+            'cover_media_id' => 'integer',
             'price_amount' => 'decimal:2',
             'delivery_days' => 'integer',
             'is_featured' => 'boolean',
@@ -109,6 +122,24 @@ class Work extends Model
     public function reports(): HasMany
     {
         return $this->hasMany(WorkReport::class);
+    }
+
+    /**
+     * @return HasMany<WorkMedia, $this>
+     */
+    public function media(): HasMany
+    {
+        return $this->hasMany(WorkMedia::class)
+            ->orderBy('position')
+            ->orderBy('id');
+    }
+
+    /**
+     * @return BelongsTo<WorkMedia, $this>
+     */
+    public function coverMedia(): BelongsTo
+    {
+        return $this->belongsTo(WorkMedia::class, 'cover_media_id');
     }
 
     public function scopeSubmitted(Builder $query): Builder
