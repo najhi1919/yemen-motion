@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\Admin\WorksReviewQueueController;
 use App\Models\AuditEvent;
 use App\Models\User;
 use App\Models\Work;
+use App\Models\WorkSetting;
 use Carbon\Carbon;
 use Database\Seeders\AuthRolesSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -301,6 +302,13 @@ class WorksReviewActionsApiTest extends TestCase
         $this->patchJson($this->actionUrl($work, 'approve'))
             ->assertOk()
             ->assertJsonPath('data.changed', true)
+            ->assertJsonPath('data.auto_published', false)
+            ->assertJsonPath('data.publication_policy', [
+                'source' => 'work_settings',
+                'direct_publish_trust_enabled' => false,
+                'approval_behavior' => 'approve_only',
+                'settings_version' => 1,
+            ])
             ->assertJsonPath('data.work.status', Work::STATUS_APPROVED)
             ->assertJsonPath('data.work.visibility_status', Work::VISIBILITY_HIDDEN)
             ->assertJsonPath('data.work.reviewer.id', $actor->id)
@@ -333,6 +341,192 @@ class WorksReviewActionsApiTest extends TestCase
             $invalid = Work::factory()->create(['status' => $status]);
             $this->patchJson($this->actionUrl($invalid, 'approve'))->assertUnprocessable();
         }
+    }
+
+    public function test_direct_publish_approve_uses_one_decision_time_and_returns_safe_policy(): void
+    {
+        Carbon::setTestNow('2026-07-16 15:30:00');
+        $actor = $this->actingAsRole('super-admin');
+        $this->setDirectPublishTrust(true, 4);
+        $work = Work::factory()->inReview()->create([
+            'reviewer_id' => null,
+            'visibility_status' => Work::VISIBILITY_HIDDEN,
+            'rejected_at' => now()->subDay(),
+            'rejection_reason' => 'سبب رفض تاريخي خاص',
+            'change_request_notes' => 'ملاحظات تعديل تاريخية خاصة',
+            'published_at' => null,
+        ]);
+
+        $response = $this->patchJson($this->actionUrl($work, 'approve'))
+            ->assertOk()
+            ->assertJsonPath('data.action', 'approve')
+            ->assertJsonPath('data.changed', true)
+            ->assertJsonPath('data.auto_published', true)
+            ->assertJsonPath('data.publication_policy', [
+                'source' => 'work_settings',
+                'direct_publish_trust_enabled' => true,
+                'approval_behavior' => 'approve_and_publish',
+                'settings_version' => 4,
+            ])
+            ->assertJsonPath('data.work.status', Work::STATUS_PUBLISHED)
+            ->assertJsonPath('data.work.visibility_status', Work::VISIBILITY_PUBLIC)
+            ->assertJsonPath('data.work.reviewer.id', $actor->id);
+
+        $this->assertSame([
+            'approval_behavior',
+            'direct_publish_trust_enabled',
+            'settings_version',
+            'source',
+        ], collect(array_keys($response->json('data.publication_policy')))->sort()->values()->all());
+
+        $fresh = $work->fresh();
+        $this->assertSame($actor->id, $fresh->reviewer_id);
+        $this->assertNotNull($fresh->reviewed_at);
+        $this->assertTrue($fresh->reviewed_at->equalTo($fresh->approved_at));
+        $this->assertTrue($fresh->approved_at->equalTo($fresh->published_at));
+        $this->assertNull($fresh->rejected_at);
+        $this->assertNull($fresh->rejection_reason);
+        $this->assertNull($fresh->change_request_notes);
+
+        foreach (['values', 'updated_by', 'media_limits', 'review_sla_hours', 'metadata'] as $forbiddenKey) {
+            $this->assertArrayNotHasKey($forbiddenKey, $response->json('data.publication_policy'));
+        }
+    }
+
+    public function test_direct_publish_approve_needs_only_approve_permission(): void
+    {
+        $this->setDirectPublishTrust(true, 5);
+        $actor = $this->actingAsRole('staff', [
+            'admin.works.access',
+            'admin.works.review.approve',
+        ]);
+        $work = Work::factory()->inReview()->create(['reviewer_id' => null]);
+
+        $this->patchJson($this->actionUrl($work, 'approve'))
+            ->assertOk()
+            ->assertJsonPath('data.auto_published', true)
+            ->assertJsonPath('data.work.status', Work::STATUS_PUBLISHED)
+            ->assertJsonPath('data.work.reviewer.id', $actor->id);
+
+        $this->actingAsRole('staff', [
+            'admin.works.access',
+            'admin.works.review.publish_after_approval',
+        ]);
+        $this->patchJson(
+            $this->actionUrl(Work::factory()->inReview()->create(), 'approve'),
+        )->assertForbidden();
+    }
+
+    public function test_direct_publish_records_ordered_logical_approval_and_publication_events(): void
+    {
+        $this->actingAsRole('super-admin');
+        $this->setDirectPublishTrust(true, 9);
+        $work = Work::factory()->inReview()->create([
+            'visibility_status' => Work::VISIBILITY_HIDDEN,
+            'rejection_reason' => 'سبب سابق خاص',
+            'change_request_notes' => 'طلب سابق خاص',
+        ]);
+
+        $this->patchJson($this->actionUrl($work, 'approve'))->assertOk();
+
+        $events = AuditEvent::query()
+            ->where('target_id', $work->id)
+            ->orderBy('id')
+            ->get();
+
+        $this->assertSame([
+            'works.review.approved',
+            'works.review.published',
+        ], $events->pluck('event_type')->all());
+        $this->assertSame(Work::STATUS_IN_REVIEW, $events[0]->metadata['old_status']);
+        $this->assertSame(Work::STATUS_APPROVED, $events[0]->metadata['new_status']);
+        $this->assertSame(Work::VISIBILITY_HIDDEN, $events[0]->metadata['new_visibility_status']);
+        $this->assertSame(Work::STATUS_APPROVED, $events[1]->metadata['old_status']);
+        $this->assertSame(Work::VISIBILITY_HIDDEN, $events[1]->metadata['old_visibility_status']);
+        $this->assertSame(Work::STATUS_PUBLISHED, $events[1]->metadata['new_status']);
+        $this->assertSame(Work::VISIBILITY_PUBLIC, $events[1]->metadata['new_visibility_status']);
+        $this->assertTrue($events[1]->metadata['automatic']);
+        $this->assertSame('approve', $events[1]->metadata['trigger_action']);
+        $this->assertSame(9, $events[1]->metadata['settings_version']);
+
+        $metadataJson = $events->pluck('metadata')->toJson();
+        foreach ([
+            'direct_publish_trust_enabled',
+            'review_sla_hours',
+            'media_limits',
+            'updated_by',
+            'values',
+            'سبب سابق خاص',
+            'طلب سابق خاص',
+        ] as $forbiddenValue) {
+            $this->assertStringNotContainsString($forbiddenValue, $metadataJson);
+        }
+    }
+
+    public function test_direct_publish_no_op_and_transition_failures_do_not_record_publication_event(): void
+    {
+        $this->actingAsRole('super-admin');
+        $this->setDirectPublishTrust(true, 3);
+
+        $approved = Work::factory()->approved()->create();
+        $this->patchJson($this->actionUrl($approved, 'approve'))
+            ->assertOk()
+            ->assertJsonPath('data.changed', false)
+            ->assertJsonPath('data.auto_published', false);
+
+        $submitted = Work::factory()->submitted()->create();
+        $this->patchJson($this->actionUrl($submitted, 'approve'))->assertUnprocessable();
+
+        $this->assertSame(0, AuditEvent::query()
+            ->where('event_type', 'works.review.published')
+            ->count());
+    }
+
+    public function test_manual_publish_keeps_its_permission_and_works_under_both_policy_values(): void
+    {
+        foreach ([false, true] as $enabled) {
+            $this->setDirectPublishTrust($enabled, $enabled ? 6 : 5);
+            $this->actingAsRole('staff', [
+                'admin.works.access',
+                'admin.works.review.approve',
+            ]);
+            $denied = Work::factory()->approved()->create();
+            $this->patchJson($this->actionUrl($denied, 'publish'))->assertForbidden();
+
+            $this->actingAsRole('staff', [
+                'admin.works.access',
+                'admin.works.review.publish_after_approval',
+            ]);
+            $approved = Work::factory()->approved()->create();
+            $this->patchJson($this->actionUrl($approved, 'publish'))
+                ->assertOk()
+                ->assertJsonPath('data.action', 'publish')
+                ->assertJsonPath('data.auto_published', false)
+                ->assertJsonPath('data.work.status', Work::STATUS_PUBLISHED)
+                ->assertJsonPath('data.work.visibility_status', Work::VISIBILITY_PUBLIC);
+        }
+    }
+
+    public function test_corrupt_direct_publish_value_normalizes_false_and_next_request_reads_changes(): void
+    {
+        $this->actingAsRole('super-admin');
+        $this->setDirectPublishTrust('true', 7);
+        $first = Work::factory()->inReview()->create();
+
+        $this->patchJson($this->actionUrl($first, 'approve'))
+            ->assertOk()
+            ->assertJsonPath('data.auto_published', false)
+            ->assertJsonPath('data.publication_policy.approval_behavior', 'approve_only')
+            ->assertJsonPath('data.work.status', Work::STATUS_APPROVED);
+
+        $this->setDirectPublishTrust(true, 8);
+        $second = Work::factory()->inReview()->create();
+
+        $this->patchJson($this->actionUrl($second, 'approve'))
+            ->assertOk()
+            ->assertJsonPath('data.auto_published', true)
+            ->assertJsonPath('data.publication_policy.settings_version', 8)
+            ->assertJsonPath('data.work.status', Work::STATUS_PUBLISHED);
     }
 
     public function test_request_changes_stores_private_notes_without_returning_them_and_supports_safe_repetition(): void
@@ -841,6 +1035,18 @@ class WorksReviewActionsApiTest extends TestCase
     private function actionUrl(Work $work, string $action): string
     {
         return "/api/admin/works/{$work->id}/review/{$action}";
+    }
+
+    private function setDirectPublishTrust(mixed $enabled, int $version): void
+    {
+        WorkSetting::query()->updateOrCreate(
+            ['scope' => WorkSetting::SCOPE_GLOBAL],
+            [
+                'values' => ['direct_publish_trust_enabled' => $enabled],
+                'version' => $version,
+                'updated_by' => null,
+            ],
+        );
     }
 
     /** @param list<string> $permissions */

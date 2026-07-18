@@ -67,6 +67,20 @@
         </div>
       </aside>
 
+      <aside
+        class="ym-works-review-policy"
+        :class="{ 'is-disabled': !publicationPolicy.direct_publish_trust_enabled }"
+        role="status"
+        aria-live="polite"
+      >
+        <span>{{ copy.publicationPolicyLabel }}</span>
+        <div>
+          <strong>{{ publicationPolicyTitle }}</strong>
+          <p>{{ publicationPolicyDescription }}</p>
+          <small>{{ copy.settingsVersion(publicationPolicy.settings_version) }}</small>
+        </div>
+      </aside>
+
       <section class="ym-works-review-summary-grid" :aria-label="copy.summaryLabel">
         <article
           v-for="card in summaryCards"
@@ -916,6 +930,8 @@ interface ReviewActionResponse {
   data: {
     action: ReviewActionKey
     changed: boolean
+    auto_published: boolean
+    publication_policy: PublicationPolicy
     work: ReviewActionWork
   } | null
   message?: string
@@ -1025,11 +1041,19 @@ interface ReviewPolicy {
   settings_version: number
 }
 
+interface PublicationPolicy {
+  source: 'work_settings'
+  direct_publish_trust_enabled: boolean
+  approval_behavior: 'approve_only' | 'approve_and_publish'
+  settings_version: number
+}
+
 interface ReviewQueueData {
   items: ReviewQueueItem[]
   pagination: ReviewPagination
   summary: ReviewSummary
   review_policy: ReviewPolicy
+  publication_policy: PublicationPolicy
   filters: Record<string, unknown>
 }
 
@@ -1188,6 +1212,12 @@ const copyMap = {
     reviewSlaDisabled: 'مهلة المراجعة غير مفعلة',
     reviewSlaDisabledDescription: 'لن تُصنف الطلبات كمتأخرة اعتمادًا على الزمن.',
     overdueFilterDisabled: 'فلتر التأخر معطل لأن مهلة المراجعة غير مفعلة.',
+    publicationPolicyLabel: 'سياسة نتيجة الاعتماد',
+    directPublishEnabled: 'النشر المباشر بعد الاعتماد مفعّل',
+    directPublishEnabledDescription: 'اعتماد العمل سينشره للعامة مباشرةً وفق سياسة الثقة الحالية.',
+    directPublishDisabled: 'النشر المباشر بعد الاعتماد غير مفعّل',
+    directPublishDisabledDescription: 'سيبقى العمل مخفيًا بعد الاعتماد إلى أن يُنفذ إجراء النشر المنفصل.',
+    settingsVersion: (version: number) => `إصدار الإعدادات: ${version}`,
     summaryLabel: 'ملخص طلبات مراجعة الأعمال',
     total: 'الإجمالي',
     totalHint: 'كل الطلبات المطابقة',
@@ -1288,6 +1318,7 @@ const copyMap = {
     executingAction: 'جارٍ التنفيذ...',
     cancel: 'إلغاء',
     actionSucceeded: 'تم تنفيذ إجراء المراجعة بنجاح',
+    approveAndPublishSucceeded: 'تم اعتماد العمل ونشره للعامة مباشرةً.',
     actionUnchanged: 'لا يوجد تغيير؛ الحالة مطابقة بالفعل',
     actionDenied: 'غير مصرح بتنفيذ هذا الإجراء.',
     actionNotFound: 'لم يعد العمل موجودًا.',
@@ -1297,7 +1328,8 @@ const copyMap = {
     notesLengthInvalid: 'يجب أن يكون النص بين 5 و2000 حرف.',
     startDescription: 'سيُنقل العمل إلى حالة تحت المراجعة ويُعيّن المنفذ كمراجع عند عدم وجود مراجع.',
     assignDescription: 'سيُعيّن معرّف المستخدم الداخلي المحدد كمراجع دون تغيير حالة العمل.',
-    approveDescription: 'سيُعتمد العمل ويخرج من طابور المراجعة دون نشره.',
+    approveDescription: 'سيصبح العمل معتمدًا ومخفيًا، ويمكن نشره لاحقًا بإجراء مستقل.',
+    approveAndPublishDescription: 'سيصبح العمل منشورًا للعامة فور تأكيد الاعتماد.',
     changesDescription: 'سيُطلب تعديل العمل، أو تُحدّث الملاحظات إذا كان الطلب قائمًا.',
     rejectDescription: 'سيُرفض العمل، أو يُحدّث سبب الرفض إذا كان مرفوضًا بالفعل.',
     publishDescription: 'سيُنشر العمل المعتمد ويصبح ظاهرًا للعامة.',
@@ -1384,6 +1416,12 @@ const copyMap = {
     reviewSlaDisabled: 'Review SLA is disabled',
     reviewSlaDisabledDescription: 'Requests will not be classified as overdue based on time.',
     overdueFilterDisabled: 'The overdue filter is disabled because the review SLA is disabled.',
+    publicationPolicyLabel: 'Approval result policy',
+    directPublishEnabled: 'Direct publishing after approval is enabled',
+    directPublishEnabledDescription: 'Approving the work will publish it publicly under the current trust policy.',
+    directPublishDisabled: 'Direct publishing after approval is disabled',
+    directPublishDisabledDescription: 'The work will remain hidden after approval until the separate publish action is run.',
+    settingsVersion: (version: number) => `Settings version: ${version}`,
     summaryLabel: 'Works review request summary',
     total: 'Total',
     totalHint: 'All matching requests',
@@ -1484,6 +1522,7 @@ const copyMap = {
     executingAction: 'Executing...',
     cancel: 'Cancel',
     actionSucceeded: 'The review action was completed successfully',
+    approveAndPublishSucceeded: 'The work was approved and published publicly.',
     actionUnchanged: 'No change; the state already matches',
     actionDenied: 'You are not authorized to run this action.',
     actionNotFound: 'The work no longer exists.',
@@ -1493,7 +1532,8 @@ const copyMap = {
     notesLengthInvalid: 'The text must contain between 5 and 2000 characters.',
     startDescription: 'The work will move into review and the actor will be assigned when no reviewer exists.',
     assignDescription: 'The selected internal user ID will be assigned without changing the work state.',
-    approveDescription: 'The work will be approved and leave the review queue without being published.',
+    approveDescription: 'The work will become approved and hidden, and can be published later with a separate action.',
+    approveAndPublishDescription: 'The work will become publicly published as soon as approval is confirmed.',
     changesDescription: 'Changes will be requested, or the notes will be updated for an existing request.',
     rejectDescription: 'The work will be rejected, or its rejection reason will be updated.',
     publishDescription: 'The approved work will be published and made public.',
@@ -1568,7 +1608,9 @@ const actionLabels = computed<Record<ReviewActionKey, string>>(() => currentLoca
   ? {
       start: 'بدء المراجعة',
       assign_reviewer: 'تعيين المراجع',
-      approve: 'اعتماد العمل',
+      approve: publicationPolicy.value.approval_behavior === 'approve_and_publish'
+        ? 'اعتماد ونشر مباشرة'
+        : 'اعتماد العمل',
       request_changes: 'طلب تعديلات',
       reject: 'رفض العمل',
       publish: 'النشر بعد الاعتماد',
@@ -1577,7 +1619,9 @@ const actionLabels = computed<Record<ReviewActionKey, string>>(() => currentLoca
   : {
       start: 'Start review',
       assign_reviewer: 'Assign reviewer',
-      approve: 'Approve work',
+      approve: publicationPolicy.value.approval_behavior === 'approve_and_publish'
+        ? 'Approve and publish'
+        : 'Approve work',
       request_changes: 'Request changes',
       reject: 'Reject work',
       publish: 'Publish after approval',
@@ -1586,7 +1630,9 @@ const actionLabels = computed<Record<ReviewActionKey, string>>(() => currentLoca
 const actionDescriptions = computed<Record<ReviewActionKey, string>>(() => ({
   start: copy.value.startDescription,
   assign_reviewer: copy.value.assignDescription,
-  approve: copy.value.approveDescription,
+  approve: publicationPolicy.value.approval_behavior === 'approve_and_publish'
+    ? copy.value.approveAndPublishDescription
+    : copy.value.approveDescription,
   request_changes: copy.value.changesDescription,
   reject: copy.value.rejectDescription,
   publish: copy.value.publishDescription,
@@ -1625,6 +1671,7 @@ const pagination = reactive<ReviewPagination>({
 })
 const summary = reactive<ReviewSummary>(emptySummary())
 const reviewPolicy = ref<ReviewPolicy>(disabledReviewPolicy())
+const publicationPolicy = ref<PublicationPolicy>(disabledPublicationPolicy())
 
 function emptySummary(): ReviewSummary {
   return {
@@ -1645,6 +1692,15 @@ function disabledReviewPolicy(): ReviewPolicy {
     enabled: false,
     review_sla_hours: null,
     overdue_cutoff: null,
+    settings_version: 1
+  }
+}
+
+function disabledPublicationPolicy(): PublicationPolicy {
+  return {
+    source: 'work_settings',
+    direct_publish_trust_enabled: false,
+    approval_behavior: 'approve_only',
     settings_version: 1
   }
 }
@@ -1749,6 +1805,18 @@ const reviewPolicyDescription = computed(() => (
   reviewPolicy.value.enabled
     ? copy.value.reviewSlaEnabledDescription
     : copy.value.reviewSlaDisabledDescription
+))
+
+const publicationPolicyTitle = computed(() => (
+  publicationPolicy.value.direct_publish_trust_enabled
+    ? copy.value.directPublishEnabled
+    : copy.value.directPublishDisabled
+))
+
+const publicationPolicyDescription = computed(() => (
+  publicationPolicy.value.direct_publish_trust_enabled
+    ? copy.value.directPublishEnabledDescription
+    : copy.value.directPublishDisabledDescription
 ))
 
 const overdueSummaryHint = computed(() => (
@@ -2055,6 +2123,30 @@ function safeCount(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0
 }
 
+function toSafePublicationPolicy(value: unknown): PublicationPolicy | null {
+  if (!value || typeof value !== 'object') return null
+  const policy = value as Record<string, unknown>
+
+  if (
+    policy.source !== 'work_settings'
+    || typeof policy.direct_publish_trust_enabled !== 'boolean'
+    || !['approve_only', 'approve_and_publish'].includes(String(policy.approval_behavior))
+    || !Number.isInteger(policy.settings_version)
+    || (policy.direct_publish_trust_enabled
+      ? policy.approval_behavior !== 'approve_and_publish'
+      : policy.approval_behavior !== 'approve_only')
+  ) {
+    return null
+  }
+
+  return {
+    source: 'work_settings',
+    direct_publish_trust_enabled: policy.direct_publish_trust_enabled,
+    approval_behavior: policy.approval_behavior as PublicationPolicy['approval_behavior'],
+    settings_version: policy.settings_version as number
+  }
+}
+
 function toSafeActionWork(value: unknown): ReviewActionWork | null {
   if (!value || typeof value !== 'object') return null
   const work = value as Record<string, unknown>
@@ -2261,6 +2353,7 @@ async function confirmReviewAction(): Promise<void> {
       '/admin/works/' + pending.target.id + '/review/' + pending.endpoint,
       options
     )
+    const safePublicationPolicy = toSafePublicationPolicy(response.data?.publication_policy)
     const safeWork = toSafeActionWork(response.data?.work)
 
     if (
@@ -2268,6 +2361,9 @@ async function confirmReviewAction(): Promise<void> {
       || !response.data
       || response.data.action !== pending.key
       || typeof response.data.changed !== 'boolean'
+      || typeof response.data.auto_published !== 'boolean'
+      || (response.data.auto_published && pending.key !== 'approve')
+      || !safePublicationPolicy
       || !safeWork
       || safeWork.id !== pending.target.id
     ) {
@@ -2282,6 +2378,7 @@ async function confirmReviewAction(): Promise<void> {
       return
     }
 
+    publicationPolicy.value = safePublicationPolicy
     updateQueueItemFromAction(safeWork)
     updateOpenDetailFromAction(safeWork)
     lastReviewAction.value = {
@@ -2308,7 +2405,9 @@ async function confirmReviewAction(): Promise<void> {
     }
     actionStatus.value = {
       kind: 'success',
-      message: response.data.changed ? copy.value.actionSucceeded : copy.value.actionUnchanged,
+      message: response.data.auto_published
+        ? copy.value.approveAndPublishSucceeded
+        : (response.data.changed ? copy.value.actionSucceeded : copy.value.actionUnchanged),
       changed: response.data.changed === true,
       actionLabel: pending.label,
       workLabel: safeWork.title
@@ -2493,6 +2592,16 @@ async function fetchReviewQueue(silent = false): Promise<void> {
 
     const overdueWasApplied = appliedFilters.overdue !== ''
     reviewPolicy.value = response.data.review_policy
+    const safePublicationPolicy = toSafePublicationPolicy(response.data.publication_policy)
+    if (!safePublicationPolicy) {
+      if (!silent) {
+        items.value = []
+        Object.assign(summary, emptySummary())
+        error.value = copy.value.genericError
+      }
+      return
+    }
+    publicationPolicy.value = safePublicationPolicy
     if (!response.data.review_policy.enabled) {
       filters.overdue = ''
       appliedFilters.overdue = ''
@@ -2671,6 +2780,7 @@ function clearQueueData(): void {
   items.value = []
   Object.assign(summary, emptySummary())
   reviewPolicy.value = disabledReviewPolicy()
+  publicationPolicy.value = disabledPublicationPolicy()
   filters.overdue = ''
   appliedFilters.overdue = ''
   Object.assign(pagination, {

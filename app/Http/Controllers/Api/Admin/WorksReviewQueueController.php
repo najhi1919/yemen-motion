@@ -36,6 +36,7 @@ class WorksReviewQueueController extends Controller
                 ? $storedReviewSlaHours
                 : null;
         $settingsVersion = (int) $storedSettings['version'];
+        $directPublishTrustEnabled = $storedSettings['values']['direct_publish_trust_enabled'];
         $now = now();
         $overdueCutoff = $reviewSlaHours === null
             ? null
@@ -113,6 +114,14 @@ class WorksReviewQueueController extends Controller
                     'enabled' => $reviewSlaHours !== null,
                     'review_sla_hours' => $reviewSlaHours,
                     'overdue_cutoff' => $overdueCutoff?->toIso8601String(),
+                    'settings_version' => $settingsVersion,
+                ],
+                'publication_policy' => [
+                    'source' => 'work_settings',
+                    'direct_publish_trust_enabled' => $directPublishTrustEnabled,
+                    'approval_behavior' => $directPublishTrustEnabled
+                        ? 'approve_and_publish'
+                        : 'approve_only',
                     'settings_version' => $settingsVersion,
                 ],
                 'filters' => [

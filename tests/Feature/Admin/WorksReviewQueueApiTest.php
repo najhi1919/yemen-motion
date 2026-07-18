@@ -203,7 +203,7 @@ class WorksReviewQueueApiTest extends TestCase
             collect(array_keys($item['review_flags']))->sort()->values()->all(),
         );
         $this->assertSame(
-            ['filters', 'items', 'pagination', 'review_policy', 'summary'],
+            ['filters', 'items', 'pagination', 'publication_policy', 'review_policy', 'summary'],
             collect(array_keys($response->json('data')))->sort()->values()->all(),
         );
     }
@@ -819,6 +819,109 @@ class WorksReviewQueueApiTest extends TestCase
         }
     }
 
+    public function test_publication_policy_defaults_to_the_exact_safe_approve_only_contract(): void
+    {
+        $this->actingAsRole('super-admin');
+
+        $response = $this->getJson('/api/admin/works/review')
+            ->assertOk()
+            ->assertJsonPath('data.publication_policy', [
+                'source' => 'work_settings',
+                'direct_publish_trust_enabled' => false,
+                'approval_behavior' => 'approve_only',
+                'settings_version' => 1,
+            ]);
+
+        $policy = $response->json('data.publication_policy');
+        $this->assertSame([
+            'approval_behavior',
+            'direct_publish_trust_enabled',
+            'settings_version',
+            'source',
+        ], collect(array_keys($policy))->sort()->values()->all());
+
+        foreach ([
+            'review_sla_hours',
+            'media_limits',
+            'updated_by',
+            'values',
+            'metadata',
+            'raw',
+        ] as $forbiddenKey) {
+            $this->assertArrayNotHasKey($forbiddenKey, $policy);
+        }
+    }
+
+    public function test_enabled_publication_policy_returns_approve_and_publish_without_changing_review_policy(): void
+    {
+        Carbon::setTestNow('2026-07-15 12:00:00');
+        $this->actingAsRole('super-admin');
+        WorkSetting::query()->updateOrCreate(
+            ['scope' => WorkSetting::SCOPE_GLOBAL],
+            [
+                'values' => [
+                    'review_sla_hours' => 24,
+                    'direct_publish_trust_enabled' => true,
+                    'media_limits' => [
+                        'max_items' => 8,
+                        'max_file_size_kb' => 1024,
+                        'allowed_types' => ['image'],
+                    ],
+                ],
+                'version' => 4,
+                'updated_by' => User::factory()->create()->id,
+            ],
+        );
+
+        $response = $this->getJson('/api/admin/works/review')
+            ->assertOk()
+            ->assertJsonPath('data.publication_policy', [
+                'source' => 'work_settings',
+                'direct_publish_trust_enabled' => true,
+                'approval_behavior' => 'approve_and_publish',
+                'settings_version' => 4,
+            ])
+            ->assertJsonPath('data.review_policy', [
+                'source' => 'work_settings',
+                'enabled' => true,
+                'review_sla_hours' => 24,
+                'overdue_cutoff' => '2026-07-14T12:00:00+00:00',
+                'settings_version' => 4,
+            ]);
+
+        $json = $response->getContent();
+        $this->assertStringNotContainsString('max_file_size_kb', $json);
+        $this->assertStringNotContainsString('updated_by', $json);
+    }
+
+    public function test_publication_policy_normalizes_corrupt_values_and_reads_the_next_change_without_cache(): void
+    {
+        $this->actingAsRole('super-admin');
+        WorkSetting::query()
+            ->where('scope', WorkSetting::SCOPE_GLOBAL)
+            ->sole()
+            ->forceFill([
+                'values' => ['direct_publish_trust_enabled' => 'true'],
+                'version' => 7,
+                'updated_by' => null,
+            ])
+            ->save();
+
+        $this->getJson('/api/admin/works/review')
+            ->assertOk()
+            ->assertJsonPath('data.publication_policy.direct_publish_trust_enabled', false)
+            ->assertJsonPath('data.publication_policy.approval_behavior', 'approve_only')
+            ->assertJsonPath('data.publication_policy.settings_version', 7);
+
+        $this->setDirectPublishTrust(true, 8);
+
+        $this->getJson('/api/admin/works/review')
+            ->assertOk()
+            ->assertJsonPath('data.publication_policy.direct_publish_trust_enabled', true)
+            ->assertJsonPath('data.publication_policy.approval_behavior', 'approve_and_publish')
+            ->assertJsonPath('data.publication_policy.settings_version', 8);
+    }
+
     public function test_disabled_review_sla_disables_time_based_overdue_behavior_but_preserves_attention_reasons(): void
     {
         Carbon::setTestNow('2026-07-15 12:00:00');
@@ -1003,6 +1106,18 @@ class WorksReviewQueueApiTest extends TestCase
             ['scope' => WorkSetting::SCOPE_GLOBAL],
             [
                 'values' => ['review_sla_hours' => $hours],
+                'version' => $version,
+                'updated_by' => null,
+            ],
+        );
+    }
+
+    private function setDirectPublishTrust(bool $enabled, int $version): void
+    {
+        WorkSetting::query()->updateOrCreate(
+            ['scope' => WorkSetting::SCOPE_GLOBAL],
+            [
+                'values' => ['direct_publish_trust_enabled' => $enabled],
                 'version' => $version,
                 'updated_by' => null,
             ],

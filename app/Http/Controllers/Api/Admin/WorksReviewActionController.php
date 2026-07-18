@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\WorksReviewActionRequest;
 use App\Models\User;
 use App\Models\Work;
 use App\Services\Audit\AuditEventLogger;
+use App\Services\Works\WorksSettingsStore;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -36,7 +37,10 @@ class WorksReviewActionController extends Controller
         'reopen' => 'reopen',
     ];
 
-    public function __construct(private readonly AuditEventLogger $auditEventLogger) {}
+    public function __construct(
+        private readonly AuditEventLogger $auditEventLogger,
+        private readonly WorksSettingsStore $settingsStore,
+    ) {}
 
     public function start(WorksReviewActionRequest $request, Work $work): JsonResponse
     {
@@ -79,8 +83,16 @@ class WorksReviewActionController extends Controller
         string $action,
     ): JsonResponse {
         $validated = $request->validated();
+        $storedSettings = $this->settingsStore->getGlobalSettings();
+        $publicationPolicy = $this->publicationPolicy($storedSettings);
 
-        $result = DB::transaction(function () use ($request, $work, $action, $validated): array {
+        $result = DB::transaction(function () use (
+            $request,
+            $work,
+            $action,
+            $validated,
+            $publicationPolicy,
+        ): array {
             $currentWork = Work::query()
                 ->whereKey($work->getKey())
                 ->lockForUpdate()
@@ -92,15 +104,56 @@ class WorksReviewActionController extends Controller
                 $action,
                 $validated,
                 (int) $request->user()->getKey(),
+                $publicationPolicy['direct_publish_trust_enabled'],
             );
             $changed = $changes !== [];
+            $autoPublished = $changed
+                && $action === 'approve'
+                && $publicationPolicy['direct_publish_trust_enabled'];
 
             if ($changed) {
                 $currentWork->fill($changes);
                 $currentWork->save();
                 $currentWork->refresh();
 
-                $this->recordAuditEvent($request, $currentWork, $action, $oldState);
+                if ($autoPublished) {
+                    $approvedState = [
+                        ...$this->reviewState($currentWork),
+                        'status' => Work::STATUS_APPROVED,
+                        'visibility_status' => Work::VISIBILITY_HIDDEN,
+                    ];
+
+                    $this->recordAuditEvent(
+                        $request,
+                        $currentWork,
+                        self::AUDIT_EVENT_TYPES['approve'],
+                        self::RESPONSE_ACTIONS['approve'],
+                        $oldState,
+                        $approvedState,
+                    );
+                    $this->recordAuditEvent(
+                        $request,
+                        $currentWork,
+                        self::AUDIT_EVENT_TYPES['publishAfterApproval'],
+                        self::RESPONSE_ACTIONS['publishAfterApproval'],
+                        $approvedState,
+                        $this->reviewState($currentWork),
+                        [
+                            'automatic' => true,
+                            'trigger_action' => 'approve',
+                            'settings_version' => $publicationPolicy['settings_version'],
+                        ],
+                    );
+                } else {
+                    $this->recordAuditEvent(
+                        $request,
+                        $currentWork,
+                        self::AUDIT_EVENT_TYPES[$action],
+                        self::RESPONSE_ACTIONS[$action],
+                        $oldState,
+                        $this->reviewState($currentWork),
+                    );
+                }
             }
 
             $currentWork->load([
@@ -110,6 +163,7 @@ class WorksReviewActionController extends Controller
 
             return [
                 'changed' => $changed,
+                'auto_published' => $autoPublished,
                 'work' => $currentWork,
             ];
         });
@@ -119,6 +173,8 @@ class WorksReviewActionController extends Controller
             'data' => [
                 'action' => self::RESPONSE_ACTIONS[$action],
                 'changed' => $result['changed'],
+                'auto_published' => $result['auto_published'],
+                'publication_policy' => $publicationPolicy,
                 'work' => $this->workPayload($result['work']),
             ],
             'message' => 'تم تنفيذ إجراء المراجعة بنجاح',
@@ -135,11 +191,12 @@ class WorksReviewActionController extends Controller
         string $action,
         array $validated,
         int $actorId,
+        bool $directPublishTrustEnabled,
     ): array {
         return match ($action) {
             'start' => $this->startChanges($work, $actorId),
             'assignReviewer' => $this->assignReviewerChanges($work, (int) $validated['reviewer_id']),
-            'approve' => $this->approveChanges($work, $actorId),
+            'approve' => $this->approveChanges($work, $actorId, $directPublishTrustEnabled),
             'requestChanges' => $this->requestChangesChanges(
                 $work,
                 $actorId,
@@ -194,7 +251,11 @@ class WorksReviewActionController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function approveChanges(Work $work, int $actorId): array
+    private function approveChanges(
+        Work $work,
+        int $actorId,
+        bool $directPublishTrustEnabled,
+    ): array
     {
         if ($work->status === Work::STATUS_APPROVED) {
             return [];
@@ -207,11 +268,16 @@ class WorksReviewActionController extends Controller
         $decisionTime = now();
 
         return [
-            'status' => Work::STATUS_APPROVED,
-            'visibility_status' => Work::VISIBILITY_HIDDEN,
+            'status' => $directPublishTrustEnabled
+                ? Work::STATUS_PUBLISHED
+                : Work::STATUS_APPROVED,
+            'visibility_status' => $directPublishTrustEnabled
+                ? Work::VISIBILITY_PUBLIC
+                : Work::VISIBILITY_HIDDEN,
             'reviewer_id' => $work->reviewer_id ?? $actorId,
             'reviewed_at' => $decisionTime,
             'approved_at' => $decisionTime,
+            ...($directPublishTrustEnabled ? ['published_at' => $decisionTime] : []),
             'rejected_at' => null,
             'rejection_reason' => null,
             'change_request_notes' => null,
@@ -388,18 +454,25 @@ class WorksReviewActionController extends Controller
         ];
     }
 
-    /** @param array<string, mixed> $oldState */
+    /**
+     * @param array<string, mixed> $oldState
+     * @param array<string, mixed> $newState
+     * @param array<string, mixed> $additionalMetadata
+     */
     private function recordAuditEvent(
         WorksReviewActionRequest $request,
         Work $work,
-        string $action,
+        string $eventType,
+        string $responseAction,
         array $oldState,
+        array $newState,
+        array $additionalMetadata = [],
     ): void {
         $actor = $request->user();
 
         try {
             $this->auditEventLogger->record([
-                'event_type' => self::AUDIT_EVENT_TYPES[$action],
+                'event_type' => $eventType,
                 'category' => 'works',
                 'severity' => 'notice',
                 'actor_type' => $actor ? 'user' : 'system',
@@ -407,23 +480,24 @@ class WorksReviewActionController extends Controller
                 'actor_role' => $actor?->roles->first()?->name,
                 'target_type' => 'work',
                 'target_id' => $work->getKey(),
-                'action' => self::RESPONSE_ACTIONS[$action],
+                'action' => $responseAction,
                 'outcome' => 'success',
                 'ip_address' => $request->ip(),
                 'user_agent' => $request->userAgent(),
                 'metadata' => [
                     'work_id' => $work->getKey(),
-                    'action' => self::RESPONSE_ACTIONS[$action],
+                    'action' => $responseAction,
                     'old_status' => $oldState['status'],
-                    'new_status' => $work->status,
+                    'new_status' => $newState['status'],
                     'old_visibility_status' => $oldState['visibility_status'],
-                    'new_visibility_status' => $work->visibility_status,
+                    'new_visibility_status' => $newState['visibility_status'],
                     'old_reviewer_id' => $oldState['reviewer_id'],
-                    'new_reviewer_id' => $work->reviewer_id,
+                    'new_reviewer_id' => $newState['reviewer_id'],
                     'old_has_change_request_notes' => $oldState['has_change_request_notes'],
-                    'new_has_change_request_notes' => filled($work->change_request_notes),
+                    'new_has_change_request_notes' => $newState['has_change_request_notes'],
                     'old_has_rejection_reason' => $oldState['has_rejection_reason'],
-                    'new_has_rejection_reason' => filled($work->rejection_reason),
+                    'new_has_rejection_reason' => $newState['has_rejection_reason'],
+                    ...$additionalMetadata,
                 ],
             ]);
         } catch (Throwable $exception) {
@@ -433,5 +507,31 @@ class WorksReviewActionController extends Controller
                 throw $exception;
             }
         }
+    }
+
+    /**
+     * @param array{
+     *     version: int,
+     *     values: array{direct_publish_trust_enabled: bool}
+     * } $storedSettings
+     * @return array{
+     *     source: string,
+     *     direct_publish_trust_enabled: bool,
+     *     approval_behavior: string,
+     *     settings_version: int
+     * }
+     */
+    private function publicationPolicy(array $storedSettings): array
+    {
+        $directPublishTrustEnabled = $storedSettings['values']['direct_publish_trust_enabled'];
+
+        return [
+            'source' => 'work_settings',
+            'direct_publish_trust_enabled' => $directPublishTrustEnabled,
+            'approval_behavior' => $directPublishTrustEnabled
+                ? 'approve_and_publish'
+                : 'approve_only',
+            'settings_version' => (int) $storedSettings['version'],
+        ];
     }
 }
