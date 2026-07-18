@@ -54,6 +54,19 @@
         </div>
       </aside>
 
+      <aside
+        class="ym-works-review-policy"
+        :class="{ 'is-disabled': !reviewPolicy.enabled }"
+        role="status"
+        aria-live="polite"
+      >
+        <span>{{ copy.reviewPolicyLabel }}</span>
+        <div>
+          <strong>{{ reviewPolicyTitle }}</strong>
+          <p>{{ reviewPolicyDescription }}</p>
+        </div>
+      </aside>
+
       <section class="ym-works-review-summary-grid" :aria-label="copy.summaryLabel">
         <article
           v-for="card in summaryCards"
@@ -139,13 +152,21 @@
             </select>
           </label>
 
-          <label>
+          <label :class="{ 'is-disabled': !reviewPolicy.enabled }">
             <span>{{ copy.overdue }}</span>
-            <select v-model="filters.overdue">
+            <select
+              v-model="filters.overdue"
+              :disabled="!reviewPolicy.enabled"
+              :aria-disabled="!reviewPolicy.enabled"
+              :aria-describedby="!reviewPolicy.enabled ? 'ym-review-overdue-disabled-reason' : undefined"
+            >
               <option v-for="option in booleanOptions" :key="'overdue-' + option.value" :value="option.value">
                 {{ option.label }}
               </option>
             </select>
+            <small v-if="!reviewPolicy.enabled" id="ym-review-overdue-disabled-reason">
+              {{ copy.overdueFilterDisabled }}
+            </small>
           </label>
 
           <label>
@@ -996,10 +1017,19 @@ interface ReviewSummary {
   reported: number
 }
 
+interface ReviewPolicy {
+  source: 'work_settings'
+  enabled: boolean
+  review_sla_hours: number | null
+  overdue_cutoff: string | null
+  settings_version: number
+}
+
 interface ReviewQueueData {
   items: ReviewQueueItem[]
   pagination: ReviewPagination
   summary: ReviewSummary
+  review_policy: ReviewPolicy
   filters: Record<string, unknown>
 }
 
@@ -1152,6 +1182,12 @@ const copyMap = {
     forbiddenCopy: 'لا يملك هذا الحساب صلاحيات قائمة المراجعة المطلوبة. لم تتم محاولة تحميل البيانات.',
     noticeTitle: 'قرارات المراجعة محكومة بالصلاحية والحالة',
     notice: 'لا يظهر للمستخدم إلا الإجراء الذي تسمح به صلاحيته، وتبقى الحالات غير المناسبة معطلة بسبب واضح قبل التأكيد.',
+    reviewPolicyLabel: 'سياسة التأخر الزمنية',
+    reviewSlaEnabled: (hours: number) => `مهلة المراجعة الحالية: ${hours} ساعة`,
+    reviewSlaEnabledDescription: 'يُعد الطلب متأخرًا بعد تجاوز هذه المهلة.',
+    reviewSlaDisabled: 'مهلة المراجعة غير مفعلة',
+    reviewSlaDisabledDescription: 'لن تُصنف الطلبات كمتأخرة اعتمادًا على الزمن.',
+    overdueFilterDisabled: 'فلتر التأخر معطل لأن مهلة المراجعة غير مفعلة.',
     summaryLabel: 'ملخص طلبات مراجعة الأعمال',
     total: 'الإجمالي',
     totalHint: 'كل الطلبات المطابقة',
@@ -1166,7 +1202,8 @@ const copyMap = {
     unassigned: 'غير مسندة',
     unassignedHint: 'دون مراجع محدد',
     overdue: 'متأخرة',
-    overdueHint: 'تجاوزت مهلة 48 ساعة',
+    overdueHint: (hours: number) => `بعد ${hours} ساعة`,
+    overdueDisabledHint: 'مهلة التأخر غير مفعلة',
     reported: 'عليها بلاغات',
     reportedHint: 'طلبات تحمل بلاغًا واحدًا أو أكثر',
     filtersTitle: 'بحث وفلاتر المراجعة',
@@ -1341,6 +1378,12 @@ const copyMap = {
     forbiddenCopy: 'This account lacks the required review queue permissions. No data request was made.',
     noticeTitle: 'Review decisions are permission and state controlled',
     notice: 'Users only see actions allowed by their exact permissions. Invalid state transitions remain disabled with a clear reason.',
+    reviewPolicyLabel: 'Time-based overdue policy',
+    reviewSlaEnabled: (hours: number) => `Current review SLA: ${hours} hours`,
+    reviewSlaEnabledDescription: 'A request becomes overdue only after it exceeds this threshold.',
+    reviewSlaDisabled: 'Review SLA is disabled',
+    reviewSlaDisabledDescription: 'Requests will not be classified as overdue based on time.',
+    overdueFilterDisabled: 'The overdue filter is disabled because the review SLA is disabled.',
     summaryLabel: 'Works review request summary',
     total: 'Total',
     totalHint: 'All matching requests',
@@ -1355,7 +1398,8 @@ const copyMap = {
     unassigned: 'Unassigned',
     unassignedHint: 'No reviewer is assigned',
     overdue: 'Overdue',
-    overdueHint: 'Past the 48-hour threshold',
+    overdueHint: (hours: number) => `After ${hours} hours`,
+    overdueDisabledHint: 'The overdue threshold is disabled',
     reported: 'Reported',
     reportedHint: 'Requests with one or more reports',
     filtersTitle: 'Review search and filters',
@@ -1580,6 +1624,7 @@ const pagination = reactive<ReviewPagination>({
   last_page: 1
 })
 const summary = reactive<ReviewSummary>(emptySummary())
+const reviewPolicy = ref<ReviewPolicy>(disabledReviewPolicy())
 
 function emptySummary(): ReviewSummary {
   return {
@@ -1591,6 +1636,16 @@ function emptySummary(): ReviewSummary {
     unassigned: 0,
     overdue: 0,
     reported: 0
+  }
+}
+
+function disabledReviewPolicy(): ReviewPolicy {
+  return {
+    source: 'work_settings',
+    enabled: false,
+    review_sla_hours: null,
+    overdue_cutoff: null,
+    settings_version: 1
   }
 }
 
@@ -1684,6 +1739,24 @@ const booleanOptions = computed(() => [
   { value: '0' as const, label: copy.value.no }
 ])
 
+const reviewPolicyTitle = computed(() => (
+  reviewPolicy.value.enabled && reviewPolicy.value.review_sla_hours !== null
+    ? copy.value.reviewSlaEnabled(reviewPolicy.value.review_sla_hours)
+    : copy.value.reviewSlaDisabled
+))
+
+const reviewPolicyDescription = computed(() => (
+  reviewPolicy.value.enabled
+    ? copy.value.reviewSlaEnabledDescription
+    : copy.value.reviewSlaDisabledDescription
+))
+
+const overdueSummaryHint = computed(() => (
+  reviewPolicy.value.enabled && reviewPolicy.value.review_sla_hours !== null
+    ? copy.value.overdueHint(reviewPolicy.value.review_sla_hours)
+    : copy.value.overdueDisabledHint
+))
+
 const summaryCards = computed(() => [
   { key: 'total', label: copy.value.total, value: summary.total, hint: copy.value.totalHint, color: '#8b5cf6' },
   { key: 'submitted', label: copy.value.submitted, value: summary.submitted, hint: copy.value.submittedHint, color: '#38bdf8' },
@@ -1691,7 +1764,7 @@ const summaryCards = computed(() => [
   { key: 'changes_requested', label: copy.value.changesRequested, value: summary.changes_requested, hint: copy.value.changesRequestedHint, color: '#f59e0b' },
   { key: 'assigned', label: copy.value.assigned, value: summary.assigned, hint: copy.value.assignedHint, color: '#14b8a6' },
   { key: 'unassigned', label: copy.value.unassigned, value: summary.unassigned, hint: copy.value.unassignedHint, color: '#94a3b8' },
-  { key: 'overdue', label: copy.value.overdue, value: summary.overdue, hint: copy.value.overdueHint, color: '#f43f5e' },
+  { key: 'overdue', label: copy.value.overdue, value: summary.overdue, hint: overdueSummaryHint.value, color: '#f43f5e' },
   { key: 'reported', label: copy.value.reported, value: summary.reported, hint: copy.value.reportedHint, color: '#e879f9' }
 ])
 
@@ -2371,10 +2444,13 @@ function buildListQuery(): Record<string, string | number> {
     ['designer_id', appliedFilters.designer_id.trim()],
     ['reviewer_id', appliedFilters.reviewer_id.trim()],
     ['assigned', appliedFilters.assigned],
-    ['overdue', appliedFilters.overdue],
     ['from', appliedFilters.from],
     ['to', appliedFilters.to]
   ]
+
+  if (reviewPolicy.value.enabled && appliedFilters.overdue !== '') {
+    query.overdue = appliedFilters.overdue
+  }
 
   for (const [key, value] of optionalFilters) {
     if (value !== '') query[key] = value
@@ -2413,6 +2489,18 @@ async function fetchReviewQueue(silent = false): Promise<void> {
         error.value = copy.value.genericError
       }
       return
+    }
+
+    const overdueWasApplied = appliedFilters.overdue !== ''
+    reviewPolicy.value = response.data.review_policy
+    if (!response.data.review_policy.enabled) {
+      filters.overdue = ''
+      appliedFilters.overdue = ''
+      if (overdueWasApplied) {
+        page.value = 1
+        void fetchReviewQueue(silent)
+        return
+      }
     }
 
     items.value = response.data.items
@@ -2582,6 +2670,9 @@ function retrySelectedDetails(): void {
 function clearQueueData(): void {
   items.value = []
   Object.assign(summary, emptySummary())
+  reviewPolicy.value = disabledReviewPolicy()
+  filters.overdue = ''
+  appliedFilters.overdue = ''
   Object.assign(pagination, {
     current_page: 1,
     per_page: appliedFilters.per_page,
@@ -2823,6 +2914,51 @@ onBeforeUnmount(() => {
   margin: 0.2rem 0 0;
 }
 
+.ym-works-review-policy {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  border: 1px solid rgba(56, 189, 248, 0.34);
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.1), transparent), var(--ym-card-bg);
+  padding: 1rem 1.1rem;
+}
+
+.ym-works-review-policy > span {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.14);
+  color: #38bdf8;
+  font-size: 10px;
+  font-weight: 950;
+  padding: 0.38rem 0.65rem;
+}
+
+.ym-works-review-policy strong {
+  display: block;
+  color: var(--ym-text);
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.ym-works-review-policy p {
+  color: var(--ym-muted);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.65;
+  margin: 0.2rem 0 0;
+}
+
+.ym-works-review-policy.is-disabled {
+  border-color: rgba(148, 163, 184, 0.3);
+  background: var(--ym-card-bg);
+}
+
+.ym-works-review-policy.is-disabled > span {
+  background: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+}
+
 .ym-works-review-summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2956,6 +3092,11 @@ onBeforeUnmount(() => {
 .ym-works-review-filter-grid select option {
   background: var(--ym-dropdown-bg);
   color: var(--ym-text);
+}
+
+.ym-works-review-filter-grid label.is-disabled select {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .ym-works-review-filter-actions {
@@ -4083,7 +4224,9 @@ onBeforeUnmount(() => {
     font-size: 2rem;
   }
 
-  .ym-works-review-notice {
+  .ym-works-review-notice,
+  .ym-works-review-policy {
+    align-items: flex-start;
     flex-direction: column;
   }
 

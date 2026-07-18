@@ -4,7 +4,7 @@
       <div>
         <p>إدارة القيم المحفوظة</p>
         <h2 id="ym-settings-editor-title">محرر إعدادات الأعمال</h2>
-        <span>تُحفظ القيم هنا، وسيتم تطبيقها على السلوك التشغيلي في مهام تكامل مستقلة.</span>
+        <span>مهلة المراجعة مطبقة على قائمة الطلبات، بينما تظل ثقة النشر وحدود الوسائط بانتظار تكاملات مستقلة.</span>
       </div>
       <div class="ym-settings-editor__dirty" :class="{ 'is-dirty': dirtyCount > 0 }" aria-live="polite">
         <strong>{{ dirtyCount }}</strong>
@@ -101,7 +101,7 @@
         </label>
 
         <p class="ym-settings-editor-card__note">
-          القيمة محفوظة، وسيأتي تطبيق تنبيه التأخر على قائمة المراجعة في تكامل لاحق.
+          تُطبق هذه القيمة على قائمة طلبات المراجعة وحساب الطلبات المتأخرة.
         </p>
       </article>
 
@@ -266,6 +266,9 @@
             </em>
           </section>
         </div>
+        <p class="ym-settings-editor-card__note is-warning">
+          هذه الحدود محفوظة حاليًا، وسيتم ربطها بإنشاء الأعمال ورفع الوسائط في مهمة تكامل مستقلة.
+        </p>
       </article>
     </div>
 

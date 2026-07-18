@@ -5,6 +5,7 @@ namespace Tests\Feature\Admin;
 use App\Http\Controllers\Api\Admin\WorksReviewQueueController;
 use App\Models\User;
 use App\Models\Work;
+use App\Models\WorkSetting;
 use Carbon\Carbon;
 use Database\Seeders\AuthRolesSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -202,7 +203,7 @@ class WorksReviewQueueApiTest extends TestCase
             collect(array_keys($item['review_flags']))->sort()->values()->all(),
         );
         $this->assertSame(
-            ['filters', 'items', 'pagination', 'summary'],
+            ['filters', 'items', 'pagination', 'review_policy', 'summary'],
             collect(array_keys($response->json('data')))->sort()->values()->all(),
         );
     }
@@ -436,6 +437,7 @@ class WorksReviewQueueApiTest extends TestCase
     {
         Carbon::setTestNow('2026-07-15 12:00:00');
         $this->actingAsRole('super-admin');
+        $this->setReviewSla(48);
         $overdue = Work::factory()->submitted()->create([
             'submitted_at' => now()->subHours(49),
         ]);
@@ -653,6 +655,7 @@ class WorksReviewQueueApiTest extends TestCase
     {
         Carbon::setTestNow('2026-07-15 12:00:00');
         $this->actingAsRole('super-admin');
+        $this->setReviewSla(48);
         $reviewer = User::factory()->create();
 
         Work::factory()->submitted()->create([
@@ -731,6 +734,7 @@ class WorksReviewQueueApiTest extends TestCase
     {
         Carbon::setTestNow('2026-07-15 12:00:00');
         $this->actingAsRole('super-admin');
+        $this->setReviewSla(48);
         $reviewer = User::factory()->create();
         $normal = Work::factory()->inReview()->create([
             'reviewer_id' => $reviewer->id,
@@ -778,6 +782,184 @@ class WorksReviewQueueApiTest extends TestCase
         ], $items->get($changes->id)['review_flags']);
     }
 
+    public function test_review_policy_exposes_only_the_approved_settings_contract(): void
+    {
+        Carbon::setTestNow('2026-07-15 12:00:00');
+        $this->actingAsRole('super-admin');
+        $this->setReviewSla(24, 3);
+
+        $response = $this->getJson('/api/admin/works/review')
+            ->assertOk()
+            ->assertJsonPath('data.review_policy', [
+                'source' => 'work_settings',
+                'enabled' => true,
+                'review_sla_hours' => 24,
+                'overdue_cutoff' => '2026-07-14T12:00:00+00:00',
+                'settings_version' => 3,
+            ]);
+
+        $policy = $response->json('data.review_policy');
+
+        $this->assertSame([
+            'enabled',
+            'overdue_cutoff',
+            'review_sla_hours',
+            'settings_version',
+            'source',
+        ], collect(array_keys($policy))->sort()->values()->all());
+
+        foreach ([
+            'direct_publish_trust_enabled',
+            'media_limits',
+            'updated_by',
+            'values',
+            'metadata',
+        ] as $forbiddenKey) {
+            $this->assertArrayNotHasKey($forbiddenKey, $policy);
+        }
+    }
+
+    public function test_disabled_review_sla_disables_time_based_overdue_behavior_but_preserves_attention_reasons(): void
+    {
+        Carbon::setTestNow('2026-07-15 12:00:00');
+        $this->actingAsRole('super-admin');
+        $normal = Work::factory()->submitted()->create([
+            'submitted_at' => now()->subHours(96),
+            'reports_count' => 0,
+        ]);
+        $reported = Work::factory()->submitted()->create([
+            'submitted_at' => now()->subHours(96),
+            'reports_count' => 2,
+        ]);
+        $changesRequested = Work::factory()->create([
+            'status' => Work::STATUS_CHANGES_REQUESTED,
+            'submitted_at' => now()->subHours(96),
+            'reports_count' => 0,
+        ]);
+
+        $response = $this->getJson($this->endpoint(['per_page' => 50]))
+            ->assertOk()
+            ->assertJsonPath('data.review_policy.enabled', false)
+            ->assertJsonPath('data.review_policy.review_sla_hours', null)
+            ->assertJsonPath('data.review_policy.overdue_cutoff', null)
+            ->assertJsonPath('data.summary.overdue', 0);
+        $items = collect($response->json('data.items'))->keyBy('id');
+
+        $this->assertFalse($items->get($normal->id)['review_flags']['overdue']);
+        $this->assertFalse($items->get($reported->id)['review_flags']['overdue']);
+        $this->assertFalse($items->get($changesRequested->id)['review_flags']['overdue']);
+        $this->assertFalse($items->get($normal->id)['review_flags']['needs_attention']);
+        $this->assertTrue($items->get($reported->id)['review_flags']['needs_attention']);
+        $this->assertTrue($items->get($changesRequested->id)['review_flags']['needs_attention']);
+
+        $this->getJson($this->endpoint(['overdue' => 1, 'per_page' => 50]))
+            ->assertOk()
+            ->assertJsonPath('data.pagination.total', 0)
+            ->assertJsonPath('data.summary.total', 0)
+            ->assertJsonPath('data.summary.overdue', 0)
+            ->assertJsonPath('data.items', []);
+
+        $notOverdue = $this->getJson($this->endpoint([
+            'overdue' => 0,
+            'per_page' => 50,
+        ]))
+            ->assertOk()
+            ->assertJsonPath('data.pagination.total', 3);
+
+        $this->assertSame(
+            collect([$normal, $reported, $changesRequested])->pluck('id')->sort()->values()->all(),
+            collect($notOverdue->json('data.items'))->pluck('id')->sort()->values()->all(),
+        );
+    }
+
+    public function test_twenty_four_hour_sla_uses_a_strict_cutoff_for_items_flags_and_summary(): void
+    {
+        Carbon::setTestNow('2026-07-15 12:00:00');
+        $this->actingAsRole('super-admin');
+        $this->setReviewSla(24, 2);
+        $overdue = Work::factory()->submitted()->create([
+            'submitted_at' => now()->subHours(25),
+        ]);
+        $fresh = Work::factory()->submitted()->create([
+            'submitted_at' => now()->subHours(23),
+        ]);
+        $atCutoff = Work::factory()->inReview()->create([
+            'submitted_at' => now()->subHours(24),
+        ]);
+
+        $response = $this->getJson($this->endpoint(['per_page' => 50]))
+            ->assertOk()
+            ->assertJsonPath('data.review_policy.review_sla_hours', 24)
+            ->assertJsonPath('data.summary.overdue', 1);
+        $items = collect($response->json('data.items'))->keyBy('id');
+
+        $this->assertTrue($items->get($overdue->id)['review_flags']['overdue']);
+        $this->assertFalse($items->get($fresh->id)['review_flags']['overdue']);
+        $this->assertFalse($items->get($atCutoff->id)['review_flags']['overdue']);
+        $this->assertSame(
+            $response->json('data.summary.overdue'),
+            $items->filter(
+                fn (array $item): bool => $item['review_flags']['overdue'],
+            )->count(),
+        );
+
+        $this->assertSingleFilteredWork(['overdue' => 1], $overdue);
+    }
+
+    public function test_changed_review_sla_is_used_by_the_next_request_without_a_cache(): void
+    {
+        Carbon::setTestNow('2026-07-15 12:00:00');
+        $this->actingAsRole('super-admin');
+        $work = Work::factory()->submitted()->create([
+            'submitted_at' => now()->subHours(60),
+        ]);
+        $this->setReviewSla(72, 4);
+
+        $this->getJson('/api/admin/works/review')
+            ->assertOk()
+            ->assertJsonPath('data.review_policy.review_sla_hours', 72)
+            ->assertJsonPath('data.review_policy.settings_version', 4)
+            ->assertJsonPath('data.summary.overdue', 0)
+            ->assertJsonPath('data.items.0.review_flags.overdue', false);
+
+        $this->setReviewSla(48, 5);
+
+        $this->getJson('/api/admin/works/review')
+            ->assertOk()
+            ->assertJsonPath('data.review_policy.review_sla_hours', 48)
+            ->assertJsonPath('data.review_policy.settings_version', 5)
+            ->assertJsonPath('data.summary.overdue', 1)
+            ->assertJsonPath('data.items.0.id', $work->id)
+            ->assertJsonPath('data.items.0.review_flags.overdue', true);
+    }
+
+    public function test_corrupt_stored_review_sla_is_normalized_to_disabled_without_falling_back_to_forty_eight_hours(): void
+    {
+        Carbon::setTestNow('2026-07-15 12:00:00');
+        $this->actingAsRole('super-admin');
+        Work::factory()->submitted()->create([
+            'submitted_at' => now()->subHours(96),
+        ]);
+        WorkSetting::query()
+            ->where('scope', WorkSetting::SCOPE_GLOBAL)
+            ->sole()
+            ->forceFill([
+                'values' => ['review_sla_hours' => '48'],
+                'version' => 7,
+                'updated_by' => null,
+            ])
+            ->save();
+
+        $this->getJson('/api/admin/works/review')
+            ->assertOk()
+            ->assertJsonPath('data.review_policy.enabled', false)
+            ->assertJsonPath('data.review_policy.review_sla_hours', null)
+            ->assertJsonPath('data.review_policy.overdue_cutoff', null)
+            ->assertJsonPath('data.review_policy.settings_version', 7)
+            ->assertJsonPath('data.summary.overdue', 0)
+            ->assertJsonPath('data.items.0.review_flags.overdue', false);
+    }
+
     public function test_static_review_route_resolves_to_review_controller(): void
     {
         $this->actingAsRole('super-admin');
@@ -813,6 +995,18 @@ class WorksReviewQueueApiTest extends TestCase
     private function endpoint(array $parameters): string
     {
         return '/api/admin/works/review?'.http_build_query($parameters);
+    }
+
+    private function setReviewSla(?int $hours, int $version = 1): void
+    {
+        WorkSetting::query()->updateOrCreate(
+            ['scope' => WorkSetting::SCOPE_GLOBAL],
+            [
+                'values' => ['review_sla_hours' => $hours],
+                'version' => $version,
+                'updated_by' => null,
+            ],
+        );
     }
 
     /**

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\WorksReviewQueueRequest;
 use App\Models\User;
 use App\Models\Work;
+use App\Services\Works\WorksSettingsStore;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -21,8 +22,24 @@ class WorksReviewQueueController extends Controller
         Work::STATUS_CHANGES_REQUESTED,
     ];
 
+    public function __construct(
+        private readonly WorksSettingsStore $settingsStore,
+    ) {}
+
     public function index(WorksReviewQueueRequest $request): JsonResponse
     {
+        $storedSettings = $this->settingsStore->getGlobalSettings();
+        $storedReviewSlaHours = $storedSettings['values']['review_sla_hours'];
+        $reviewSlaHours = is_int($storedReviewSlaHours)
+            && $storedReviewSlaHours >= 1
+            && $storedReviewSlaHours <= 720
+                ? $storedReviewSlaHours
+                : null;
+        $settingsVersion = (int) $storedSettings['version'];
+        $now = now();
+        $overdueCutoff = $reviewSlaHours === null
+            ? null
+            : $now->copy()->subHours($reviewSlaHours);
         $validated = $request->validated();
         $queryText = trim((string) ($validated['q'] ?? ''));
         $sort = (string) ($validated['sort'] ?? 'submitted_at');
@@ -36,8 +53,6 @@ class WorksReviewQueueController extends Controller
         $to = filled($validated['to'] ?? null)
             ? Carbon::parse((string) $validated['to'])->endOfDay()
             : null;
-        $overdueCutoff = now()->subHours(48);
-
         // نستخدم الاستعلام المفلتر نفسه للملخص والقائمة حتى تبقى الأرقام متطابقة.
         $reviewQuery = $this->reviewQuery(
             $validated,
@@ -93,6 +108,13 @@ class WorksReviewQueueController extends Controller
                     'last_page' => $works->lastPage(),
                 ],
                 'summary' => $summary,
+                'review_policy' => [
+                    'source' => 'work_settings',
+                    'enabled' => $reviewSlaHours !== null,
+                    'review_sla_hours' => $reviewSlaHours,
+                    'overdue_cutoff' => $overdueCutoff?->toIso8601String(),
+                    'settings_version' => $settingsVersion,
+                ],
                 'filters' => [
                     'q' => $queryText !== '' ? $queryText : null,
                     'status' => $validated['status'] ?? null,
@@ -122,7 +144,7 @@ class WorksReviewQueueController extends Controller
         ?bool $overdue,
         ?Carbon $from,
         ?Carbon $to,
-        Carbon $overdueCutoff,
+        ?Carbon $overdueCutoff,
     ): Builder {
         $query = Work::query()
             ->whereIn('status', self::REVIEW_STATUSES)
@@ -169,8 +191,16 @@ class WorksReviewQueueController extends Controller
         return $query;
     }
 
-    private function applyOverdueFilter(Builder $query, bool $overdue, Carbon $cutoff): void
+    private function applyOverdueFilter(Builder $query, bool $overdue, ?Carbon $cutoff): void
     {
+        if ($cutoff === null) {
+            if ($overdue) {
+                $query->whereRaw('1 = 0');
+            }
+
+            return;
+        }
+
         if ($overdue) {
             $query
                 ->whereIn('status', [Work::STATUS_SUBMITTED, Work::STATUS_IN_REVIEW])
@@ -200,16 +230,20 @@ class WorksReviewQueueController extends Controller
     /**
      * @return array<string, int>
      */
-    private function summary(Builder $query, Carbon $overdueCutoff): array
+    private function summary(Builder $query, ?Carbon $overdueCutoff): array
     {
-        $counts = $query
+        $summaryQuery = $query
             ->selectRaw('COUNT(*) AS total')
             ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS submitted', [Work::STATUS_SUBMITTED])
             ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS in_review', [Work::STATUS_IN_REVIEW])
             ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS changes_requested', [Work::STATUS_CHANGES_REQUESTED])
             ->selectRaw('SUM(CASE WHEN reviewer_id IS NOT NULL THEN 1 ELSE 0 END) AS assigned')
-            ->selectRaw('SUM(CASE WHEN reviewer_id IS NULL THEN 1 ELSE 0 END) AS unassigned')
-            ->selectRaw(
+            ->selectRaw('SUM(CASE WHEN reviewer_id IS NULL THEN 1 ELSE 0 END) AS unassigned');
+
+        if ($overdueCutoff === null) {
+            $summaryQuery->selectRaw('0 AS overdue');
+        } else {
+            $summaryQuery->selectRaw(
                 'SUM(CASE WHEN status IN (?, ?)
                     AND submitted_at IS NOT NULL
                     AND submitted_at < ?
@@ -223,7 +257,10 @@ class WorksReviewQueueController extends Controller
                     Work::STATUS_IN_REVIEW,
                     $overdueCutoff->toDateTimeString(),
                 ],
-            )
+            );
+        }
+
+        $counts = $summaryQuery
             ->selectRaw('SUM(CASE WHEN reports_count > 0 THEN 1 ELSE 0 END) AS reported')
             ->first();
 
@@ -257,7 +294,7 @@ class WorksReviewQueueController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function workPayload(Work $work, Carbon $overdueCutoff): array
+    private function workPayload(Work $work, ?Carbon $overdueCutoff): array
     {
         $isOverdue = $this->isOverdue($work, $overdueCutoff);
 
@@ -289,9 +326,10 @@ class WorksReviewQueueController extends Controller
         ];
     }
 
-    private function isOverdue(Work $work, Carbon $cutoff): bool
+    private function isOverdue(Work $work, ?Carbon $cutoff): bool
     {
-        return in_array($work->status, [Work::STATUS_SUBMITTED, Work::STATUS_IN_REVIEW], true)
+        return $cutoff !== null
+            && in_array($work->status, [Work::STATUS_SUBMITTED, Work::STATUS_IN_REVIEW], true)
             && $work->submitted_at !== null
             && $work->submitted_at->lt($cutoff)
             && $work->reviewed_at === null
