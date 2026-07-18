@@ -5,6 +5,7 @@ namespace Tests\Feature\Admin;
 use App\Http\Controllers\Api\Admin\WorksSettingsController;
 use App\Models\User;
 use App\Models\Work;
+use App\Models\WorkSetting;
 use Database\Seeders\AuthRolesSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
@@ -52,9 +53,21 @@ class WorksSettingsApiTest extends TestCase
             ->assertJsonPath('message', 'تم جلب إعدادات وصلاحيات الأعمال بنجاح')
             ->assertJsonPath('errors', null)
             ->assertJsonPath('data.settings_support', [
-                'persistent_settings_available' => false,
-                'source' => 'static_defaults_and_registered_permissions',
-                'reason' => 'لا يوجد جدول إعدادات أعمال مستقل حاليًا؛ هذه القراءة تعرض الوضع الحالي والصلاحيات المسجلة فقط.',
+                'persistent_settings_available' => true,
+                'source' => 'work_settings',
+                'reason' => 'توجد طبقة تخزين دائمة لإعدادات الأعمال، لكن واجهات الحفظ والتعديل لم تُبنَ بعد.',
+            ])
+            ->assertJsonPath('data.stored_settings.scope', WorkSetting::SCOPE_GLOBAL)
+            ->assertJsonPath('data.stored_settings.version', 1)
+            ->assertJsonPath('data.stored_settings.storage_record_found', true)
+            ->assertJsonPath('data.stored_settings.values', [
+                'review_sla_hours' => null,
+                'direct_publish_trust_enabled' => false,
+                'media_limits' => [
+                    'max_items' => null,
+                    'max_file_size_kb' => null,
+                    'allowed_types' => null,
+                ],
             ])
             ->assertJsonPath('data.access_model', [
                 'internal_roles' => ['super-admin', 'admin', 'staff'],
@@ -78,6 +91,7 @@ class WorksSettingsApiTest extends TestCase
                 'management_support',
                 'permission_registry',
                 'settings_support',
+                'stored_settings',
                 'workflow',
             ],
             collect(array_keys($response->json('data')))->sort()->values()->all(),
@@ -93,6 +107,11 @@ class WorksSettingsApiTest extends TestCase
             ],
             collect($response->json('data.current_user_capabilities'))->sortKeys()->all(),
         );
+        $response->assertJsonStructure([
+            'data' => [
+                'stored_settings' => ['updated_at'],
+            ],
+        ]);
     }
 
     public function test_admin_staff_and_access_only_accounts_get_403(): void
@@ -307,6 +326,23 @@ class WorksSettingsApiTest extends TestCase
     public function test_response_does_not_expose_sensitive_or_raw_data(): void
     {
         $user = $this->actingAsRole('admin', $this->settingsViewPermissions());
+        WorkSetting::query()
+            ->where('scope', WorkSetting::SCOPE_GLOBAL)
+            ->sole()
+            ->forceFill([
+                'updated_by' => $user->id,
+                'values' => [
+                    'review_sla_hours' => 24,
+                    'password' => 'secret',
+                    'token' => 'secret-token',
+                    'metadata' => ['hidden' => true],
+                    'private_notes' => 'hidden',
+                    'unknown_setting' => true,
+                    'reporter_email' => $user->email,
+                ],
+            ])
+            ->save();
+
         $response = $this->getJson('/api/admin/works/settings')->assertOk();
         $keys = $this->recursiveKeys($response->json());
         $encodedResponse = strtolower($response->getContent());
@@ -320,8 +356,11 @@ class WorksSettingsApiTest extends TestCase
             'cookie',
             'metadata',
             'payload',
+            'updated_by',
             'raw_config',
             'raw_model',
+            'unknown_setting',
+            'reporter_email',
             'rows',
             'works',
             'work_rows',
@@ -335,6 +374,60 @@ class WorksSettingsApiTest extends TestCase
 
         $this->assertStringNotContainsString(strtolower($user->email), $encodedResponse);
         $this->assertStringNotContainsString(strtolower($user->name), $encodedResponse);
+    }
+
+    public function test_endpoint_returns_normalized_stored_values_without_unknown_keys(): void
+    {
+        $this->actingAsRole('super-admin');
+        WorkSetting::query()
+            ->where('scope', WorkSetting::SCOPE_GLOBAL)
+            ->sole()
+            ->forceFill([
+                'version' => 7,
+                'values' => [
+                    'review_sla_hours' => 72,
+                    'direct_publish_trust_enabled' => 'false',
+                    'media_limits' => [
+                        'max_items' => 12,
+                        'max_file_size_kb' => 4096,
+                        'allowed_types' => ['video', 'unknown', 'video', 'image'],
+                        'token' => 'nested-secret',
+                    ],
+                    'password' => 'secret',
+                    'metadata' => ['private' => true],
+                    'private_notes' => 'hidden',
+                    'unknown_setting' => true,
+                    'reporter_email' => 'reporter@example.test',
+                ],
+            ])
+            ->save();
+
+        $response = $this->getJson('/api/admin/works/settings')
+            ->assertOk()
+            ->assertJsonPath('data.stored_settings.scope', WorkSetting::SCOPE_GLOBAL)
+            ->assertJsonPath('data.stored_settings.version', 7)
+            ->assertJsonPath('data.stored_settings.storage_record_found', true)
+            ->assertJsonPath('data.stored_settings.values', [
+                'review_sla_hours' => 72,
+                'direct_publish_trust_enabled' => false,
+                'media_limits' => [
+                    'max_items' => 12,
+                    'max_file_size_kb' => 4096,
+                    'allowed_types' => ['video', 'image'],
+                ],
+            ]);
+
+        foreach ([
+            'password',
+            'token',
+            'metadata',
+            'private_notes',
+            'unknown_setting',
+            'reporter_email',
+            'updated_by',
+        ] as $forbiddenKey) {
+            $this->assertNotContains($forbiddenKey, $this->recursiveKeys($response->json()));
+        }
     }
 
     public function test_static_settings_route_resolves_to_settings_controller(): void

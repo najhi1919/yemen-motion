@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\WorksSettingsRequest;
 use App\Models\Work;
+use App\Services\Works\WorksSettingsStore;
 use Illuminate\Http\JsonResponse;
 
 class WorksSettingsController extends Controller
@@ -96,16 +97,21 @@ class WorksSettingsController extends Controller
         'can_manage_media_limits' => 'admin.works.settings.media_limits.manage',
     ];
 
+    public function __construct(
+        private readonly WorksSettingsStore $settingsStore,
+    ) {}
+
     public function index(WorksSettingsRequest $request): JsonResponse
     {
         return response()->json([
             'success' => true,
             'data' => [
                 'settings_support' => [
-                    'persistent_settings_available' => false,
-                    'source' => 'static_defaults_and_registered_permissions',
-                    'reason' => 'لا يوجد جدول إعدادات أعمال مستقل حاليًا؛ هذه القراءة تعرض الوضع الحالي والصلاحيات المسجلة فقط.',
+                    'persistent_settings_available' => true,
+                    'source' => 'work_settings',
+                    'reason' => 'توجد طبقة تخزين دائمة لإعدادات الأعمال، لكن واجهات الحفظ والتعديل لم تُبنَ بعد.',
                 ],
+                'stored_settings' => $this->settingsStore->getGlobalSettings(),
                 'access_model' => [
                     'internal_roles' => self::INTERNAL_ROLES,
                     'forbidden_roles' => self::FORBIDDEN_ROLES,
