@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\WorksActivityRequest;
 use App\Models\User;
 use App\Models\Work;
+use App\Services\Works\WorksActivityAuditQuery;
 use Carbon\Carbon;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
@@ -73,9 +74,18 @@ class WorksActivityController extends Controller
         'archived',
     ];
 
+    public function __construct(
+        private readonly WorksActivityAuditQuery $activityAuditQuery,
+    ) {}
+
     public function index(WorksActivityRequest $request): JsonResponse
     {
         $validated = $request->validated();
+
+        if (($validated['source'] ?? 'lifecycle') === 'audit') {
+            return $this->auditIndex($validated);
+        }
+
         $queryText = trim((string) ($validated['q'] ?? ''));
         $eventType = filled($validated['event_type'] ?? null)
             ? (string) $validated['event_type']
@@ -146,12 +156,187 @@ class WorksActivityController extends Controller
                 'activity_source' => [
                     'dedicated_log_available' => false,
                     'source' => 'work_lifecycle_timestamps',
+                    'mode' => 'lifecycle',
                     'reason' => 'لا يوجد جدول سجل أعمال مستقل حاليًا؛ هذه القائمة مشتقة من تواريخ دورة حياة الأعمال.',
                 ],
             ],
             'message' => 'تم جلب سجل الأعمال بنجاح',
             'errors' => null,
         ]);
+    }
+
+    /**
+     * @param array<string, mixed> $validated
+     */
+    private function auditIndex(array $validated): JsonResponse
+    {
+        $queryText = trim((string) ($validated['q'] ?? ''));
+        $sort = (string) ($validated['sort'] ?? 'event_at');
+        $direction = (string) ($validated['direction'] ?? 'desc');
+        $perPage = (int) ($validated['per_page'] ?? 15);
+        $from = filled($validated['from'] ?? null)
+            ? Carbon::parse((string) $validated['from'])->startOfDay()
+            : null;
+        $to = filled($validated['to'] ?? null)
+            ? Carbon::parse((string) $validated['to'])->endOfDay()
+            : null;
+        $filters = [
+            'q' => $queryText,
+            'event_type' => $validated['event_type'] ?? null,
+            'event_group' => $validated['event_group'] ?? null,
+            'actor_id' => $validated['actor_id'] ?? null,
+            'target_type' => $validated['target_type'] ?? null,
+            'target_id' => $validated['target_id'] ?? null,
+            'work_id' => $validated['work_id'] ?? null,
+            'outcome' => $validated['outcome'] ?? null,
+            'from' => $from,
+            'to' => $to,
+        ];
+        $auditQuery = $this->activityAuditQuery->query(
+            $filters,
+            $direction,
+            $sort,
+        );
+        $summary = $this->auditSummary(clone $auditQuery);
+        $events = (clone $auditQuery)->paginate($perPage);
+        $items = collect($events->items())
+            ->map(fn (stdClass $event): array => $this->auditActivityPayload($event))
+            ->all();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'items' => $items,
+                'pagination' => [
+                    'current_page' => $events->currentPage(),
+                    'per_page' => $events->perPage(),
+                    'total' => $events->total(),
+                    'last_page' => $events->lastPage(),
+                ],
+                'summary' => $summary,
+                'filters' => [
+                    'source' => 'audit',
+                    'q' => $queryText !== '' ? $queryText : null,
+                    'event_type' => $validated['event_type'] ?? null,
+                    'event_group' => $validated['event_group'] ?? null,
+                    'actor_id' => isset($validated['actor_id']) ? (int) $validated['actor_id'] : null,
+                    'target_type' => $validated['target_type'] ?? null,
+                    'target_id' => isset($validated['target_id']) ? (int) $validated['target_id'] : null,
+                    'work_id' => isset($validated['work_id']) ? (int) $validated['work_id'] : null,
+                    'outcome' => $validated['outcome'] ?? null,
+                    'from' => $from?->toDateString(),
+                    'to' => $to?->toDateString(),
+                    'sort' => $sort,
+                    'direction' => $direction,
+                ],
+                'activity_source' => [
+                    'dedicated_log_available' => true,
+                    'legacy_source_available' => true,
+                    'source' => 'audit_events',
+                    'mode' => 'audit',
+                ],
+                'event_catalog' => $this->activityAuditQuery->eventCatalog(),
+            ],
+            'message' => 'تم جلب سجل تدقيق الأعمال بنجاح',
+            'errors' => null,
+        ]);
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function auditSummary(Builder $auditQuery): array
+    {
+        $counts = DB::query()
+            ->fromSub($auditQuery->reorder(), 'works_audit_activity')
+            ->selectRaw('COUNT(*) AS total_events')
+            ->selectRaw('COUNT(DISTINCT work_id) AS unique_works')
+            ->selectRaw(
+                "COALESCE(SUM(CASE WHEN event_group = 'review' THEN 1 ELSE 0 END), 0) AS review_events",
+            )
+            ->selectRaw(
+                "COALESCE(SUM(CASE WHEN event_group = 'visibility' THEN 1 ELSE 0 END), 0) AS visibility_events",
+            )
+            ->selectRaw(
+                "COALESCE(SUM(CASE WHEN event_group = 'reports' THEN 1 ELSE 0 END), 0) AS report_events",
+            )
+            ->selectRaw(
+                "COALESCE(SUM(CASE WHEN event_group = 'taxonomy' THEN 1 ELSE 0 END), 0) AS taxonomy_events",
+            )
+            ->selectRaw(
+                "COALESCE(SUM(CASE WHEN event_group = 'taxonomy_assignment' THEN 1 ELSE 0 END), 0) AS taxonomy_assignment_events",
+            )
+            ->selectRaw(
+                'COALESCE(SUM(CASE WHEN needs_attention = 1 THEN 1 ELSE 0 END), 0) AS attention_events',
+            )
+            ->first();
+
+        return [
+            'total_events' => (int) ($counts?->total_events ?? 0),
+            'unique_works' => (int) ($counts?->unique_works ?? 0),
+            'review_events' => (int) ($counts?->review_events ?? 0),
+            'visibility_events' => (int) ($counts?->visibility_events ?? 0),
+            'report_events' => (int) ($counts?->report_events ?? 0),
+            'taxonomy_events' => (int) ($counts?->taxonomy_events ?? 0),
+            'taxonomy_assignment_events' => (int) ($counts?->taxonomy_assignment_events ?? 0),
+            'attention_events' => (int) ($counts?->attention_events ?? 0),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function auditActivityPayload(stdClass $event): array
+    {
+        $actorId = $event->actor_id !== null ? (int) $event->actor_id : null;
+        $actorName = $event->actor_name !== null ? (string) $event->actor_name : null;
+        $workId = $event->work_id !== null ? (int) $event->work_id : null;
+        $requiresWork = (bool) $event->requires_work;
+
+        return [
+            'id' => 'audit-'.(int) $event->audit_event_id,
+            'source' => 'audit_events',
+            'audit_event_id' => (int) $event->audit_event_id,
+            'event_type' => (string) $event->event_type,
+            'event_key' => (string) $event->event_key,
+            'event_group' => (string) $event->event_group,
+            'event_label_ar' => (string) $event->event_label_ar,
+            'event_label_en' => (string) $event->event_label_en,
+            'event_at' => Carbon::parse((string) $event->occurred_at)->toJSON(),
+            'severity' => (string) $event->severity,
+            'action' => $event->action !== null ? (string) $event->action : null,
+            'outcome' => (string) $event->outcome,
+            'actor' => $actorName !== null
+                ? [
+                    'id' => $actorId,
+                    'name' => $actorName,
+                    'role' => $event->actor_role !== null ? (string) $event->actor_role : null,
+                ]
+                : null,
+            'target' => [
+                'type' => (string) $event->target_type,
+                'id' => $event->target_id !== null ? (int) $event->target_id : null,
+                'scope' => (string) $event->target_scope,
+            ],
+            'work' => $workId !== null
+                ? [
+                    'id' => $workId,
+                    'title' => (string) $event->work_title,
+                    'slug' => (string) $event->work_slug,
+                    'status' => (string) $event->work_status,
+                    'visibility_status' => (string) $event->work_visibility_status,
+                    'media_type' => $event->work_media_type !== null
+                        ? (string) $event->work_media_type
+                        : null,
+                ]
+                : null,
+            'activity_flags' => [
+                'requires_work' => $requiresWork,
+                'needs_attention' => (bool) $event->needs_attention,
+                'actor_missing' => $actorId !== null && $actorName === null,
+                'work_missing' => $requiresWork && $workId === null,
+            ],
+        ];
     }
 
     /**

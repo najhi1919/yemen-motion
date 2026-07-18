@@ -497,6 +497,14 @@ class WorksActivityAuditFoundationTest extends TestCase
             [$secondAtSameTime->id, $firstAtSameTime->id, $older->id],
             $this->activityQuery->query([], 'unsupported')->pluck('audit_event_id')->all(),
         );
+        $this->assertSame(
+            [$older->id, $firstAtSameTime->id, $secondAtSameTime->id],
+            $this->activityQuery->query([], 'asc', 'audit_event_id')->pluck('audit_event_id')->all(),
+        );
+        $this->assertSame(
+            [$secondAtSameTime->id, $firstAtSameTime->id, $older->id],
+            $this->activityQuery->query([], 'desc', 'unsupported')->pluck('audit_event_id')->all(),
+        );
     }
 
     public function test_joins_do_not_duplicate_audit_event_rows(): void

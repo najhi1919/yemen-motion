@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Admin;
 
 use App\Models\Work;
+use App\Services\Works\WorksActivityAuditQuery;
 use Carbon\Carbon;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -14,8 +15,15 @@ class WorksActivityRequest extends FormRequest
      * @var list<string>
      */
     private const ALLOWED_QUERY_PARAMETERS = [
+        'source',
         'q',
         'event_type',
+        'event_group',
+        'actor_id',
+        'target_type',
+        'target_id',
+        'work_id',
+        'outcome',
         'status',
         'visibility_status',
         'media_type',
@@ -35,7 +43,7 @@ class WorksActivityRequest extends FormRequest
     /**
      * @var list<string>
      */
-    private const EVENT_TYPES = [
+    private const LIFECYCLE_EVENT_TYPES = [
         'created',
         'updated',
         'submitted',
@@ -50,12 +58,38 @@ class WorksActivityRequest extends FormRequest
     /**
      * @var list<string>
      */
-    private const SORTABLE_COLUMNS = [
+    private const LIFECYCLE_SORTS = [
         'event_at',
         'work_id',
         'title',
         'status',
         'reports_count',
+    ];
+
+    /**
+     * @var list<string>
+     */
+    private const LIFECYCLE_ONLY_FILTERS = [
+        'status',
+        'visibility_status',
+        'media_type',
+        'designer_id',
+        'reviewer_id',
+        'category_id',
+        'reported',
+        'promoted',
+    ];
+
+    /**
+     * @var list<string>
+     */
+    private const AUDIT_ONLY_FILTERS = [
+        'event_group',
+        'actor_id',
+        'target_type',
+        'target_id',
+        'work_id',
+        'outcome',
     ];
 
     protected function prepareForValidation(): void
@@ -87,9 +121,25 @@ class WorksActivityRequest extends FormRequest
 
     public function rules(): array
     {
+        $source = $this->activitySource();
+        $auditQuery = app(WorksActivityAuditQuery::class);
+        $eventTypes = $source === 'audit'
+            ? $auditQuery->supportedEventTypes()
+            : self::LIFECYCLE_EVENT_TYPES;
+        $sorts = $source === 'audit'
+            ? $auditQuery->supportedSorts()
+            : self::LIFECYCLE_SORTS;
+
         return [
+            'source' => ['nullable', Rule::in(['lifecycle', 'audit'])],
             'q' => ['nullable', 'string', 'min:2', 'max:80'],
-            'event_type' => ['nullable', Rule::in(self::EVENT_TYPES)],
+            'event_type' => ['nullable', Rule::in($eventTypes)],
+            'event_group' => ['nullable', Rule::in($auditQuery->supportedEventGroups())],
+            'actor_id' => ['nullable', 'integer', 'min:1'],
+            'target_type' => ['nullable', Rule::in($auditQuery->supportedTargetTypes())],
+            'target_id' => ['nullable', 'integer', 'min:1'],
+            'work_id' => ['nullable', 'integer', 'min:1'],
+            'outcome' => ['nullable', 'string', 'max:50'],
             'status' => ['nullable', Rule::in([
                 Work::STATUS_DRAFT,
                 Work::STATUS_SUBMITTED,
@@ -106,14 +156,14 @@ class WorksActivityRequest extends FormRequest
                 Work::VISIBILITY_PUBLIC,
             ])],
             'media_type' => ['nullable', 'string', 'max:40'],
-            'designer_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
-            'reviewer_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
-            'category_id' => ['nullable', 'integer'],
+            'designer_id' => ['nullable', 'integer', 'min:1', Rule::exists('users', 'id')],
+            'reviewer_id' => ['nullable', 'integer', 'min:1', Rule::exists('users', 'id')],
+            'category_id' => ['nullable', 'integer', 'min:1'],
             'reported' => ['nullable', 'boolean'],
             'promoted' => ['nullable', 'boolean'],
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date', 'after_or_equal:from'],
-            'sort' => ['nullable', Rule::in(self::SORTABLE_COLUMNS)],
+            'sort' => ['nullable', Rule::in($sorts)],
             'direction' => ['nullable', Rule::in(['asc', 'desc'])],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:50'],
@@ -124,6 +174,7 @@ class WorksActivityRequest extends FormRequest
     {
         return [
             'q.min' => 'نص البحث يجب ألا يقل عن حرفين.',
+            'outcome.max' => 'قيمة نتيجة حدث التدقيق طويلة جدًا.',
             'to.after_or_equal' => 'تاريخ النهاية يجب أن يساوي تاريخ البداية أو يأتي بعده.',
             'per_page.max' => 'حجم الصفحة يجب ألا يتجاوز 50 عنصرًا.',
         ];
@@ -139,6 +190,24 @@ class WorksActivityRequest extends FormRequest
 
             foreach ($unexpectedParameters as $parameter) {
                 $validator->errors()->add((string) $parameter, 'معامل سجل الأعمال غير مسموح.');
+            }
+
+            $source = $this->activitySource();
+
+            if (in_array($source, ['lifecycle', 'audit'], true)) {
+                $forbiddenFilters = $source === 'audit'
+                    ? self::LIFECYCLE_ONLY_FILTERS
+                    : self::AUDIT_ONLY_FILTERS;
+                $sourceLabel = $source === 'audit' ? 'Audit' : 'Lifecycle';
+
+                foreach ($forbiddenFilters as $filter) {
+                    if (array_key_exists($filter, $this->query->all())) {
+                        $validator->errors()->add(
+                            $filter,
+                            "المعامل {$filter} غير متاح في وضع {$sourceLabel}.",
+                        );
+                    }
+                }
             }
 
             if (
@@ -158,5 +227,12 @@ class WorksActivityRequest extends FormRequest
                 $validator->errors()->add('to', 'المدى الزمني يجب ألا يتجاوز عشر سنوات.');
             }
         });
+    }
+
+    private function activitySource(): string
+    {
+        $source = $this->query('source', 'lifecycle');
+
+        return is_string($source) ? $source : 'lifecycle';
     }
 }

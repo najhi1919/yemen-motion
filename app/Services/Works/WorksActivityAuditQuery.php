@@ -15,9 +15,23 @@ class WorksActivityAuditQuery
     private const CATEGORY = 'works';
 
     /**
+     * @var list<string>
+     */
+    private const SORTS = [
+        'event_at',
+        'audit_event_id',
+        'event_type',
+        'actor_name',
+        'work_id',
+        'work_title',
+    ];
+
+    /**
      * @var array<string, array{
      *     event_type: string,
      *     event_group: string,
+     *     group_label_ar?: string,
+     *     group_label_en?: string,
      *     event_key: string,
      *     label_ar: string,
      *     label_en: string,
@@ -31,6 +45,8 @@ class WorksActivityAuditQuery
         'works.review.started' => [
             'event_type' => 'works.review.started',
             'event_group' => 'review',
+            'group_label_ar' => 'المراجعة',
+            'group_label_en' => 'Review',
             'event_key' => 'started',
             'label_ar' => 'بدء مراجعة العمل',
             'label_en' => 'Work review started',
@@ -108,6 +124,8 @@ class WorksActivityAuditQuery
         'works.visibility.published' => [
             'event_type' => 'works.visibility.published',
             'event_group' => 'visibility',
+            'group_label_ar' => 'الظهور',
+            'group_label_en' => 'Visibility',
             'event_key' => 'published',
             'label_ar' => 'نشر العمل',
             'label_en' => 'Work published',
@@ -196,6 +214,8 @@ class WorksActivityAuditQuery
         'works.reports.review_started' => [
             'event_type' => 'works.reports.review_started',
             'event_group' => 'reports',
+            'group_label_ar' => 'البلاغات',
+            'group_label_en' => 'Reports',
             'event_key' => 'review_started',
             'label_ar' => 'بدء مراجعة بلاغ العمل',
             'label_en' => 'Work report review started',
@@ -229,6 +249,8 @@ class WorksActivityAuditQuery
         'works.taxonomy.category.created' => [
             'event_type' => 'works.taxonomy.category.created',
             'event_group' => 'taxonomy',
+            'group_label_ar' => 'التصنيف',
+            'group_label_en' => 'Taxonomy',
             'event_key' => 'category_created',
             'label_ar' => 'إنشاء تصنيف أعمال',
             'label_en' => 'Work category created',
@@ -306,6 +328,8 @@ class WorksActivityAuditQuery
         'work.category.changed' => [
             'event_type' => 'work.category.changed',
             'event_group' => 'taxonomy_assignment',
+            'group_label_ar' => 'إسناد التصنيف',
+            'group_label_en' => 'Taxonomy assignment',
             'event_key' => 'category_changed',
             'label_ar' => 'تغيير تصنيف العمل',
             'label_en' => 'Work category changed',
@@ -331,6 +355,8 @@ class WorksActivityAuditQuery
      * @return array<string, array{
      *     event_type: string,
      *     event_group: string,
+     *     group_label_ar?: string,
+     *     group_label_en?: string,
      *     event_key: string,
      *     label_ar: string,
      *     label_en: string,
@@ -354,6 +380,83 @@ class WorksActivityAuditQuery
     }
 
     /**
+     * @return list<string>
+     */
+    public function supportedEventGroups(): array
+    {
+        return array_values(array_unique(array_column(
+            self::EVENT_DEFINITIONS,
+            'event_group',
+        )));
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function supportedTargetTypes(): array
+    {
+        return array_values(array_unique(array_column(
+            self::EVENT_DEFINITIONS,
+            'target_scope',
+        )));
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function supportedSorts(): array
+    {
+        return self::SORTS;
+    }
+
+    /**
+     * @return array{
+     *     groups: list<array{key: string, label_ar: string, label_en: string}>,
+     *     events: list<array{
+     *         event_type: string,
+     *         event_key: string,
+     *         event_group: string,
+     *         label_ar: string,
+     *         label_en: string,
+     *         target_scope: string,
+     *         requires_work: bool,
+     *         needs_attention: bool
+     *     }>
+     * }
+     */
+    public function eventCatalog(): array
+    {
+        $groups = [];
+        $events = [];
+
+        foreach (self::EVENT_DEFINITIONS as $definition) {
+            if (isset($definition['group_label_ar'], $definition['group_label_en'])) {
+                $groups[] = [
+                    'key' => $definition['event_group'],
+                    'label_ar' => $definition['group_label_ar'],
+                    'label_en' => $definition['group_label_en'],
+                ];
+            }
+
+            $events[] = [
+                'event_type' => $definition['event_type'],
+                'event_key' => $definition['event_key'],
+                'event_group' => $definition['event_group'],
+                'label_ar' => $definition['label_ar'],
+                'label_en' => $definition['label_en'],
+                'target_scope' => $definition['target_scope'],
+                'requires_work' => $definition['requires_work'],
+                'needs_attention' => $definition['needs_attention'],
+            ];
+        }
+
+        return [
+            'groups' => $groups,
+            'events' => $events,
+        ];
+    }
+
+    /**
      * @param array{
      *     event_type?: mixed,
      *     event_group?: mixed,
@@ -367,11 +470,15 @@ class WorksActivityAuditQuery
      *     outcome?: mixed
      * } $filters
      */
-    public function query(array $filters = [], string $direction = 'desc'): Builder
+    public function query(
+        array $filters = [],
+        string $direction = 'desc',
+        string $sort = 'event_at',
+    ): Builder
     {
         $query = $this->baseQuery();
         $this->applyFilters($query, $filters);
-        $this->applyOrder($query, $direction);
+        $this->applyOrder($query, $sort, $direction);
 
         return $query;
     }
@@ -540,21 +647,38 @@ class WorksActivityAuditQuery
         }
     }
 
-    private function applyOrder(Builder $query, string $direction): void
+    private function applyOrder(Builder $query, string $sort, string $direction): void
     {
         $safeDirection = in_array(strtolower($direction), ['asc', 'desc'], true)
             ? strtolower($direction)
             : 'desc';
+        $safeSort = in_array($sort, self::SORTS, true) ? $sort : 'event_at';
 
-        $query
-            ->orderBy('audit_events.occurred_at', $safeDirection)
-            ->orderBy('audit_events.id', $safeDirection);
+        match ($safeSort) {
+            'audit_event_id' => $query->orderBy('audit_events.id', $safeDirection),
+            'event_type' => $query->orderBy('audit_events.event_type', $safeDirection),
+            'actor_name' => $query->orderBy('activity_actors.name', $safeDirection),
+            'work_id' => $query->orderByRaw(
+                "COALESCE(direct_works.id, report_works.id) {$safeDirection}",
+            ),
+            'work_title' => $query->orderByRaw(
+                "COALESCE(direct_works.title, report_works.title) {$safeDirection}",
+            ),
+            default => $query->orderBy('audit_events.occurred_at', $safeDirection),
+        };
+
+        if ($safeSort !== 'audit_event_id') {
+            $query->orderBy('audit_events.id', $safeDirection);
+        }
     }
 
     private function addDefinitionColumn(Builder $query, string $alias, string $definitionKey): void
     {
         [$case, $bindings] = $this->definitionCase($definitionKey);
-        $query->selectRaw("{$case} as {$alias}", $bindings);
+        $expression = in_array($definitionKey, ['requires_work', 'needs_attention'], true)
+            ? "CAST({$case} AS INTEGER)"
+            : $case;
+        $query->selectRaw("{$expression} as {$alias}", $bindings);
     }
 
     /**
