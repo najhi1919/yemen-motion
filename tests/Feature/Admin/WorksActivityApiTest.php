@@ -247,6 +247,7 @@ class WorksActivityApiTest extends TestCase
             ->assertJsonPath('data.activity_source', [
                 'dedicated_log_available' => false,
                 'source' => 'work_lifecycle_timestamps',
+                'mode' => 'lifecycle',
                 'reason' => 'لا يوجد جدول سجل أعمال مستقل حاليًا؛ هذه القائمة مشتقة من تواريخ دورة حياة الأعمال.',
             ]);
 
