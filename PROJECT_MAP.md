@@ -21,9 +21,9 @@
 
 آخر نقطة مستقرة موثقة:
 
-- `8a4fb5b feat: connect works activity ui to audit log`
+- `1afc3ed feat: apply works direct publish trust`
 
-هذه النقطة موجودة على `main` ومدفوعة إلى `origin/main`، وهي آخر baseline نظيف ومتزامن ومعتمد. تغلق دمج سجل Activity مع سجل `audit_events` الحقيقي وواجهة المستخدم، مع الحفاظ على Lifecycle كمصدر منفصل للعرض التاريخي المتوافق. تبقى حدود المنصة العامة موضحة في القسمين `0.31` و`0.32`.
+هذه النقطة موجودة على `main` ومدفوعة إلى `origin/main`، وهي آخر baseline نظيف ومتزامن ومعتمد. تغلق التكامل التشغيلي لثقة النشر المباشر، وتأتي بعد تكامل مهلة المراجعة وإدارة إعدادات Works الدائمة. لا يعني هذا الإغلاق اكتمال منظومة Settings بالكامل أو اكتمال منصة Works العامة؛ وتبقى حدود التنفيذ موضحة في الأقسام `0.31` إلى `0.33`.
 
 ### 0.3 Completed UI Foundation Work
 
@@ -1642,7 +1642,7 @@ GET /api/admin/works/settings
 - أصبح قسم البلاغات يجمع بين جدول `work_reports` المتتبع والعداد التاريخي `works.reports_count`، والمصدران غير متزامنين تلقائيًا.
 - أصبحت Taxonomy تعتمد على `work_categories` و`work_tags` و`work_tag_assignments`، مع إبقاء `works.category_id` متوافقًا مع القيم القديمة غير المربوطة.
 - عند إغلاق baseline القراءة فقط كان سجل الأعمال يعتمد على lifecycle timestamps في جدول `works`. استُبدل هذا الحد لاحقًا بالتكامل المكتمل مع `audit_events`، مع إبقاء Lifecycle مصدرًا منفصلًا للتوافق، كما يوثق القسم `0.32`.
-- تعتمد إعدادات الأعمال على static defaults وregistered permissions، ولا يوجد persistent settings table أو endpoint للحفظ والتعديل.
+- عند إغلاق baseline القراءة فقط كانت إعدادات الأعمال تعتمد على static defaults وregistered permissions دون persistent settings table أو endpoint للتعديل. اكتمل لاحقًا أساس التخزين الدائم وMutation API وواجهة الإدارة وتكامل سياستي مهلة المراجعة والنشر المباشر كما يوثق القسم `0.33`.
 
 #### Verification baseline
 
@@ -1745,8 +1745,8 @@ a9354d4 feat: add bulk works taxonomy assignment ui
 #### Activity and Settings boundaries
 
 - كان Activity عند إغلاق baseline هذا يعتمد على lifecycle timestamps فقط. اكتمل لاحقًا ربطه بسجل `audit_events` الحقيقي مع بقاء Lifecycle مصدرًا منفصلًا للتوافق والتحليل التاريخي؛ ويوثق القسم `0.32` حالة الإغلاق النهائية.
-- Settings يملك `GET` وصفيًا حقيقيًا يعرض نموذج الوصول والصلاحيات والقدرات الحالية.
-- لا توجد إعدادات Works محفوظة، ولا settings model أو update API؛ لذلك تبقى Settings أساسًا غير مكتمل.
+- كان Settings عند إغلاق baseline هذا يملك `GET` وصفيًا فقط. اكتمل لاحقًا التخزين الدائم وMutation API ومحرر الإدارة وتكامل `review_sla_hours` و`direct_publish_trust_enabled` كما يوثق القسم `0.33`.
+- بقي تطبيق `media_limits` تشغيليًا وWorkflow mutation خارج المنجز الحالي.
 
 #### Verification baseline
 
@@ -1783,7 +1783,7 @@ Final baseline: clean and synchronized after a9354d4
 
 مكتمل جزئيًا:
 
-- Settings.
+- Overall Works Settings؛ اكتملت الإدارة الدائمة وتكامل سياستي مهلة المراجعة والنشر المباشر، وبقيت حدود الوسائط وWorkflow mutation.
 
 غير مبني ويبقى ضمن Roadmap:
 
@@ -1792,7 +1792,8 @@ Final baseline: clean and synchronized after a9354d4
 - Client Works experience.
 - Designer Works experience.
 - Report creation UI.
-- Stored Works settings وواجهات تحديثها.
+- Media Limits operational integration.
+- Workflow mutation.
 - Topbar Works search.
 - Comments and likes.
 - Public engagement features.
@@ -1895,6 +1896,192 @@ Final baseline: clean and synchronized after 8a4fb5b
 - Audit read integration.
 
 هذا الإغلاق خاص بسجل النشاط التشغيلي الداخلي للأعمال، ولا يعلن اكتمال منصة Works العامة.
+
+---
+
+### 0.33 Completed Persistent Works Settings and Policy Integrations — 2026-07-18
+
+اكتملت إدارة إعدادات Works الدائمة وتكامل سياستي مهلة المراجعة والنشر المباشر حتى baseline:
+
+```text
+1afc3ed feat: apply works direct publish trust
+```
+
+هذه النقطة موجودة على `main` ومدفوعة إلى `origin/main`، وهي baseline نهائي نظيف ومتزامن. يصف هذا الإنجاز:
+
+```text
+Persistent Works Settings Management + Two Operational Policy Integrations
+```
+
+ولا يعني اكتمال جميع إعدادات Works أو اكتمال منصة Works العامة.
+
+#### Persistent settings foundation
+
+- أضيف جدول `work_settings` بسجل افتراضي واحد للنطاق `scope=global`.
+- يخزن الجدول `values` بصيغة JSON، مع `version` و`updated_by`.
+- أضيف `WorkSetting` model و`WorksSettingsStore` ليكونا عقد القراءة والتحديث المطبّع.
+- يوفر المخزن defaults آمنة، ويسقط المفاتيح المجهولة، ويطبع القيم التالفة بدل تمريرها إلى السياسات التشغيلية.
+- يحافظ التنفيذ على التوافق مع SQLite وPostgreSQL.
+- لا تنفذ طلبات `GET` أي كتابة ضمنية أو إنشاء سجل أثناء القراءة.
+
+الإعدادات المخزنة الحالية:
+
+```text
+review_sla_hours
+direct_publish_trust_enabled
+media_limits.max_items
+media_limits.max_file_size_kb
+media_limits.allowed_types
+```
+
+تخزين `media_limits` وإدارتها لا يعني تطبيقها تشغيليًا على إنشاء الأعمال أو تعديلها أو رفع وسائطها.
+
+#### Settings Mutation API
+
+أصبح التحديث متاحًا عبر:
+
+```text
+PATCH /api/admin/works/settings
+```
+
+- يدعم Partial updates ولا يطلب إرسال القيم غير المتغيرة.
+- يطبق Field-scoped authorization لكل مجموعة إعدادات.
+- تمثل `admin.works.settings.manage` الصلاحية الشاملة، مع الصلاحيات المستقلة `admin.works.settings.review_sla.manage` و`admin.works.settings.direct_publish_trust.manage` و`admin.works.settings.media_limits.manage`.
+- يستخدم optimistic concurrency عبر `version`، ويعيد HTTP `409` عند التعارض.
+- ينفذ القراءة المقفلة بـ`lockForUpdate` والتحديث والتدقيق داخل Transaction.
+- لا يرفع `version` ولا يكتب عند no-op.
+- يسجل `updated_by` عند التغيير الفعلي.
+- يسجل الحدث `works.settings.updated` دون وضع قيم الإعدادات داخل Audit metadata.
+- المتاح هو `GET` و`PATCH` فقط؛ ولا توجد مسارات `POST` أو`PUT` أو`DELETE`.
+- Workflow mutation غير متاحة.
+
+#### Settings Management UI
+
+أصبحت صفحة `/admin/works/settings` محررًا فعليًا للإعدادات المحفوظة:
+
+- تعرض ثلاث بطاقات للإعدادات الحالية مع صلاحيات مستقلة لكل بطاقة.
+- تفصل `serverSnapshot` عن Draft، وتحسب Dirty state، وترسل Partial payload.
+- توفر local validation وReset دون تغيير نموذج الحفظ الآمن.
+- تعرض optimistic conflict UX وتحافظ على التعديلات المحلية عند تعارض الإصدار.
+- تعالج حالات `401` و`403` و`409` و`422`.
+- تعرض `version` و`updated_at`.
+- تحافظ على عرض Workflow وPermission Registry دون جعل Workflow قابلًا للتعديل.
+- تدعم RTL والوضع الداكن.
+
+#### Review SLA operational integration
+
+- أزيل الاعتماد التشغيلي على مهلة ثابتة قدرها `48` ساعة.
+- تقرأ Review Queue قيمة `review_sla_hours` من `WorksSettingsStore`.
+- أضيف عقد `review_policy` إلى استجابة Review Queue.
+- تطبق السياسة على `overdue` filter و`summary.overdue` و`review_flags.overdue` و`review_flags.needs_attention`.
+- عند القيمة `null` يكون التأخر الزمني غير مفعل، وتكون قيمة `overdue=0`، ويعطل فلتر overdue في الواجهة.
+- تستخدم المقارنة الزمنية الصارمة `submitted_at < cutoff`.
+- تعرض صفحة Review السياسة الحالية، وينعكس تغيير الإعداد على الطلب التالي دون Cache.
+
+#### Direct Publish Trust operational integration
+
+عند `direct_publish_trust_enabled=false`:
+
+- ينتج approve حالة `approved + hidden`.
+- يبقى النشر اليدوي إجراءً منفصلًا.
+
+عند `direct_publish_trust_enabled=true`:
+
+- ينتج approve حالة `published + public` مباشرة.
+- تستخدم `reviewed_at` و`approved_at` و`published_at` وقت القرار نفسه.
+- لا يرسل Frontend طلب نشر ثانٍ.
+- تكفي صلاحية `admin.works.review.approve` للنشر الناتج عن سياسة المنصة.
+- تبقى صلاحية `admin.works.review.publish_after_approval` خاصة بمسار النشر اليدوي.
+
+أضيف عقد `publication_policy` إلى Review Queue واستجابات إجراءات المراجعة. وعند النشر المباشر يسجل التدقيق بالترتيب:
+
+1. `works.review.approved`
+2. `works.review.published`
+
+يتضمن حدث النشر التلقائي metadata الآمنة التالية فقط بالإضافة إلى انتقال الحالة المعتاد:
+
+```text
+automatic=true
+trigger_action=approve
+settings_version
+```
+
+ولا يتضمن قيم الإعدادات الخام.
+
+#### Reference commits
+
+```text
+eb81f62 feat: add persistent works settings foundation
+7c74182 feat: add works settings mutation api
+913dd8a feat: add works settings management ui
+bba9673 feat: apply works review sla settings
+1afc3ed feat: apply works direct publish trust
+```
+
+#### Verified results
+
+نتائج Settings الأساسية:
+
+```text
+WorksSettingsPersistenceTest: 17 tests / 67 assertions
+WorksSettingsApiTest: 15 tests / 158 assertions
+WorksSettingsMutationApiTest: 45 tests / 243 assertions
+```
+
+نتائج آخر جولة Direct Publish:
+
+```text
+WorksReviewActionsApiTest: 33 tests / 676 assertions
+WorksReviewQueueApiTest: 44 tests / 278 assertions
+Works Activity Audit: 55 tests / 444 assertions
+Works Settings: 77 tests / 468 assertions
+Total: 209 tests / 1866 assertions
+Frontend Build: Build complete.
+git diff --check: نجح.
+Settings visual check: نجح.
+Review SLA policy visual check: نجح.
+Direct Publish Trust enabled and disabled visual checks: نجحا.
+Final baseline: clean and synchronized after 1afc3ed
+```
+
+لا تجمع هذه الوثيقة نتائج Settings الأساسية مرة ثانية داخل إجمالي الجولة الأخيرة.
+
+#### Closure status
+
+مكتمل ومغلق:
+
+- Works Settings Persistence Foundation.
+- Works Settings Mutation API.
+- Works Settings Management UI.
+- Review SLA operational integration.
+- Direct Publish Trust operational integration.
+
+مكتمل جزئيًا:
+
+- Overall Works Settings.
+- Media Limits integration: التخزين والإدارة مكتملان، والتطبيق التشغيلي مؤجل.
+- Workflow management: العرض الوصفي موجود، وMutation غير مبنية.
+
+غير مبني أو مؤجل:
+
+- تطبيق `media_limits` على إنشاء/تعديل/رفع وسائط الأعمال.
+- Workflow mutation UI/API.
+- Dynamic workflow configuration.
+
+#### Roadmap boundary
+
+تبقى العناصر التالية ضمن Roadmap دون تحديد المرحلة التنفيذية التالية:
+
+- Media Limits operational integration.
+- Workflow mutation.
+- General Works CRUD.
+- Public/client/designer Works experience.
+- Report creation.
+- Topbar Works search.
+- Comments and likes.
+- Public engagement features.
+
+اكتملت إدارة الإعدادات الدائمة وتكامل سياستي مهلة المراجعة والنشر المباشر، ولا يعني ذلك اكتمال جميع إعدادات الأعمال أو منصة Works العامة.
 
 ---
 
@@ -2020,7 +2207,7 @@ Final baseline: clean and synchronized after 8a4fb5b
 نشر: عنوان + وصف + سعر + مدة تسليم + رفع ملفات + غلاف (FFmpeg) + تصنيفات + معاينة + مراجعة.
 الرفع: فيديو 5 دقائق/200MB، صور عالية الدقة.
 
-نظام الثقة: مراجعة أولية لكل عمل. زر ثقة لكل مصمم (مفعّل = نشر مباشر). مدة المراجعة: 48 ساعة كحد أقصى + تذكيرات. حالتان: إرجاع للتعديل أو رفض + إعادة تقديم — كلها مسجلة.
+نظام الثقة: مراجعة أولية لكل عمل. تضبط سياسة النشر المباشر نتيجة الاعتماد، وتُقرأ مهلة المراجعة التشغيلية من `review_sla_hours` بدل قيمة ثابتة. حالتان: إرجاع للتعديل أو رفض + إعادة تقديم — كلها مسجلة. تبقى التذكيرات ضمن Roadmap.
 
 حد 20 عمل مجاني: المؤرشيف يُحتسب، المرفوض لا. قابل للتغيير.
 
@@ -3528,7 +3715,7 @@ avatar, social_links (JSON: {twitter, instagram, behance})
 
 **المصمم:** يدخل `/designer/works` ← يرى كل أعماله مع حالتها: منشورة (public)، قيد المراجعة (pending)، مرفوضة (rejected)، مؤرشفة (archived). يضغط [إضافة عمل جديد] ← يملأ النموذج: عنوان، وصف تفصيلي، سعر بالريال، مدة التسليم بالأيام، رفع ملفات (فيديو أو صور)، اختيار الغلاف (من الفيديو تلقائياً عبر FFmpeg أو رفع صورة منفصلة)، اختيار التصنيفات الثلاث (خدمة، مناسبة، ستايل) ← معاينة ← إرسال للمراجعة. بعد الإرسال: إذا كان المصمم موثوقاً (Trust Toggle مفعّل)، يُنشر العمل مباشرة. وإلا يدخل قائمة الانتظار للمراجعة.
 
-**Content Manager:** يدخل `/admin/content` ← يرى قائمة الأعمال بانتظار المراجعة مرتبة من الأقدم للأولوية. يفتح عملاً ← يشاهد معاينة العمل والملفات المرفوعة ← يقرر: [قبول] (ينشر فوراً) / [إرجاع للتعديل مع ملاحظات] / [رفض] (مع سبب). مدة المراجعة: 48 ساعة كحد أقصى مع تذكيرات متكررة.
+**Content Manager:** يدخل `/admin/content` ← يرى قائمة الأعمال بانتظار المراجعة مرتبة من الأقدم للأولوية. يفتح عملاً ← يشاهد معاينة العمل والملفات المرفوعة ← يقرر: [قبول] وفق سياسة `direct_publish_trust_enabled` / [إرجاع للتعديل مع ملاحظات] / [رفض] (مع سبب). تُقرأ مهلة المراجعة من `review_sla_hours`، بينما تبقى التذكيرات المتكررة ضمن Roadmap.
 
 **الزائر — الصفحة الرئيسية (الـ Feed):** يدخل `/` (SSR) ← يرى في أعلى الصفحة **قسم المسابقة الحالية** بشكل بصري قوي مع غلاف المسابقة، عداد زمني ديناميكي، وزر [شارك الآن]. بجانبه **قسم الفائزين السابقين** يعرض أصحاب المراكز الثلاث 🥇🥈🥉 مع أسمائهم وصورهم. أسفل ذلك يظهر **زر [طلب خدمة]** ثابت. ثم يبدأ **الـ Feed** بتدفق مستمر من المحتوى مثل فيسبوك — بطاقات متعددة الأنواع (أعمال، مسابقات نشطة، نتائج سابقة) في تدفق واحد بمقاسات موحدة. كل بطاقة عمل تحتوي: غلاف + عنوان + اسم المصمم @mention + إعجابات ❤ + تعليقات 💬 + مفضلة 📌 + مشاركة 📤 + زر [اطلب مشابه]. التحميل عبر Infinite Scroll. الفلترة تشمل: الأكثر تفاعلاً، الأكثر مشاهدة، الأكثر إعجاباً، الأحدث، الأقدم، التصنيفات، أسماء المصممين، الكلمات المفتاحية.
 
@@ -3891,7 +4078,7 @@ $compressed = $ffmpeg->compress(20000);            // ضغط حتى 20MB
 - [ ] الفلترة تشمل: الأكثر تفاعلاً، مشاهدة، إعجاباً، الأحدث، الأقدم، التصنيفات، الأسماء
 - [ ] المصمم يضيف عملاً مع رفع فيديو/صور + FFmpeg (غلاف + معاينة + تصغير)
 - [ ] التصنيفات الثلاث (خدمة، مناسبة، ستايل) تعمل
-- [ ] Content Review: قبول/رفض/إرجاع + ملاحظات + تذكيرات 48 ساعة
+- [ ] Content Review العام: قبول/رفض/إرجاع + ملاحظات؛ مهلة Review SLA الإدارية مطبقة، والتذكيرات ما تزال ضمن Roadmap
 - [ ] Trust Toggle: المصمم الموثوق يُنشر عمله مباشرة
 - [ ] حد الـ 20 عمل مجاني يُحتسب بشكل صحيح
 - [ ] تفاصيل العمل (SSR) مع إعجاب/مفضلة/بلاغ/مشاركة
