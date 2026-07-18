@@ -9,12 +9,12 @@
         <div>
           <div class="ym-works-settings-chips">
             <span class="ym-works-settings-chip is-brand">Yemen Motion</span>
-            <span class="ym-works-settings-chip is-readonly">قراءة تنظيمية فقط</span>
+            <span class="ym-works-settings-chip is-readonly">إدارة حسب الصلاحية</span>
           </div>
           <p class="ym-works-settings-kicker">حوكمة إدارة الأعمال</p>
           <h1>إعدادات وصلاحيات الأعمال</h1>
           <p class="ym-works-settings-description">
-            قراءة تنظيمية لحالة إعدادات الأعمال، ونموذج الوصول، والصلاحيات المسجلة، وقدرات الحساب الحالي.
+            إدارة القيم المحفوظة لإعدادات الأعمال حسب صلاحيات الحساب، مع إبقاء نموذج الوصول وسير العمل وسجل الصلاحيات ظاهرًا.
           </p>
         </div>
 
@@ -41,19 +41,19 @@
     <template v-else>
       <section class="ym-works-settings-notices" aria-label="ملاحظات إعدادات الأعمال">
         <aside class="ym-works-settings-notice" role="note">
-          <span>دون حفظ</span>
-          <p>الإعدادات القابلة للحفظ غير متاحة في هذه المرحلة؛ المعروض وصف للحالة الحالية فقط.</p>
+          <span>تخزين دائم</span>
+          <p>يمكن حفظ مهلة المراجعة وثقة النشر المباشر وحدود الوسائط حسب صلاحيات الحساب.</p>
         </aside>
         <aside class="ym-works-settings-notice is-restriction" role="note">
-          <span>للقراءة فقط</span>
-          <p>لا توجد عمليات حفظ أو تعديل أو حذف أو إدارة لسير العمل الآن.</p>
+          <span>تكامل لاحق</span>
+          <p>حالات سير العمل للقراءة فقط، وتطبيق القيم على المراجعة والنشر والوسائط سيتم في مهام مستقلة.</p>
         </aside>
       </section>
 
       <section v-if="loading" class="ym-works-settings-result-card ym-works-settings-state" role="status" aria-live="polite">
         <span class="ym-works-settings-spinner" aria-hidden="true" />
         <h2>جارٍ تحميل إعدادات وصلاحيات الأعمال</h2>
-        <p>يتم جلب العقد الآمن للقراءة فقط.</p>
+        <p>يتم جلب القيم المحفوظة وعقد الصلاحيات الآمن.</p>
       </section>
 
       <section v-else-if="error" class="ym-works-settings-result-card ym-works-settings-state is-error" role="alert">
@@ -72,7 +72,7 @@
             <h2>
               {{ data.settings_support.persistent_settings_available
                 ? 'الإعدادات الدائمة متاحة'
-                : 'الإعدادات الدائمة غير متاحة حاليًا' }}
+                : 'راجع حالة دعم التخزين الدائم' }}
             </h2>
             <p>{{ data.settings_support.reason }}</p>
             <dl>
@@ -87,6 +87,21 @@
             </dl>
           </div>
         </aside>
+
+        <WorksSettingsEditor
+          :settings="data.stored_settings"
+          :capabilities="data.current_user_capabilities"
+          :management-support="data.management_support"
+          :saving="saving"
+          :save-message="saveMessage"
+          :message-tone="messageTone"
+          :field-errors="fieldErrors"
+          :conflict-version="conflictVersion"
+          :locale="currentLocale"
+          @save="saveSettings"
+          @reload="reloadAfterConflict"
+          @reset="resetMutationFeedback"
+        />
 
         <section class="ym-works-settings-summary-grid" aria-label="ملخص إعدادات وصلاحيات الأعمال">
           <article
@@ -147,11 +162,11 @@
                 <p>قدرات الحساب الحالي</p>
                 <h2>نطاق الصلاحيات المتاح</h2>
               </div>
-              <span class="ym-works-settings-section-badge is-capability">عرض فقط</span>
+              <span class="ym-works-settings-section-badge is-capability">حسب التفويض</span>
             </header>
 
             <p class="ym-works-settings-card-copy">
-              هذه المؤشرات تصف الصلاحيات فقط، ولا تتيح أي عملية تنفيذية حتى عندما تكون قدرة الإدارة متاحة.
+              تحدد هذه القدرات الأقسام التي يمكن للحساب تعديلها داخل إعدادات الأعمال.
             </p>
             <div class="ym-works-settings-capabilities">
               <article v-for="capability in capabilityItems" :key="capability.key">
@@ -222,7 +237,7 @@
         <aside class="ym-works-settings-info-card is-management" role="note">
           <span class="ym-works-settings-info-card__icon" aria-hidden="true">i</span>
           <div>
-            <h2>{{ noMutationSupport ? 'واجهات الحفظ والتعديل غير مبنية في هذه المرحلة' : 'حالة دعم الإدارة' }}</h2>
+            <h2>حالة دعم الإدارة</h2>
             <p>{{ data.management_support.reason }}</p>
             <div class="ym-works-settings-mutation-grid">
               <article v-for="item in mutationItems" :key="item.key">
@@ -439,8 +454,31 @@ interface ManagementSupport {
   reason: string
 }
 
+type AllowedMediaType = 'image' | 'video' | 'gallery'
+
+interface StoredMediaLimits {
+  max_items: number | null
+  max_file_size_kb: number | null
+  allowed_types: AllowedMediaType[] | null
+}
+
+interface StoredSettingsValues {
+  review_sla_hours: number | null
+  direct_publish_trust_enabled: boolean
+  media_limits: StoredMediaLimits
+}
+
+interface StoredSettings {
+  scope: string
+  version: number
+  values: StoredSettingsValues
+  storage_record_found: boolean
+  updated_at: string | null
+}
+
 interface SettingsData {
   settings_support: SettingsSupport
+  stored_settings: StoredSettings
   access_model: AccessModel
   workflow: Workflow
   permission_registry: PermissionRegistry
@@ -451,6 +489,34 @@ interface SettingsData {
 interface SettingsResponse {
   success: boolean
   data: SettingsData | null
+  message?: string
+  errors?: Record<string, string[]> | null
+}
+
+interface SettingsMutationValues extends Partial<Omit<StoredSettingsValues, 'media_limits'>> {
+  media_limits?: Partial<StoredMediaLimits>
+}
+
+interface SettingsMutationPayload {
+  version: number
+  values: SettingsMutationValues
+}
+
+interface SettingsMutationSuccessData {
+  changed: boolean
+  changed_keys: string[]
+  previous_version: number
+  current_version: number
+  stored_settings: StoredSettings
+}
+
+interface SettingsMutationConflictData {
+  current_version: number
+}
+
+interface SettingsMutationResponse {
+  success: boolean
+  data: SettingsMutationSuccessData | SettingsMutationConflictData | null
   message?: string
   errors?: Record<string, string[]> | null
 }
@@ -489,6 +555,11 @@ const data = ref<SettingsData | null>(null)
 const loading = ref(false)
 const hasLoaded = ref(false)
 const error = ref<string | null>(null)
+const saving = ref(false)
+const saveMessage = ref<string | null>(null)
+const messageTone = ref<'success' | 'error' | 'info' | null>(null)
+const fieldErrors = ref<Record<string, string[]>>({})
+const conflictVersion = ref<number | null>(null)
 const permissionSearch = ref('')
 const selectedSection = ref<'' | SectionKey>('')
 const drawerOpen = ref(false)
@@ -498,6 +569,7 @@ let pageMounted = false
 let loadedAuthorizationSignature: string | null = null
 let accessRevision = 0
 let requestRevision = 0
+let mutationRevision = 0
 
 const authorizationSignature = computed(() => [
   authStore.isInitialized ? 'ready' : 'pending',
@@ -553,8 +625,6 @@ const mutationItems = computed(() => {
     .map(key => ({ key, label: mutationLabels[key], value: support[key] }))
 })
 
-const noMutationSupport = computed(() => mutationItems.value.every(item => !item.value))
-
 const summaryCards = computed(() => {
   if (!data.value) return []
   const settings = data.value
@@ -570,7 +640,7 @@ const summaryCards = computed(() => {
     { key: 'events', label: 'أحداث دورة الحياة', value: settings.workflow.lifecycle_events.length, hint: 'العقد الحالي للنشاط', color: '#06b6d4' },
     { key: 'queue', label: 'حالات قائمة المراجعة', value: settings.workflow.review_queue_statuses.length, hint: 'ضمن مسار المراجعة', color: '#c084fc' },
     { key: 'capabilities', label: 'القدرات المتاحة', value: availableCapabilities, hint: 'للحساب الحالي', color: '#22c55e' },
-    { key: 'mutations', label: 'واجهات التعديل المتاحة', value: availableMutations, hint: 'المتوقع حاليًا صفر', color: '#fb7185' }
+    { key: 'mutations', label: 'واجهات التعديل المتاحة', value: availableMutations, hint: 'وفق عقد دعم الإدارة', color: '#fb7185' }
   ]
 })
 
@@ -637,6 +707,169 @@ function errorStatus(requestError: unknown): number | null {
   return null
 }
 
+function errorData(requestError: unknown): Record<string, unknown> | null {
+  if (!requestError || typeof requestError !== 'object') return null
+  const candidate = requestError as {
+    data?: unknown
+    response?: { _data?: unknown }
+  }
+  const payload = candidate.data ?? candidate.response?._data
+  return payload && typeof payload === 'object'
+    ? payload as Record<string, unknown>
+    : null
+}
+
+function serverErrors(requestError: unknown): Record<string, string[]> {
+  const errors = errorData(requestError)?.errors
+  if (!errors || typeof errors !== 'object') return {}
+
+  return Object.fromEntries(
+    Object.entries(errors)
+      .filter((entry): entry is [string, string[]] => (
+        Array.isArray(entry[1]) && entry[1].every(message => typeof message === 'string')
+      ))
+  )
+}
+
+function serverMessage(requestError: unknown): string | null {
+  const message = errorData(requestError)?.message
+  return typeof message === 'string' && message.trim() !== '' ? message : null
+}
+
+function conflictCurrentVersion(requestError: unknown): number | null {
+  const responseData = errorData(requestError)?.data
+  if (!responseData || typeof responseData !== 'object' || !('current_version' in responseData)) return null
+  const version = (responseData as { current_version?: unknown }).current_version
+  return typeof version === 'number' && Number.isInteger(version) ? version : null
+}
+
+function changedKeyLabel(key: string): string {
+  const labels: Record<string, string> = {
+    review_sla_hours: 'مهلة المراجعة',
+    direct_publish_trust_enabled: 'ثقة النشر المباشر',
+    'media_limits.max_items': 'الحد الأقصى لعناصر الوسائط',
+    'media_limits.max_file_size_kb': 'الحد الأقصى لحجم الملف',
+    'media_limits.allowed_types': 'أنواع الوسائط المسموحة'
+  }
+  return labels[key] ?? key
+}
+
+function mutationResultMessage(response: SettingsMutationResponse, result: SettingsMutationSuccessData): string {
+  const parts = [
+    response.message || (result.changed ? 'تم تحديث إعدادات الأعمال بنجاح.' : 'القيم مطابقة للإعدادات المحفوظة.'),
+    `الإصدار السابق: ${result.previous_version}، الإصدار الحالي: ${result.current_version}.`
+  ]
+  if (result.changed_keys.length > 0) {
+    parts.push(`الحقول المتغيرة: ${result.changed_keys.map(changedKeyLabel).join('، ')}.`)
+  }
+  return parts.join(' ')
+}
+
+async function saveSettings(payload: SettingsMutationPayload): Promise<void> {
+  if (saving.value || !data.value) return
+  const currentMutationRevision = ++mutationRevision
+  saving.value = true
+  saveMessage.value = null
+  messageTone.value = null
+  fieldErrors.value = {}
+  conflictVersion.value = null
+
+  try {
+    const response = await apiFetch<SettingsMutationResponse>('/admin/works/settings', {
+      method: 'PATCH',
+      body: payload
+    })
+    if (currentMutationRevision !== mutationRevision || !data.value) return
+    if (!response.success || !response.data || !('stored_settings' in response.data)) {
+      saveMessage.value = response.message || 'تعذر اعتماد استجابة حفظ إعدادات الأعمال.'
+      messageTone.value = 'error'
+      return
+    }
+
+    requestRevision += 1
+    loading.value = false
+    data.value = {
+      ...data.value,
+      stored_settings: response.data.stored_settings
+    }
+    fieldErrors.value = {}
+    conflictVersion.value = null
+    saveMessage.value = mutationResultMessage(response, response.data)
+    messageTone.value = response.data.changed ? 'success' : 'info'
+  } catch (requestError: unknown) {
+    if (currentMutationRevision !== mutationRevision) return
+    const status = errorStatus(requestError)
+
+    if (status === 409) {
+      conflictVersion.value = conflictCurrentVersion(requestError)
+      fieldErrors.value = {}
+      saveMessage.value = serverMessage(requestError) || 'توجد نسخة أحدث من إعدادات الأعمال على الخادم.'
+      messageTone.value = 'error'
+      return
+    }
+
+    if (status === 422) {
+      const errors = serverErrors(requestError)
+      const bindableFields = new Set([
+        'values.review_sla_hours',
+        'values.direct_publish_trust_enabled',
+        'values.media_limits',
+        'values.media_limits.max_items',
+        'values.media_limits.max_file_size_kb',
+        'values.media_limits.allowed_types'
+      ])
+      fieldErrors.value = errors
+      const unboundError = Object.entries(errors).find(([key]) => !bindableFields.has(key))
+      saveMessage.value = unboundError?.[1]?.[0]
+        || (Object.keys(errors).length === 0
+          ? serverMessage(requestError) || 'تعذر التحقق من القيم المرسلة.'
+          : null)
+      messageTone.value = saveMessage.value ? 'error' : null
+      return
+    }
+
+    if (status === 401) {
+      fieldErrors.value = {}
+      conflictVersion.value = null
+      saveMessage.value = null
+      messageTone.value = null
+      authStore.clearAuth()
+      clearPageState()
+      return
+    }
+
+    if (status === 403) {
+      fieldErrors.value = {}
+      conflictVersion.value = null
+      await fetchSettings()
+      if (currentMutationRevision !== mutationRevision) return
+      saveMessage.value = 'تغيّرت صلاحيات الحساب. تم تحديث القدرات وأصبحت الحقول غير المصرح بها مقفلة.'
+      messageTone.value = 'error'
+      return
+    }
+
+    saveMessage.value = serverMessage(requestError) || 'تعذر حفظ إعدادات الأعمال. حاول مرة أخرى.'
+    messageTone.value = 'error'
+  } finally {
+    if (currentMutationRevision === mutationRevision) saving.value = false
+  }
+}
+
+function resetMutationFeedback(): void {
+  if (saving.value) return
+  mutationRevision += 1
+  fieldErrors.value = {}
+  conflictVersion.value = null
+  saveMessage.value = null
+  messageTone.value = null
+}
+
+async function reloadAfterConflict(): Promise<void> {
+  if (saving.value) return
+  resetMutationFeedback()
+  await fetchSettings()
+}
+
 async function fetchSettings(): Promise<void> {
   if (!authStore.isInitialized || !hasSettingsAccess.value) return
   const requestAccessRevision = accessRevision
@@ -694,9 +927,15 @@ function clearSettingsData(): void {
 
 function clearPageState(): void {
   requestRevision += 1
+  mutationRevision += 1
   clearSettingsData()
   loading.value = false
+  saving.value = false
   error.value = null
+  saveMessage.value = null
+  messageTone.value = null
+  fieldErrors.value = {}
+  conflictVersion.value = null
   closePermissionDetails()
 }
 
