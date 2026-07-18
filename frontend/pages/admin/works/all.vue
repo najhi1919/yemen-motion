@@ -975,6 +975,8 @@ interface WorksFilters {
 
 const authStore = useAuthStore()
 const { apiFetch } = useApiClient()
+const route = useRoute()
+const router = useRouter()
 const currentLocale = useState<Locale>('ym-dashboard-locale', () => 'ar')
 
 const copyMap = {
@@ -1429,6 +1431,7 @@ let loadedAuthorizationSignature: string | null = null
 let accessRevision = 0
 let listRequestRevision = 0
 let detailRequestRevision = 0
+let handledDeepLinkWork: string | null = null
 
 const authorizationSignature = computed(() => [
   authStore.isInitialized ? 'ready' : 'pending',
@@ -1864,6 +1867,30 @@ function openDetails(work: WorkListItem): void {
   void fetchWorkDetails(work.id)
 }
 
+function deepLinkWorkId(): number | null {
+  const raw = Array.isArray(route.query.work) ? route.query.work[0] : route.query.work
+  if (typeof raw !== 'string' || !/^[1-9]\d*$/.test(raw)) return null
+  const workId = Number(raw)
+  return Number.isSafeInteger(workId) ? workId : null
+}
+
+function openDeepLinkedWork(): void {
+  const workId = deepLinkWorkId()
+  if (workId === null || !canViewDetails.value) return
+  const identity = String(workId)
+  if (handledDeepLinkWork === identity) return
+
+  handledDeepLinkWork = identity
+  closeBulkAssignment()
+  closeTaxonomyAssignment()
+  drawerOpen.value = true
+  selectedWorkId.value = workId
+  selectedWorkTitle.value = ''
+  detail.value = null
+  detailError.value = null
+  void fetchWorkDetails(workId)
+}
+
 function openTaxonomyAssignment(work: WorkListItem): void {
   if (!canManageIndividualTaxonomy.value) return
   closeBulkAssignment()
@@ -2022,7 +2049,7 @@ async function fetchWorkDetails(workId: number): Promise<void> {
   }
 }
 
-function closeDetails(): void {
+function closeDetails(removeDeepLink = true): void {
   detailRequestRevision += 1
   drawerOpen.value = false
   selectedWorkId.value = null
@@ -2030,6 +2057,13 @@ function closeDetails(): void {
   detail.value = null
   detailError.value = null
   detailLoading.value = false
+
+  if (removeDeepLink && route.query.work !== undefined) {
+    const query = { ...route.query }
+    delete query.work
+    handledDeepLinkWork = null
+    void router.replace({ query })
+  }
 }
 
 function retrySelectedDetails(): void {
@@ -2057,7 +2091,7 @@ function clearPageState(): void {
   })
   closeTaxonomyAssignment()
   clearBulkSelection()
-  closeDetails()
+  closeDetails(false)
 }
 
 function syncWorksAccessState(): void {
@@ -2082,7 +2116,9 @@ function syncWorksAccessState(): void {
   if (loadedAuthorizationSignature === authorizationSignature.value) return
 
   loadedAuthorizationSignature = authorizationSignature.value
-  void fetchWorks()
+  void fetchWorks().then((loaded) => {
+    if (loaded) openDeepLinkedWork()
+  })
 }
 
 watch(
@@ -2134,6 +2170,18 @@ watch(
     if (!canCategory && !canTags && (couldCategory || couldTags || selectedCount.value > 0)) {
       clearBulkSelection()
     }
+  },
+  { flush: 'post' }
+)
+
+watch(
+  () => route.query.work,
+  (work) => {
+    if (work === undefined) {
+      handledDeepLinkWork = null
+      return
+    }
+    if (pageMounted && hasWorksListAccess.value) openDeepLinkedWork()
   },
   { flush: 'post' }
 )
