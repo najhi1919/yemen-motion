@@ -21,9 +21,9 @@
 
 آخر نقطة مستقرة موثقة:
 
-- `a9354d4 feat: add bulk works taxonomy assignment ui`
+- `8a4fb5b feat: connect works activity ui to audit log`
 
-هذه النقطة موجودة على `main`، وهي آخر baseline نظيف ومدفوع معتمد لمجموعة إدارة الأعمال الداخلية الحالية. تغلق هذه المجموعة الإسناد الفردي والجماعي للتصنيفات والوسوم، مع بقاء حدود المنصة العامة موضحة في القسم `0.31`.
+هذه النقطة موجودة على `main` ومدفوعة إلى `origin/main`، وهي آخر baseline نظيف ومتزامن ومعتمد. تغلق دمج سجل Activity مع سجل `audit_events` الحقيقي وواجهة المستخدم، مع الحفاظ على Lifecycle كمصدر منفصل للعرض التاريخي المتوافق. تبقى حدود المنصة العامة موضحة في القسمين `0.31` و`0.32`.
 
 ### 0.3 Completed UI Foundation Work
 
@@ -339,7 +339,7 @@ git diff --check: passed
 
 #### ملاحظات
 
-هذه ليست منظومة Activity Log كاملة. هي Foundation آمنة ومحدودة تعتمد على المصادر المتاحة عند إغلاق الخطوة. أصبحت مصادر وإجراءات Works الداخلية موجودة لاحقًا، لكن دمجها في Activity المعتمد على `audit_events` ما زال غير مبني، وهو المرحلة التالية المسجلة في القسم `0.31`.
+هذه ليست منظومة Activity Log كاملة. هي Foundation آمنة ومحدودة تعتمد على المصادر المتاحة عند إغلاق الخطوة. اكتمل لاحقًا دمج Activity الخاص بالأعمال مع `audit_events` كما يوثق القسم `0.32`.
 
 
 ### 0.11 Completed User Role Assignment Backend Contract — 2026-07-06
@@ -1200,7 +1200,7 @@ activities
 
 #### Current boundary
 
-تُجمع Audit logs الآن للأحداث الداخلية الرئيسية المذكورة أعلاه. لا توجد بعد APIs لقراءة السجلات، ولا Reports / Analytics UI؛ وتبقى هذه أعمالًا مستقبلية مستقلة.
+عند إغلاق هذا baseline كانت Audit logs تُجمع للأحداث الداخلية الرئيسية دون APIs للقراءة. أضيفت لاحقًا قراءة Audit الداخلية العامة، ثم اكتملت قراءة سجل أعمال Activity المتخصص كما يوثق القسم `0.32`. تبقى Reports / Analytics UI أعمالًا مستقلة.
 
 
 ### 0.22 Audit Logs Read Access Baseline — 2026-07-13
@@ -1641,7 +1641,7 @@ GET /api/admin/works/settings
 
 - أصبح قسم البلاغات يجمع بين جدول `work_reports` المتتبع والعداد التاريخي `works.reports_count`، والمصدران غير متزامنين تلقائيًا.
 - أصبحت Taxonomy تعتمد على `work_categories` و`work_tags` و`work_tag_assignments`، مع إبقاء `works.category_id` متوافقًا مع القيم القديمة غير المربوطة.
-- يعتمد سجل الأعمال على lifecycle timestamps في جدول `works`، ولا يقرأ `audit_events` ولا يملك جدول activity مستقلًا.
+- عند إغلاق baseline القراءة فقط كان سجل الأعمال يعتمد على lifecycle timestamps في جدول `works`. استُبدل هذا الحد لاحقًا بالتكامل المكتمل مع `audit_events`، مع إبقاء Lifecycle مصدرًا منفصلًا للتوافق، كما يوثق القسم `0.32`.
 - تعتمد إعدادات الأعمال على static defaults وregistered permissions، ولا يوجد persistent settings table أو endpoint للحفظ والتعديل.
 
 #### Verification baseline
@@ -1657,7 +1657,7 @@ WorksAccessGateTest: 11 passed / 50 assertions
 
 #### Superseded next sequence
 
-أُنجزت لاحقًا إجراءات Visibility وReview وReports ومراحل Taxonomy التي كانت مقترحة بعد baseline القراءة فقط. يسجل القسم `0.31` حالة الإغلاق الحالية والمرحلة التالية المعتمدة.
+أُنجزت لاحقًا إجراءات Visibility وReview وReports ومراحل Taxonomy التي كانت مقترحة بعد baseline القراءة فقط. يسجل القسم `0.31` إغلاق منظومة الإدارة الداخلية الأساسية، ويوثق القسم `0.32` إغلاق تكامل Activity مع سجل Audit.
 
 ---
 
@@ -1744,7 +1744,7 @@ a9354d4 feat: add bulk works taxonomy assignment ui
 
 #### Activity and Settings boundaries
 
-- Activity يملك API وصفحة حقيقية، لكن المصدر الحالي مشتق من lifecycle timestamps في `works` ولا يقرأ `audit_events` بعد؛ لذلك يبقى مكتملًا جزئيًا.
+- كان Activity عند إغلاق baseline هذا يعتمد على lifecycle timestamps فقط. اكتمل لاحقًا ربطه بسجل `audit_events` الحقيقي مع بقاء Lifecycle مصدرًا منفصلًا للتوافق والتحليل التاريخي؛ ويوثق القسم `0.32` حالة الإغلاق النهائية.
 - Settings يملك `GET` وصفيًا حقيقيًا يعرض نموذج الوصول والصلاحيات والقدرات الحالية.
 - لا توجد إعدادات Works محفوظة، ولا settings model أو update API؛ لذلك تبقى Settings أساسًا غير مكتمل.
 
@@ -1773,6 +1773,7 @@ Final baseline: clean and synchronized after a9354d4
 - Taxonomy.
 - Individual Taxonomy Assignment.
 - Bulk Taxonomy Assignment.
+- Works Activity Audit Integration كما يوثق القسم `0.32`.
 
 مكتمل وظيفيًا ويحتاج توثيق إغلاق أو تحققًا نهائيًا أوسع:
 
@@ -1782,33 +1783,118 @@ Final baseline: clean and synchronized after a9354d4
 
 مكتمل جزئيًا:
 
-- Activity.
-- Audit read integration.
 - Settings.
 
 غير مبني ويبقى ضمن Roadmap:
 
 - General Works CRUD وإنشاء وتعديل محتوى الأعمال ووسائطه.
-- Public/client/designer Works experience والعرض العام.
-- إنشاء البلاغات من واجهة المستخدم.
-- التعليقات والإعجابات والمفضلة.
-- إعدادات Works المحفوظة وواجهات تحديثها.
+- Public Works experience.
+- Client Works experience.
+- Designer Works experience.
+- Report creation UI.
+- Stored Works settings وواجهات تحديثها.
 - Topbar Works search.
-- Activity المبني على `audit_events`.
+- Comments and likes.
+- Public engagement features.
 
-#### Next approved phase
+#### Roadmap boundary
 
-المرحلة التالية المعتمدة:
+اكتمل سجل النشاط التشغيلي الداخلي للأعمال، ولا يعني ذلك اكتمال منصة Works العامة. لا يحدد إغلاق Activity مرحلة تنفيذية تالية أو أولوية جديدة للعناصر المتبقية.
+
+---
+
+### 0.32 Completed Works Activity Audit Integration — 2026-07-18
+
+اكتمل سجل النشاط التشغيلي الداخلي للأعمال وأُغلقت مرحلة Works Activity Audit Integration عند baseline:
 
 ```text
-Works Activity Audit Integration
+8a4fb5b feat: connect works activity ui to audit log
 ```
 
-وتقسم لاحقًا إلى:
+هذه النقطة موجودة على `main` ومدفوعة إلى `origin/main`، وهي baseline نهائي نظيف ومتزامن. يغلق هذا الإنجاز دمج Activity مع سجل Audit الحقيقي وواجهة المستخدم، ويحافظ على Lifecycle كعرض تاريخي متوافق ومنفصل.
 
-1. Audit query foundation.
-2. Activity API and tests.
-3. Activity UI integration.
+#### Query Foundation
+
+- أضيف `WorksActivityAuditQuery` بقائمة سماح صريحة من `27` نوع `event_type` ضمن `category=works`.
+- يطابق الاستعلام `event_type` مع `target_type` ضمن مجموعات `review` و`visibility` و`reports` و`taxonomy` و`taxonomy_assignment`.
+- يدعم أهداف `work` و`work_report` و`work_category` و`work_tag`.
+- يستخدم `LEFT JOIN` حتى لا تسقط الأحداث عند فقد الهدف أو الفاعل.
+- يعيد عقدًا داخليًا آمنًا لا يعرض metadata الخام.
+- يحافظ على التوافق مع SQLite وPostgreSQL.
+
+#### Audit API
+
+- يستخدم المصدران Endpoint نفسه:
+
+```text
+GET /api/admin/works/activity?source=audit
+GET /api/admin/works/activity?source=lifecycle
+```
+
+- بقي Backend default هو `lifecycle` للتوافق.
+- ينفذ مصدر Audit الترقيم على مستوى قاعدة البيانات، ويعيد Summary حقيقيًا وEvent Catalog مشتقًا من Registry.
+- يملك كل مصدر فلاتره وفرزه المستقلين، ويستخدمان Authorization الحالي دون إضافة Permission جديدة.
+- لا تكشف الاستجابة `metadata` أو `ip_address` أو `user_agent` أو `request_id` أو `correlation_id` أو الأسباب والملاحظات الخاصة.
+
+#### Audit UI
+
+- أصبحت صفحة `/admin/works/activity` تعرض Audit افتراضيًا في الواجهة.
+- يبدّل Source Switcher بين السجل التشغيلي ودورة حياة الأعمال، مع Summary وفلاتر مستقلين لكل مصدر، ودون انتقال الفلاتر بينهما.
+- اكتمل جدول Audit وDrawer التفاصيل الآمن، مع دعم RTL/LTR والوضعين الداكن والفاتح.
+- بقي Lifecycle UI متاحًا كمصدر منفصل للتوافق والتحليل التاريخي.
+- يدعم زر تفاصيل العمل Deep Link التالي:
+
+```text
+/admin/works/all?work=<id>
+```
+
+- تحمي revisions الواجهة من الطلبات المتأخرة، وتتعامل مع حالات `401` و`403` و`422`.
+
+#### Activity Drawers
+
+- يستخدم Audit وLifecycle `Teleport to body`.
+- فُصل Overlay عن Drawer، وضُبط جذر الطبقات على `z-index=12000`.
+- استُعيدت متغيرات الثيم داخل العناصر المنقولة، فأصبحت الخلفية وحدها معتمة وبقيت اللوحة واضحة.
+- أزيل Duplicate key الخاص بـ`title` بفصل عنوان الصفحة عن عنوان العمل.
+
+#### Reference commits
+
+```text
+fab9a59 feat: add works activity audit query foundation
+e23dd86 feat: expose works activity audit api
+13c38c9 test: align works activity lifecycle source contract
+8a4fb5b feat: connect works activity ui to audit log
+```
+
+#### Verified results
+
+```text
+WorksActivityAuditFoundationTest: 17 tests / 235 assertions
+WorksActivityAuditApiTest: 38 tests / 209 assertions
+WorksActivityApiTest: 47 tests / 339 assertions
+Total: 102 tests / 783 assertions
+Frontend Build: Build complete.
+git diff --check: نجح.
+Final baseline: clean and synchronized after 8a4fb5b
+```
+
+- أزيل تحذير `Duplicate key "title"`.
+- نجح الفحص البصري للـDrawer: أصبحت الخلفية فقط معتمة وبقيت اللوحة واضحة.
+- ظهر الوضع العربي RTL بصورة صحيحة.
+
+#### Closure status
+
+مكتمل ومغلق:
+
+- Works Activity API.
+- Works Audit Query Integration.
+- Works Activity Audit API.
+- Works Activity Audit UI.
+- Lifecycle compatibility.
+- Activity Drawers.
+- Audit read integration.
+
+هذا الإغلاق خاص بسجل النشاط التشغيلي الداخلي للأعمال، ولا يعلن اكتمال منصة Works العامة.
 
 ---
 
