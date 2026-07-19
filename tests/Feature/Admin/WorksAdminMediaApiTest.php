@@ -12,6 +12,7 @@ use App\Models\WorkMedia;
 use App\Models\WorkSetting;
 use App\Services\Audit\AuditEventLogger;
 use App\Services\Works\WorksSettingsStore;
+use Carbon\Carbon;
 use Database\Seeders\AuthRolesSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -71,6 +72,25 @@ class WorksAdminMediaApiTest extends TestCase
         }
     }
 
+    public function test_media_organization_routes_resolve_to_expected_actions(): void
+    {
+        $routes = [
+            ['PATCH', '/api/admin/works/10/media/order', 'reorder'],
+            ['PATCH', '/api/admin/works/10/media/cover', 'updateCover'],
+        ];
+
+        foreach ($routes as [$method, $uri, $action]) {
+            $route = Route::getRoutes()->match(
+                \Illuminate\Http\Request::create($uri, $method),
+            );
+
+            $this->assertSame(
+                WorksMediaController::class.'@'.$action,
+                $route->getActionName(),
+            );
+        }
+    }
+
     public function test_unsupported_media_methods_return_405(): void
     {
         $this->actingAsRole('super-admin');
@@ -81,6 +101,9 @@ class WorksAdminMediaApiTest extends TestCase
         $this->patchJson($this->mediaEndpoint($work), [])->assertMethodNotAllowed();
         $this->patchJson($this->mediaItemEndpoint($work, $media), [])
             ->assertMethodNotAllowed();
+        $this->getJson($this->reorderEndpoint($work))->assertMethodNotAllowed();
+        $this->postJson($this->reorderEndpoint($work))->assertMethodNotAllowed();
+        $this->putJson($this->coverEndpoint($work), [])->assertMethodNotAllowed();
     }
 
     public function test_all_media_routes_require_authentication(): void
@@ -89,6 +112,12 @@ class WorksAdminMediaApiTest extends TestCase
         $this->postJson('/api/admin/works/1/media')->assertUnauthorized();
         $this->getJson('/api/admin/works/1/media/1/content')->assertUnauthorized();
         $this->deleteJson('/api/admin/works/1/media/1')->assertUnauthorized();
+        $this->patchJson('/api/admin/works/1/media/order', [
+            'media_ids' => [],
+        ])->assertUnauthorized();
+        $this->patchJson('/api/admin/works/1/media/cover', [
+            'cover_media_id' => null,
+        ])->assertUnauthorized();
         $this->assertSame(0, $this->mediaAuditEvents()->count());
     }
 
@@ -109,6 +138,12 @@ class WorksAdminMediaApiTest extends TestCase
             $this->postJson($this->mediaEndpoint($work))->assertForbidden();
             $this->getJson($this->contentEndpoint($work, $media))->assertForbidden();
             $this->deleteJson($this->mediaItemEndpoint($work, $media))->assertForbidden();
+            $this->patchJson($this->reorderEndpoint($work), [
+                'media_ids' => [$media->id],
+            ])->assertForbidden();
+            $this->patchJson($this->coverEndpoint($work), [
+                'cover_media_id' => null,
+            ])->assertForbidden();
         }
     }
 
@@ -930,6 +965,650 @@ class WorksAdminMediaApiTest extends TestCase
         $this->assertSame(0, $this->mediaAuditEvents()->count());
     }
 
+    public function test_organization_requires_access_and_update_media_permission(): void
+    {
+        $work = $this->work(['media_type' => Work::MEDIA_TYPE_GALLERY]);
+        $media = WorkMedia::factory()->image()->ready()->create([
+            'work_id' => $work->id,
+            'position' => 4,
+        ]);
+
+        foreach ([
+            ['admin.works.access'],
+            ['admin.works.access', 'admin.works.media.view'],
+            ['admin.works.access', 'admin.works.create'],
+            ['admin.works.update.media'],
+        ] as $permissions) {
+            $this->actingAsRole('admin', $permissions);
+            $this->patchJson($this->reorderEndpoint($work), [
+                'media_ids' => [$media->id],
+            ])->assertForbidden();
+            $this->patchJson($this->coverEndpoint($work), [
+                'cover_media_id' => $media->id,
+            ])->assertForbidden();
+        }
+
+        $this->assertSame(4, $media->fresh()->position);
+        $this->assertNull($work->fresh()->cover_media_id);
+        $this->assertSame(0, $this->organizationAuditEvents()->count());
+
+        $this->actingAsRole('staff', [
+            'admin.works.access',
+            'admin.works.update.media',
+        ]);
+        $this->patchJson($this->reorderEndpoint($work), [
+            'media_ids' => [$media->id],
+        ])->assertOk();
+        $this->patchJson($this->coverEndpoint($work), [
+            'cover_media_id' => $media->id,
+        ])->assertOk();
+    }
+
+    public function test_draft_and_changes_requested_allow_reorder_and_cover_updates(): void
+    {
+        $this->actingAsRole('super-admin');
+
+        foreach ([Work::STATUS_DRAFT, Work::STATUS_CHANGES_REQUESTED] as $status) {
+            $work = $this->work([
+                'status' => $status,
+                'media_type' => Work::MEDIA_TYPE_GALLERY,
+            ]);
+            $media = WorkMedia::factory()->image()->ready()->create([
+                'work_id' => $work->id,
+                'position' => 8,
+            ]);
+
+            $this->patchJson($this->reorderEndpoint($work), [
+                'media_ids' => [$media->id],
+            ])->assertOk();
+            $this->patchJson($this->coverEndpoint($work), [
+                'cover_media_id' => $media->id,
+            ])->assertOk();
+        }
+    }
+
+    public function test_non_editable_states_reject_organization_without_changes(): void
+    {
+        $this->actingAsRole('super-admin');
+        $statuses = [
+            Work::STATUS_SUBMITTED,
+            Work::STATUS_IN_REVIEW,
+            Work::STATUS_APPROVED,
+            Work::STATUS_PUBLISHED,
+            Work::STATUS_REJECTED,
+            Work::STATUS_HIDDEN,
+            Work::STATUS_ARCHIVED,
+        ];
+
+        foreach ($statuses as $status) {
+            $work = $this->work([
+                'status' => $status,
+                'media_type' => Work::MEDIA_TYPE_GALLERY,
+            ]);
+            $media = WorkMedia::factory()->image()->ready()->create([
+                'work_id' => $work->id,
+                'position' => 7,
+            ]);
+
+            foreach ([
+                [$this->reorderEndpoint($work), ['media_ids' => [$media->id]]],
+                [$this->coverEndpoint($work), ['cover_media_id' => $media->id]],
+            ] as [$endpoint, $payload]) {
+                $this->patchJson($endpoint, $payload)
+                    ->assertStatus(409)
+                    ->assertExactJson([
+                        'success' => false,
+                        'data' => [
+                            'reason' => 'work_state_not_editable',
+                            'current_status' => $status,
+                        ],
+                        'message' => 'لا يمكن تنظيم وسائط العمل في حالته الحالية.',
+                        'errors' => null,
+                    ]);
+            }
+
+            $this->assertSame(7, $media->fresh()->position);
+            $this->assertNull($work->fresh()->cover_media_id);
+        }
+
+        $this->assertSame(0, $this->organizationAuditEvents()->count());
+    }
+
+    public function test_reorder_request_contract_is_strict(): void
+    {
+        $this->actingAsRole('super-admin');
+        $work = $this->work(['media_type' => Work::MEDIA_TYPE_GALLERY]);
+
+        $this->patchJson($this->reorderEndpoint($work), [])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('media_ids');
+        $this->patchJson($this->reorderEndpoint($work), [
+            'media_ids' => [],
+            'extra' => true,
+        ])->assertUnprocessable()->assertJsonValidationErrors('extra');
+        $this->patchJson($this->reorderEndpoint($work).'?preview=true', [
+            'media_ids' => [],
+        ])->assertUnprocessable();
+        $this->patchJson($this->reorderEndpoint($work), [
+            'media_ids' => [1 => 10],
+        ])->assertUnprocessable()->assertJsonValidationErrors('media_ids');
+        $this->patchJson($this->reorderEndpoint($work), [
+            'media_ids' => range(1, 101),
+        ])->assertUnprocessable()->assertJsonValidationErrors('media_ids');
+
+        foreach ([['1'], [1.5], [true], [null], [[]], [(object) ['id' => 1]]]
+            as $invalidIds) {
+            $this->patchJson($this->reorderEndpoint($work), [
+                'media_ids' => $invalidIds,
+            ])->assertUnprocessable()->assertJsonValidationErrors('media_ids');
+        }
+
+        $this->patchJson($this->reorderEndpoint($work), [
+            'media_ids' => [1, 1],
+        ])->assertUnprocessable()->assertJsonValidationErrors('media_ids');
+    }
+
+    public function test_reorder_requires_the_exact_complete_active_media_set(): void
+    {
+        $this->actingAsRole('super-admin');
+        $work = $this->work(['media_type' => Work::MEDIA_TYPE_GALLERY]);
+        $first = WorkMedia::factory()->image()->ready()->create(['work_id' => $work->id]);
+        $second = WorkMedia::factory()->image()->ready()->create(['work_id' => $work->id]);
+        $otherWork = $this->work(['media_type' => Work::MEDIA_TYPE_GALLERY]);
+        $foreign = WorkMedia::factory()->image()->ready()->create([
+            'work_id' => $otherWork->id,
+        ]);
+        $deleted = WorkMedia::factory()->image()->ready()->create(['work_id' => $work->id]);
+        $deleted->delete();
+        $originalPositions = [
+            $first->id => $first->position,
+            $second->id => $second->position,
+        ];
+
+        foreach ([
+            [$first->id],
+            [$first->id, $second->id, 999999],
+            [$first->id, $foreign->id],
+            [$first->id, $deleted->id],
+        ] as $mediaIds) {
+            $response = $this->patchJson($this->reorderEndpoint($work), [
+                'media_ids' => $mediaIds,
+            ])->assertUnprocessable()->assertJsonValidationErrors('media_ids');
+            $response->assertJsonMissing(['work_id' => $foreign->work_id]);
+        }
+
+        $this->patchJson($this->reorderEndpoint($work), [
+            'media_ids' => [],
+        ])->assertUnprocessable();
+
+        $emptyWork = $this->work(['media_type' => Work::MEDIA_TYPE_GALLERY]);
+        $this->patchJson($this->reorderEndpoint($emptyWork), [
+            'media_ids' => [],
+        ])->assertOk()
+            ->assertJsonPath('data.changed', false)
+            ->assertJsonCount(0, 'data.media');
+
+        $missingWorkId = ((int) Work::query()->max('id')) + 1000;
+        $this->patchJson('/api/admin/works/'.$missingWorkId.'/media/order', [
+            'media_ids' => [],
+        ])->assertNotFound();
+        $this->patchJson('/api/admin/works/'.$missingWorkId.'/media/cover', [
+            'cover_media_id' => null,
+        ])->assertNotFound();
+
+        $this->assertSame($originalPositions, WorkMedia::query()
+            ->whereIn('id', [$first->id, $second->id])
+            ->orderBy('id')
+            ->pluck('position', 'id')
+            ->all());
+        $this->assertSame(0, $this->organizationAuditEvents()->count());
+    }
+
+    public function test_reorder_normalizes_positions_and_preserves_media_and_cover_data(): void
+    {
+        $this->actingAsRole('super-admin');
+        $this->setMediaLimits(6, 2048, [Work::MEDIA_TYPE_GALLERY], 7);
+        $work = $this->work(['media_type' => Work::MEDIA_TYPE_GALLERY]);
+        $first = WorkMedia::factory()->image()->ready()->create([
+            'work_id' => $work->id,
+            'position' => 9,
+            'path' => 'works/'.$work->id.'/first.jpg',
+        ]);
+        $second = WorkMedia::factory()->image()->ready()->create([
+            'work_id' => $work->id,
+            'position' => 2,
+            'path' => 'works/'.$work->id.'/second.jpg',
+        ]);
+        $third = WorkMedia::factory()->image()->ready()->create([
+            'work_id' => $work->id,
+            'position' => 5,
+            'path' => 'works/'.$work->id.'/third.jpg',
+        ]);
+        $work->update(['cover_media_id' => $second->id]);
+        $preservedMetadata = WorkMedia::query()
+            ->whereIn('id', [$first->id, $second->id, $third->id])
+            ->orderBy('id')
+            ->get()
+            ->mapWithKeys(fn (WorkMedia $item): array => [
+                $item->id => $item->only([
+                    'work_id',
+                    'uploaded_by',
+                    'disk',
+                    'path',
+                    'original_name',
+                    'mime_type',
+                    'extension',
+                    'kind',
+                    'size_bytes',
+                    'width',
+                    'height',
+                    'duration_ms',
+                    'processing_status',
+                    'processing_error',
+                ]),
+            ])
+            ->all();
+
+        $response = $this->patchJson($this->reorderEndpoint($work), [
+            'media_ids' => [$third->id, $first->id, $second->id],
+        ])->assertOk()
+            ->assertJsonPath('data.action', 'reorder')
+            ->assertJsonPath('data.changed', true)
+            ->assertJsonPath('data.changed_keys', ['media_order'])
+            ->assertJsonPath('data.work.cover_media_id', $second->id)
+            ->assertJsonPath('data.media_policy.settings_version', 7)
+            ->assertJsonPath('data.counts.active', 3)
+            ->assertJsonPath('data.counts.remaining', 3);
+
+        $this->assertSame(
+            [$third->id, $first->id, $second->id],
+            array_column($response->json('data.media'), 'id'),
+        );
+        $this->assertSame(1, $third->fresh()->position);
+        $this->assertSame(2, $first->fresh()->position);
+        $this->assertSame(3, $second->fresh()->position);
+        $this->assertSame($preservedMetadata, WorkMedia::query()
+            ->whereIn('id', [$first->id, $second->id, $third->id])
+            ->orderBy('id')
+            ->get()
+            ->mapWithKeys(fn (WorkMedia $item): array => [
+                $item->id => $item->only([
+                    'work_id',
+                    'uploaded_by',
+                    'disk',
+                    'path',
+                    'original_name',
+                    'mime_type',
+                    'extension',
+                    'kind',
+                    'size_bytes',
+                    'width',
+                    'height',
+                    'duration_ms',
+                    'processing_status',
+                    'processing_error',
+                ]),
+            ])
+            ->all());
+        $this->assertSame($second->id, $work->fresh()->cover_media_id);
+        $serialized = json_encode($response->json('data'), JSON_THROW_ON_ERROR);
+        $this->assertStringNotContainsString('"disk"', $serialized);
+        $this->assertStringNotContainsString('"path"', $serialized);
+        $this->assertStringNotContainsString('processing_error', $serialized);
+
+        $this->getJson($this->mediaEndpoint($work))
+            ->assertOk()
+            ->assertJsonPath('data.media.0.id', $third->id)
+            ->assertJsonPath('data.media.1.id', $first->id)
+            ->assertJsonPath('data.media.2.id', $second->id);
+    }
+
+    public function test_reorder_normalizes_non_contiguous_positions_even_when_ids_match(): void
+    {
+        $this->actingAsRole('super-admin');
+        $work = $this->work(['media_type' => Work::MEDIA_TYPE_GALLERY]);
+        $first = WorkMedia::factory()->create(['work_id' => $work->id, 'position' => 0]);
+        $second = WorkMedia::factory()->create(['work_id' => $work->id, 'position' => 4]);
+        $third = WorkMedia::factory()->create(['work_id' => $work->id, 'position' => 9]);
+
+        $this->patchJson($this->reorderEndpoint($work), [
+            'media_ids' => [$first->id, $second->id, $third->id],
+        ])->assertOk()->assertJsonPath('data.changed', true);
+
+        $this->assertSame([1, 2, 3], WorkMedia::query()
+            ->whereIn('id', [$first->id, $second->id, $third->id])
+            ->orderBy('position')
+            ->pluck('position')
+            ->all());
+    }
+
+    public function test_reorder_no_op_preserves_timestamps_and_records_no_audit(): void
+    {
+        Carbon::setTestNow('2026-07-19 10:00:00');
+        $this->actingAsRole('super-admin');
+        $work = $this->work(['media_type' => Work::MEDIA_TYPE_GALLERY]);
+        $first = WorkMedia::factory()->create(['work_id' => $work->id, 'position' => 1]);
+        $second = WorkMedia::factory()->create(['work_id' => $work->id, 'position' => 2]);
+        $timestamps = [$first->updated_at->toJSON(), $second->updated_at->toJSON()];
+        Carbon::setTestNow('2026-07-20 10:00:00');
+
+        try {
+            $this->patchJson($this->reorderEndpoint($work), [
+                'media_ids' => [$first->id, $second->id],
+            ])->assertOk()
+                ->assertJsonPath('data.changed', false)
+                ->assertJsonPath('data.changed_keys', [])
+                ->assertJsonPath('message', 'ترتيب وسائط العمل محدث بالفعل');
+
+            $this->assertSame($timestamps, [
+                $first->fresh()->updated_at->toJSON(),
+                $second->fresh()->updated_at->toJSON(),
+            ]);
+            $this->assertSame(0, $this->organizationAuditEvents()->count());
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_cover_request_contract_is_strict(): void
+    {
+        $this->actingAsRole('super-admin');
+        $work = $this->work(['media_type' => Work::MEDIA_TYPE_GALLERY]);
+
+        $this->patchJson($this->coverEndpoint($work), [])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('cover_media_id');
+        $this->patchJson($this->coverEndpoint($work), [
+            'cover_media_id' => null,
+            'extra' => true,
+        ])->assertUnprocessable()->assertJsonValidationErrors('extra');
+        $this->patchJson($this->coverEndpoint($work).'?preview=true', [
+            'cover_media_id' => null,
+        ])->assertUnprocessable();
+
+        foreach (['1', 1.5, true, false, [], (object) ['id' => 1], 0, -1]
+            as $invalidId) {
+            $this->patchJson($this->coverEndpoint($work), [
+                'cover_media_id' => $invalidId,
+            ])->assertUnprocessable()->assertJsonValidationErrors('cover_media_id');
+        }
+    }
+
+    public function test_cover_requires_a_ready_active_image_from_the_same_work(): void
+    {
+        $this->actingAsRole('super-admin');
+        $work = $this->work(['media_type' => Work::MEDIA_TYPE_GALLERY]);
+        $otherWork = $this->work(['media_type' => Work::MEDIA_TYPE_GALLERY]);
+        $foreign = WorkMedia::factory()->image()->ready()->create([
+            'work_id' => $otherWork->id,
+        ]);
+        $deleted = WorkMedia::factory()->image()->ready()->create(['work_id' => $work->id]);
+        $deleted->delete();
+        $video = WorkMedia::factory()->video()->create(['work_id' => $work->id]);
+        $pending = WorkMedia::factory()->image()->create([
+            'work_id' => $work->id,
+            'processing_status' => WorkMedia::PROCESSING_PENDING,
+        ]);
+        $failed = WorkMedia::factory()->image()->failed()->create(['work_id' => $work->id]);
+
+        foreach ([$foreign->id, $deleted->id, $video->id, $pending->id, $failed->id, 999999]
+            as $invalidId) {
+            $response = $this->patchJson($this->coverEndpoint($work), [
+                'cover_media_id' => $invalidId,
+            ])->assertUnprocessable()->assertJsonValidationErrors('cover_media_id');
+            $response->assertJsonMissing(['work_id' => $foreign->work_id]);
+        }
+
+        $this->assertNull($work->fresh()->cover_media_id);
+        $this->assertSame(0, $this->organizationAuditEvents()->count());
+    }
+
+    public function test_cover_can_be_set_changed_cleared_and_is_reflected_in_media_payload(): void
+    {
+        $this->actingAsRole('super-admin');
+        $imageWork = $this->work(['media_type' => Work::MEDIA_TYPE_IMAGE]);
+        $singleImage = WorkMedia::factory()->image()->ready()->create([
+            'work_id' => $imageWork->id,
+        ]);
+        $this->patchJson($this->coverEndpoint($imageWork), [
+            'cover_media_id' => $singleImage->id,
+        ])->assertOk()->assertJsonPath('data.current_cover_media_id', $singleImage->id);
+
+        $work = $this->work(['media_type' => Work::MEDIA_TYPE_GALLERY]);
+        $first = WorkMedia::factory()->image()->ready()->create([
+            'work_id' => $work->id,
+            'position' => 1,
+        ]);
+        $second = WorkMedia::factory()->image()->ready()->create([
+            'work_id' => $work->id,
+            'position' => 2,
+        ]);
+
+        $this->patchJson($this->coverEndpoint($work), [
+            'cover_media_id' => $first->id,
+        ])->assertOk()
+            ->assertJsonPath('data.action', 'cover_update')
+            ->assertJsonPath('data.changed', true)
+            ->assertJsonPath('data.changed_keys', ['cover_media_id'])
+            ->assertJsonPath('data.previous_cover_media_id', null)
+            ->assertJsonPath('data.current_cover_media_id', $first->id)
+            ->assertJsonPath('data.media.0.is_cover', true)
+            ->assertJsonPath('data.media.1.is_cover', false);
+
+        $this->patchJson($this->coverEndpoint($work), [
+            'cover_media_id' => $second->id,
+        ])->assertOk()
+            ->assertJsonPath('data.previous_cover_media_id', $first->id)
+            ->assertJsonPath('data.current_cover_media_id', $second->id)
+            ->assertJsonPath('data.media.0.is_cover', false)
+            ->assertJsonPath('data.media.1.is_cover', true);
+
+        $this->patchJson($this->coverEndpoint($work), [
+            'cover_media_id' => null,
+        ])->assertOk()
+            ->assertJsonPath('data.current_cover_media_id', null)
+            ->assertJsonPath('data.work.cover_media_id', null)
+            ->assertJsonPath('message', 'تمت إزالة غلاف العمل بنجاح');
+        $this->assertNull($work->fresh()->cover_media_id);
+    }
+
+    public function test_cover_no_op_preserves_work_timestamp_and_records_no_audit(): void
+    {
+        Carbon::setTestNow('2026-07-19 10:00:00');
+        $this->actingAsRole('super-admin');
+        $work = $this->work(['media_type' => Work::MEDIA_TYPE_GALLERY]);
+        $media = WorkMedia::factory()->image()->ready()->create(['work_id' => $work->id]);
+        $work->update(['cover_media_id' => $media->id]);
+        $updatedAt = $work->fresh()->updated_at->toJSON();
+        Carbon::setTestNow('2026-07-20 10:00:00');
+
+        try {
+            $this->patchJson($this->coverEndpoint($work), [
+                'cover_media_id' => $media->id,
+            ])->assertOk()
+                ->assertJsonPath('data.changed', false)
+                ->assertJsonPath('data.changed_keys', [])
+                ->assertJsonPath('message', 'غلاف العمل محدث بالفعل');
+
+            $this->assertSame($updatedAt, $work->fresh()->updated_at->toJSON());
+            $this->assertSame(0, $this->organizationAuditEvents()->count());
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_video_work_can_clear_cover_but_cannot_select_video(): void
+    {
+        $this->actingAsRole('super-admin');
+        $work = $this->work(['media_type' => Work::MEDIA_TYPE_VIDEO]);
+        $legacyCover = WorkMedia::factory()->image()->ready()->create(['work_id' => $work->id]);
+        $video = WorkMedia::factory()->video()->create(['work_id' => $work->id]);
+        $work->update(['cover_media_id' => $legacyCover->id]);
+
+        $this->patchJson($this->coverEndpoint($work), [
+            'cover_media_id' => $video->id,
+        ])->assertUnprocessable();
+        $this->patchJson($this->coverEndpoint($work), [
+            'cover_media_id' => null,
+        ])->assertOk()->assertJsonPath('data.current_cover_media_id', null);
+    }
+
+    public function test_organization_uses_current_settings_once_without_blocking_on_allowed_types(): void
+    {
+        $store = new class extends WorksSettingsStore
+        {
+            public int $calls = 0;
+
+            public function getGlobalSettings(): array
+            {
+                $this->calls++;
+
+                return [
+                    'scope' => 'global',
+                    'version' => 12,
+                    'values' => [
+                        'review_sla_hours' => null,
+                        'direct_publish_trust_enabled' => false,
+                        'media_limits' => [
+                            'max_items' => 4,
+                            'max_file_size_kb' => 1024,
+                            'allowed_types' => [Work::MEDIA_TYPE_VIDEO],
+                        ],
+                    ],
+                    'storage_record_found' => true,
+                    'updated_at' => null,
+                ];
+            }
+        };
+        $this->app->instance(WorksSettingsStore::class, $store);
+        $this->actingAsRole('super-admin');
+        $work = $this->work(['media_type' => Work::MEDIA_TYPE_GALLERY]);
+        $media = WorkMedia::factory()->image()->ready()->create([
+            'work_id' => $work->id,
+            'position' => 3,
+        ]);
+
+        $this->patchJson($this->reorderEndpoint($work), [
+            'media_ids' => [$media->id],
+        ])->assertOk()
+            ->assertJsonPath('data.media_policy.settings_version', 12)
+            ->assertJsonPath('data.media_policy.allowed_media_types', ['video'])
+            ->assertJsonPath('data.counts.remaining', 3);
+        $this->assertSame(1, $store->calls);
+
+        $this->patchJson($this->coverEndpoint($work), [
+            'cover_media_id' => $media->id,
+        ])->assertOk()
+            ->assertJsonPath('data.media_policy.allowed_media_types', ['video']);
+        $this->assertSame(2, $store->calls);
+    }
+
+    public function test_reorder_and_cover_audits_are_exact_and_safe(): void
+    {
+        $this->actingAsRole('super-admin');
+        $this->setMediaLimits(5, null, null, 9);
+        $work = $this->work(['media_type' => Work::MEDIA_TYPE_GALLERY]);
+        $first = WorkMedia::factory()->image()->ready()->create([
+            'work_id' => $work->id,
+            'position' => 1,
+            'path' => 'works/private-first.jpg',
+        ]);
+        $second = WorkMedia::factory()->image()->ready()->create([
+            'work_id' => $work->id,
+            'position' => 2,
+            'path' => 'works/private-second.jpg',
+        ]);
+
+        $this->patchJson($this->reorderEndpoint($work), [
+            'media_ids' => [$second->id, $first->id],
+        ])->assertOk();
+        $this->patchJson($this->coverEndpoint($work), [
+            'cover_media_id' => $first->id,
+        ])->assertOk();
+        $this->patchJson($this->coverEndpoint($work), [
+            'cover_media_id' => null,
+        ])->assertOk();
+
+        $reordered = $this->organizationAuditEvents()
+            ->where('event_type', 'works.media.reordered')
+            ->sole();
+        $setCover = $this->organizationAuditEvents()
+            ->where('event_type', 'works.media.cover_updated')
+            ->where('action', 'set_cover')
+            ->sole();
+        $clearCover = $this->organizationAuditEvents()
+            ->where('event_type', 'works.media.cover_updated')
+            ->where('action', 'clear_cover')
+            ->sole();
+
+        $this->assertSame('works', $reordered->category);
+        $this->assertSame('work', $reordered->target_type);
+        $this->assertSame($work->id, $reordered->target_id);
+        $this->assertSame([
+            'work_id',
+            'media_count',
+            'ordered_media_ids',
+            'settings_version',
+        ], array_keys($reordered->metadata));
+        $this->assertSame([$second->id, $first->id], $reordered->metadata['ordered_media_ids']);
+        $this->assertSame([
+            'work_id',
+            'previous_cover_media_id',
+            'current_cover_media_id',
+            'settings_version',
+        ], array_keys($setCover->metadata));
+        $this->assertNull($clearCover->metadata['current_cover_media_id']);
+
+        $serialized = $reordered->toJson().$setCover->toJson().$clearCover->toJson();
+        foreach (['path', 'disk', 'original_name', 'mime_type', 'title', 'email'] as $forbidden) {
+            $this->assertStringNotContainsString($forbidden, $serialized);
+        }
+    }
+
+    public function test_reorder_audit_failure_rolls_back_positions_and_event(): void
+    {
+        $this->actingAsRole('super-admin');
+        $work = $this->work(['media_type' => Work::MEDIA_TYPE_GALLERY]);
+        $first = WorkMedia::factory()->create(['work_id' => $work->id, 'position' => 1]);
+        $second = WorkMedia::factory()->create(['work_id' => $work->id, 'position' => 2]);
+        $this->forceAuditFailure('Forced reorder audit failure.');
+        $this->withoutExceptionHandling();
+
+        try {
+            $this->patchJson($this->reorderEndpoint($work), [
+                'media_ids' => [$second->id, $first->id],
+            ]);
+            $this->fail('The forced reorder audit failure was not thrown.');
+        } catch (LogicException $exception) {
+            $this->assertSame('Forced reorder audit failure.', $exception->getMessage());
+        }
+
+        $this->assertSame(1, $first->fresh()->position);
+        $this->assertSame(2, $second->fresh()->position);
+        $this->assertSame(0, $this->organizationAuditEvents()->count());
+    }
+
+    public function test_cover_audit_failure_rolls_back_cover_and_event(): void
+    {
+        $this->actingAsRole('super-admin');
+        $work = $this->work(['media_type' => Work::MEDIA_TYPE_GALLERY]);
+        $media = WorkMedia::factory()->image()->ready()->create(['work_id' => $work->id]);
+        $this->forceAuditFailure('Forced cover audit failure.');
+        $this->withoutExceptionHandling();
+
+        try {
+            $this->patchJson($this->coverEndpoint($work), [
+                'cover_media_id' => $media->id,
+            ]);
+            $this->fail('The forced cover audit failure was not thrown.');
+        } catch (LogicException $exception) {
+            $this->assertSame('Forced cover audit failure.', $exception->getMessage());
+        }
+
+        $this->assertNull($work->fresh()->cover_media_id);
+        $this->assertSame(0, $this->organizationAuditEvents()->count());
+    }
+
     public function test_work_media_hidden_fields_remain_absent_from_api_payloads(): void
     {
         $this->actingAsRole('super-admin');
@@ -1033,6 +1712,16 @@ class WorksAdminMediaApiTest extends TestCase
         return $this->mediaItemEndpoint($work, $media).'/content';
     }
 
+    private function reorderEndpoint(Work $work): string
+    {
+        return $this->mediaEndpoint($work).'/order';
+    }
+
+    private function coverEndpoint(Work $work): string
+    {
+        return $this->mediaEndpoint($work).'/cover';
+    }
+
     private function setMediaLimits(
         mixed $maxItems,
         mixed $maxFileSizeKb,
@@ -1062,6 +1751,31 @@ class WorksAdminMediaApiTest extends TestCase
         return AuditEvent::query()->whereIn('event_type', [
             'works.media.uploaded',
             'works.media.deleted',
+            'works.media.reordered',
+            'works.media.cover_updated',
         ]);
+    }
+
+    private function organizationAuditEvents(): \Illuminate\Database\Eloquent\Builder
+    {
+        return AuditEvent::query()->whereIn('event_type', [
+            'works.media.reordered',
+            'works.media.cover_updated',
+        ]);
+    }
+
+    private function forceAuditFailure(string $message): void
+    {
+        $this->app->instance(AuditEventLogger::class, new class($message) extends AuditEventLogger
+        {
+            public function __construct(private readonly string $message) {}
+
+            public function record(array $event): AuditEvent
+            {
+                parent::record($event);
+
+                throw new LogicException($this->message);
+            }
+        });
     }
 }

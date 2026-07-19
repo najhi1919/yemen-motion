@@ -238,6 +238,7 @@ class WorksMediaService
             $media = WorkMedia::query()
                 ->where('work_id', $work->id)
                 ->whereKey($mediaId)
+                ->orderBy('id')
                 ->lockForUpdate()
                 ->first();
 
@@ -277,6 +278,188 @@ class WorksMediaService
                 'cover_cleared' => $wasCover,
                 'physical_file_retained' => true,
                 'counts' => $this->counts($work, $settings, $active),
+            ];
+        });
+    }
+
+    /**
+     * @param list<int> $mediaIds
+     * @param array<string, mixed> $settings
+     * @param array<string, string|null> $requestContext
+     * @return array<string, mixed>
+     */
+    public function reorder(
+        int $workId,
+        array $mediaIds,
+        array $settings,
+        User $actor,
+        array $requestContext,
+    ): array {
+        return DB::transaction(function () use (
+            $workId,
+            $mediaIds,
+            $settings,
+            $actor,
+            $requestContext,
+        ): array {
+            $work = Work::query()->lockForUpdate()->findOrFail($workId);
+            $this->assertOrganizable($work);
+            $lockedMedia = WorkMedia::query()
+                ->where('work_id', $work->id)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+            $activeIds = $lockedMedia->pluck('id')->all();
+            $requestedSet = $mediaIds;
+            $activeSet = $activeIds;
+            sort($requestedSet);
+            sort($activeSet);
+
+            if (count($mediaIds) !== count($activeIds)
+                || $requestedSet !== $activeSet) {
+                throw ValidationException::withMessages([
+                    'media_ids' => [
+                        'يجب أن تمثل القائمة المجموعة الكاملة لجميع وسائط العمل الفعالة.',
+                    ],
+                ]);
+            }
+
+            $currentlyOrderedIds = $lockedMedia
+                ->sort(
+                    static fn (WorkMedia $left, WorkMedia $right): int => [
+                        $left->position,
+                        $left->id,
+                    ] <=> [
+                        $right->position,
+                        $right->id,
+                    ],
+                )
+                ->pluck('id')
+                ->values()
+                ->all();
+            $mediaById = $lockedMedia->keyBy('id');
+            $positionsAreNormalized = true;
+
+            foreach ($mediaIds as $index => $mediaId) {
+                if ($mediaById->get($mediaId)?->position !== $index + 1) {
+                    $positionsAreNormalized = false;
+
+                    break;
+                }
+            }
+
+            $changed = $currentlyOrderedIds !== $mediaIds || ! $positionsAreNormalized;
+
+            if ($changed) {
+                foreach ($mediaIds as $index => $mediaId) {
+                    /** @var WorkMedia $media */
+                    $media = $mediaById->get($mediaId);
+                    $position = $index + 1;
+
+                    if ($media->position === $position) {
+                        continue;
+                    }
+
+                    $media->forceFill(['position' => $position])->save();
+                }
+
+                $this->recordWorkAuditEvent(
+                    $work,
+                    $actor,
+                    $requestContext,
+                    'works.media.reordered',
+                    'reorder',
+                    [
+                        'work_id' => $work->id,
+                        'media_count' => count($mediaIds),
+                        'ordered_media_ids' => $mediaIds,
+                        'settings_version' => $this->settingsVersion($settings),
+                    ],
+                );
+            }
+
+            return [
+                'action' => 'reorder',
+                'changed' => $changed,
+                'changed_keys' => $changed ? ['media_order'] : [],
+                ...$this->organizationSnapshot($work, $settings),
+            ];
+        });
+    }
+
+    /**
+     * @param array<string, mixed> $settings
+     * @param array<string, string|null> $requestContext
+     * @return array<string, mixed>
+     */
+    public function updateCover(
+        int $workId,
+        ?int $coverMediaId,
+        array $settings,
+        User $actor,
+        array $requestContext,
+    ): array {
+        return DB::transaction(function () use (
+            $workId,
+            $coverMediaId,
+            $settings,
+            $actor,
+            $requestContext,
+        ): array {
+            $work = Work::query()->lockForUpdate()->findOrFail($workId);
+            $this->assertOrganizable($work);
+
+            if ($coverMediaId !== null) {
+                $coverMedia = WorkMedia::query()
+                    ->where('work_id', $work->id)
+                    ->whereKey($coverMediaId)
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($coverMedia === null
+                    || ! in_array($work->media_type, [
+                        Work::MEDIA_TYPE_IMAGE,
+                        Work::MEDIA_TYPE_GALLERY,
+                    ], true)
+                    || $coverMedia->kind !== WorkMedia::KIND_IMAGE
+                    || $coverMedia->processing_status !== WorkMedia::PROCESSING_READY) {
+                    throw ValidationException::withMessages([
+                        'cover_media_id' => [
+                            'يجب أن يشير الغلاف إلى صورة فعالة وجاهزة تابعة للعمل.',
+                        ],
+                    ]);
+                }
+            }
+
+            $previousCoverMediaId = $work->cover_media_id;
+            $changed = $previousCoverMediaId !== $coverMediaId;
+
+            if ($changed) {
+                $work->forceFill(['cover_media_id' => $coverMediaId])->save();
+
+                $this->recordWorkAuditEvent(
+                    $work,
+                    $actor,
+                    $requestContext,
+                    'works.media.cover_updated',
+                    $coverMediaId === null ? 'clear_cover' : 'set_cover',
+                    [
+                        'work_id' => $work->id,
+                        'previous_cover_media_id' => $previousCoverMediaId,
+                        'current_cover_media_id' => $coverMediaId,
+                        'settings_version' => $this->settingsVersion($settings),
+                    ],
+                );
+            }
+
+            return [
+                'action' => 'cover_update',
+                'changed' => $changed,
+                'changed_keys' => $changed ? ['cover_media_id'] : [],
+                'previous_cover_media_id' => $previousCoverMediaId,
+                'current_cover_media_id' => $coverMediaId,
+                ...$this->organizationSnapshot($work, $settings),
             ];
         });
     }
@@ -370,6 +553,17 @@ class WorksMediaService
         }
     }
 
+    private function assertOrganizable(Work $work): void
+    {
+        if (! in_array($work->status, self::EDITABLE_STATUSES, true)) {
+            throw new WorksMediaConflictException(
+                'work_state_not_editable',
+                ['current_status' => $work->status],
+                'لا يمكن تنظيم وسائط العمل في حالته الحالية.',
+            );
+        }
+    }
+
     /** @param array<string, mixed> $settings */
     private function assertMediaTypeAllowed(Work $work, array $settings): void
     {
@@ -453,6 +647,25 @@ class WorksMediaService
             'remaining' => $effectiveMax === null
                 ? null
                 : max(0, $effectiveMax - $active),
+        ];
+    }
+
+    /** @param array<string, mixed> $settings */
+    private function organizationSnapshot(Work $work, array $settings): array
+    {
+        $media = WorkMedia::query()
+            ->where('work_id', $work->id)
+            ->with(['uploader:id,name'])
+            ->ordered()
+            ->get();
+
+        return [
+            'work' => $this->workPayload($work),
+            'media' => $media
+                ->map(fn (WorkMedia $item): array => $this->mediaPayload($item, $work))
+                ->all(),
+            'media_policy' => $this->mediaPolicy($work, $settings),
+            'counts' => $this->counts($work, $settings, $media->count()),
         ];
     }
 
@@ -603,6 +816,35 @@ class WorksMediaService
             'actor_role' => $actor->roles->first()?->name,
             'target_type' => 'work_media',
             'target_id' => $media->getKey(),
+            'action' => $action,
+            'outcome' => 'success',
+            'ip_address' => $requestContext['ip_address'] ?? null,
+            'user_agent' => $requestContext['user_agent'] ?? null,
+            'metadata' => $metadata,
+        ]);
+    }
+
+    /**
+     * @param array<string, string|null> $requestContext
+     * @param array<string, mixed> $metadata
+     */
+    private function recordWorkAuditEvent(
+        Work $work,
+        User $actor,
+        array $requestContext,
+        string $eventType,
+        string $action,
+        array $metadata,
+    ): void {
+        $this->auditEventLogger->record([
+            'event_type' => $eventType,
+            'category' => 'works',
+            'severity' => 'notice',
+            'actor_type' => 'user',
+            'actor_id' => $actor->getKey(),
+            'actor_role' => $actor->roles->first()?->name,
+            'target_type' => 'work',
+            'target_id' => $work->getKey(),
             'action' => $action,
             'outcome' => 'success',
             'ip_address' => $requestContext['ip_address'] ?? null,

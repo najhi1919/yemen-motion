@@ -7,8 +7,10 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Exceptions\WorksMediaConflictException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\WorksMediaContentRequest;
+use App\Http\Requests\Admin\WorksMediaCoverRequest;
 use App\Http\Requests\Admin\WorksMediaDeleteRequest;
 use App\Http\Requests\Admin\WorksMediaIndexRequest;
+use App\Http\Requests\Admin\WorksMediaReorderRequest;
 use App\Http\Requests\Admin\WorksMediaUploadRequest;
 use App\Models\User;
 use App\Services\Works\WorksMediaService;
@@ -73,6 +75,69 @@ class WorksMediaController extends Controller
         return $this->mediaService->content((int) $work, (int) $media);
     }
 
+    public function reorder(
+        WorksMediaReorderRequest $request,
+        string $work,
+    ): JsonResponse {
+        /** @var User $actor */
+        $actor = $request->user();
+
+        try {
+            $result = $this->mediaService->reorder(
+                (int) $work,
+                $request->validated('media_ids'),
+                $request->mediaSettings(),
+                $actor,
+                $this->requestContext($request),
+            );
+        } catch (WorksMediaConflictException $exception) {
+            return $this->conflictResponse($exception);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $result,
+            'message' => $result['changed']
+                ? 'تم تحديث ترتيب وسائط العمل بنجاح'
+                : 'ترتيب وسائط العمل محدث بالفعل',
+            'errors' => null,
+        ]);
+    }
+
+    public function updateCover(
+        WorksMediaCoverRequest $request,
+        string $work,
+    ): JsonResponse {
+        /** @var User $actor */
+        $actor = $request->user();
+        $coverMediaId = $request->validated('cover_media_id');
+
+        try {
+            $result = $this->mediaService->updateCover(
+                (int) $work,
+                $coverMediaId,
+                $request->mediaSettings(),
+                $actor,
+                $this->requestContext($request),
+            );
+        } catch (WorksMediaConflictException $exception) {
+            return $this->conflictResponse($exception);
+        }
+
+        $message = ! $result['changed']
+            ? 'غلاف العمل محدث بالفعل'
+            : ($result['current_cover_media_id'] === null
+                ? 'تمت إزالة غلاف العمل بنجاح'
+                : 'تم تحديث غلاف العمل بنجاح');
+
+        return response()->json([
+            'success' => true,
+            'data' => $result,
+            'message' => $message,
+            'errors' => null,
+        ]);
+    }
+
     public function destroy(
         WorksMediaDeleteRequest $request,
         string $work,
@@ -128,7 +193,7 @@ class WorksMediaController extends Controller
 
     /** @return array{ip_address: string|null, user_agent: string|null} */
     private function requestContext(
-        WorksMediaUploadRequest|WorksMediaDeleteRequest $request,
+        WorksMediaUploadRequest|WorksMediaDeleteRequest|WorksMediaReorderRequest|WorksMediaCoverRequest $request,
     ): array {
         return [
             'ip_address' => $request->ip(),

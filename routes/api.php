@@ -105,6 +105,10 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
     Route::get('/works', [AdminWorksIndexController::class, 'index']);
     Route::get('/works/{work}/media', [AdminWorksMediaController::class, 'index'])->whereNumber('work');
     Route::post('/works/{work}/media', [AdminWorksMediaController::class, 'store'])->whereNumber('work');
+    Route::patch('/works/{work}/media/order', [AdminWorksMediaController::class, 'reorder'])
+        ->whereNumber('work');
+    Route::patch('/works/{work}/media/cover', [AdminWorksMediaController::class, 'updateCover'])
+        ->whereNumber('work');
     Route::get('/works/{work}/media/{media}/content', [AdminWorksMediaController::class, 'content'])
         ->whereNumber('work')
         ->whereNumber('media');
