@@ -473,8 +473,8 @@ class WorksAdminDraftApiTest extends TestCase
             ->assertJsonPath('data.authoring_policy.media_limits.max_items', 8)
             ->assertJsonPath('data.authoring_policy.media_limits.max_file_size_kb', 4096)
             ->assertJsonPath('data.authoring_policy.enforcement.media_type', true)
-            ->assertJsonPath('data.authoring_policy.enforcement.max_items', false)
-            ->assertJsonPath('data.authoring_policy.enforcement.max_file_size_kb', false);
+            ->assertJsonPath('data.authoring_policy.enforcement.max_items', true)
+            ->assertJsonPath('data.authoring_policy.enforcement.max_file_size_kb', true);
 
         $work = Work::factory()->create(['media_type' => null]);
         $this->patchJson($this->endpoint($work), [

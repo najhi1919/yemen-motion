@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\Admin\WorksAccessController as AdminWorksAccessCont
 use App\Http\Controllers\Api\Admin\WorksActivityController as AdminWorksActivityController;
 use App\Http\Controllers\Api\Admin\WorksAuthoringController as AdminWorksAuthoringController;
 use App\Http\Controllers\Api\Admin\WorksIndexController as AdminWorksIndexController;
+use App\Http\Controllers\Api\Admin\WorksMediaController as AdminWorksMediaController;
 use App\Http\Controllers\Api\Admin\WorksOverviewController as AdminWorksOverviewController;
 use App\Http\Controllers\Api\Admin\WorksReportsController as AdminWorksReportsController;
 use App\Http\Controllers\Api\Admin\WorksReportActionController as AdminWorksReportActionController;
@@ -102,6 +103,14 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
     Route::post('/works', [AdminWorksAuthoringController::class, 'store']);
     Route::patch('/works/{work}', [AdminWorksAuthoringController::class, 'update'])->whereNumber('work');
     Route::get('/works', [AdminWorksIndexController::class, 'index']);
+    Route::get('/works/{work}/media', [AdminWorksMediaController::class, 'index'])->whereNumber('work');
+    Route::post('/works/{work}/media', [AdminWorksMediaController::class, 'store'])->whereNumber('work');
+    Route::get('/works/{work}/media/{media}/content', [AdminWorksMediaController::class, 'content'])
+        ->whereNumber('work')
+        ->whereNumber('media');
+    Route::delete('/works/{work}/media/{media}', [AdminWorksMediaController::class, 'destroy'])
+        ->whereNumber('work')
+        ->whereNumber('media');
     Route::get('/works/{work}', [AdminWorksShowController::class, 'show'])->whereNumber('work');
 
     Route::get('/users', [AdminUserController::class, 'index']);

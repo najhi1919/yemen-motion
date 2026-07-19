@@ -167,8 +167,8 @@ class WorksAuthoringController extends Controller
             ],
             'enforcement' => [
                 'media_type' => true,
-                'max_items' => false,
-                'max_file_size_kb' => false,
+                'max_items' => true,
+                'max_file_size_kb' => true,
             ],
         ];
     }
