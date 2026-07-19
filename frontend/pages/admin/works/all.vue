@@ -16,6 +16,13 @@
           <p class="ym-works-all-description">
             {{ taxonomyDescription }}
           </p>
+          <NuxtLink
+            v-if="canCreateWork"
+            to="/admin/works/create"
+            class="ym-works-all-create-button"
+          >
+            {{ copy.createWork }}
+          </NuxtLink>
         </div>
 
         <div class="ym-works-all-hero__summary">
@@ -404,6 +411,13 @@
                 <td><time :datetime="work.updated_at || undefined">{{ formatDateTime(work.updated_at) }}</time></td>
                 <td class="is-action">
                   <div class="ym-works-all-row-actions">
+                    <NuxtLink
+                      v-if="canEditWork(work)"
+                      :to="`/admin/works/${work.id}/edit`"
+                      class="ym-works-all-edit-button"
+                    >
+                      {{ copy.editWork }}
+                    </NuxtLink>
                     <button
                       type="button"
                       class="ym-works-all-details-button"
@@ -1078,6 +1092,8 @@ const copyMap = {
     createdAt: 'تاريخ الإنشاء',
     updatedAt: 'آخر تحديث',
     actions: 'الإجراءات',
+    createWork: 'إنشاء عمل جديد',
+    editWork: 'تحرير العمل',
     viewDetails: 'عرض التفاصيل',
     viewDetailsHint: 'فتح تفاصيل العمل الآمنة',
     detailsPermissionRequired: 'تحتاج صلاحية عرض تفاصيل الأعمال',
@@ -1231,6 +1247,8 @@ const copyMap = {
     createdAt: 'Created at',
     updatedAt: 'Updated at',
     actions: 'Actions',
+    createWork: 'Create new work',
+    editWork: 'Edit work',
     viewDetails: 'View details',
     viewDetailsHint: 'Open safe work details',
     detailsPermissionRequired: 'Work detail permission is required',
@@ -1304,6 +1322,33 @@ const taxonomyAccess = reactive<TaxonomyAccess>({
   can_view_tags: false
 })
 const isSuperAdmin = computed(() => authStore.role === 'super-admin')
+const updatePermissions = [
+  'admin.works.update.basic',
+  'admin.works.update.media',
+  'admin.works.update.pricing',
+  'admin.works.update.delivery',
+  'admin.works.update.designer',
+  'admin.works.update.private_notes'
+] as const
+const canCreateWork = computed(() => (
+  isSuperAdmin.value
+  || (
+    ['admin', 'staff'].includes(authStore.role || '')
+    && authStore.permissions.includes('admin.works.access')
+    && authStore.permissions.includes('admin.works.create')
+  )
+))
+function canEditWork(work: WorkListItem): boolean {
+  if (!['draft', 'changes_requested'].includes(work.status)) return false
+  if (isSuperAdmin.value) return true
+  return ['admin', 'staff'].includes(authStore.role || '')
+    && authStore.permissions.includes('admin.works.access')
+    && (
+      updatePermissions.some(permission => authStore.permissions.includes(permission))
+      || canUpdateAssignedCategory.value
+      || canUpdateAssignedTags.value
+    )
+}
 const canViewDetails = computed(() => (
   hasWorksListAccess.value
   && (
@@ -2880,6 +2925,42 @@ onMounted(() => {
   font-weight: 950;
   padding: 0.55rem 0.7rem;
   transition: background 160ms ease, transform 160ms ease;
+}
+
+.ym-works-all-create-button {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 1rem;
+  min-height: 42px;
+  align-items: center;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  border-radius: 13px;
+  background: #f59e0b;
+  color: #111827;
+  font-size: 12px;
+  font-weight: 950;
+  padding: 0.7rem 1rem;
+  text-decoration: none;
+}
+
+.ym-works-all-edit-button {
+  display: grid;
+  min-height: 38px;
+  place-items: center;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  border-radius: 12px;
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+  font-size: 11px;
+  font-weight: 950;
+  padding: 0.55rem 0.7rem;
+  text-decoration: none;
+}
+
+.ym-works-all-create-button:focus-visible,
+.ym-works-all-edit-button:focus-visible {
+  outline: 3px solid rgba(245, 158, 11, 0.4);
+  outline-offset: 2px;
 }
 
 .ym-works-all-row-actions {

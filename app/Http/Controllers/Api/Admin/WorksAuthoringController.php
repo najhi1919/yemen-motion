@@ -6,6 +6,8 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Exceptions\WorksAuthoringStateConflictException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\WorksAuthoringOptionsRequest;
+use App\Http\Requests\Admin\WorksAuthoringShowRequest;
 use App\Http\Requests\Admin\WorksDraftStoreRequest;
 use App\Http\Requests\Admin\WorksDraftUpdateRequest;
 use App\Models\User;
@@ -16,6 +18,112 @@ use Illuminate\Http\JsonResponse;
 class WorksAuthoringController extends Controller
 {
     public function __construct(private readonly WorksAuthoringService $authoringService) {}
+
+    public function options(WorksAuthoringOptionsRequest $request): JsonResponse
+    {
+        /** @var User $actor */
+        $actor = $request->user();
+        $validated = $request->validated();
+        $fieldAccess = $this->authoringFieldAccess($actor);
+        $designerOptions = [];
+
+        if ($fieldAccess['can_update_designer']) {
+            $search = trim((string) ($validated['q'] ?? ''));
+            $limit = (int) ($validated['limit'] ?? 20);
+
+            $designerOptions = User::query()
+                ->select(['id', 'name'])
+                ->whereHas('roles', fn ($query) => $query->where('name', 'designer'))
+                ->when(
+                    $search !== '',
+                    fn ($query) => $query->where('name', 'like', "%{$search}%"),
+                )
+                ->orderBy('name')
+                ->orderBy('id')
+                ->limit($limit)
+                ->get()
+                ->map(fn (User $designer): array => [
+                    'id' => $designer->id,
+                    'name' => $designer->name,
+                ])
+                ->values()
+                ->all();
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'field_access' => $fieldAccess,
+                'authoring_policy' => $this->authoringPolicy($request->authoringSettings()),
+                'designer_options' => $designerOptions,
+            ],
+            'message' => 'تم جلب خيارات تأليف الأعمال بنجاح',
+            'errors' => null,
+        ]);
+    }
+
+    public function show(WorksAuthoringShowRequest $request, string $work): JsonResponse
+    {
+        /** @var User $actor */
+        $actor = $request->user();
+        $currentWork = Work::query()
+            ->with('designer:id,name')
+            ->findOrFail((int) $work);
+        $fieldAccess = $this->authoringFieldAccess($actor);
+        $workPayload = [
+            'id' => $currentWork->id,
+            'title' => $currentWork->title,
+            'slug' => $currentWork->slug,
+            'summary' => $currentWork->summary,
+            'description' => $currentWork->description,
+            'status' => $currentWork->status,
+            'visibility_status' => $currentWork->visibility_status,
+            'media_type' => $currentWork->media_type,
+            'price_amount' => $currentWork->price_amount,
+            'delivery_days' => $currentWork->delivery_days,
+            'designer_id' => $currentWork->designer_id,
+            'category_id' => $currentWork->category_id,
+            'tag_ids' => $this->hasPermissions($actor, [
+                'admin.works.taxonomy.view',
+                'admin.works.taxonomy.tags.view',
+            ])
+                ? $currentWork->tags()->orderBy('work_tags.id')->pluck('work_tags.id')->all()
+                : [],
+            'cover_media_id' => $currentWork->cover_media_id,
+            'change_request_notes' => $currentWork->change_request_notes,
+            'created_at' => $currentWork->created_at?->toJSON(),
+            'updated_at' => $currentWork->updated_at?->toJSON(),
+        ];
+
+        if ($fieldAccess['can_update_private_notes']) {
+            $workPayload['internal_notes'] = $currentWork->internal_notes;
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'work' => $workPayload,
+                'designer' => $currentWork->designer ? [
+                    'id' => $currentWork->designer->id,
+                    'name' => $currentWork->designer->name,
+                ] : null,
+                'field_access' => $fieldAccess,
+                'authoring_policy' => $this->authoringPolicy($request->authoringSettings()),
+                'authoring_state' => [
+                    'editable' => in_array($currentWork->status, [
+                        Work::STATUS_DRAFT,
+                        Work::STATUS_CHANGES_REQUESTED,
+                    ], true),
+                    'allowed_statuses' => [
+                        Work::STATUS_DRAFT,
+                        Work::STATUS_CHANGES_REQUESTED,
+                    ],
+                ],
+            ],
+            'message' => 'تم جلب مساحة تأليف العمل بنجاح',
+            'errors' => null,
+        ]);
+    }
 
     public function store(WorksDraftStoreRequest $request): JsonResponse
     {
@@ -132,7 +240,17 @@ class WorksAuthoringController extends Controller
     /** @return array<string, bool> */
     private function fieldAccess(User $actor): array
     {
+        return array_diff_key(
+            $this->authoringFieldAccess($actor),
+            ['can_create' => true],
+        );
+    }
+
+    /** @return array<string, bool> */
+    private function authoringFieldAccess(User $actor): array
+    {
         return [
+            'can_create' => $this->hasPermission($actor, 'admin.works.create'),
             'can_update_basic' => $this->hasPermission($actor, 'admin.works.update.basic'),
             'can_update_media' => $this->hasPermission($actor, 'admin.works.update.media'),
             'can_update_pricing' => $this->hasPermission($actor, 'admin.works.update.pricing'),

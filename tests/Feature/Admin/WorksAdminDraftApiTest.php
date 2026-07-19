@@ -8,7 +8,9 @@ use App\Http\Controllers\Api\Admin\WorksAuthoringController;
 use App\Models\AuditEvent;
 use App\Models\User;
 use App\Models\Work;
+use App\Models\WorkCategory;
 use App\Models\WorkSetting;
+use App\Models\WorkTag;
 use App\Services\Audit\AuditEventLogger;
 use App\Services\Works\WorksSettingsStore;
 use Carbon\Carbon;
@@ -572,10 +574,17 @@ class WorksAdminDraftApiTest extends TestCase
         $this->app->instance(WorksSettingsStore::class, $store);
         $this->actingAsRole('super-admin');
 
-        $this->postJson('/api/admin/works', ['title' => 'Single settings read'])
-            ->assertCreated();
+        $workId = $this->postJson('/api/admin/works', ['title' => 'Single settings read'])
+            ->assertCreated()
+            ->json('data.work.id');
 
         $this->assertSame(1, $store->calls);
+
+        $this->getJson('/api/admin/works/authoring/options')->assertOk();
+        $this->assertSame(2, $store->calls);
+
+        $this->getJson('/api/admin/works/'.$workId.'/authoring')->assertOk();
+        $this->assertSame(3, $store->calls);
     }
 
     public function test_partial_update_preserves_unsent_fields_and_slug(): void
@@ -958,6 +967,314 @@ class WorksAdminDraftApiTest extends TestCase
         $this->assertDatabaseCount('audit_events', 0);
     }
 
+    public function test_authoring_read_routes_resolve_and_reject_unsupported_methods(): void
+    {
+        $options = Route::getRoutes()->match(
+            Request::create('/api/admin/works/authoring/options', 'GET'),
+        );
+        $show = Route::getRoutes()->match(
+            Request::create('/api/admin/works/19/authoring', 'GET'),
+        );
+
+        $this->assertSame(WorksAuthoringController::class.'@options', $options->getActionName());
+        $this->assertSame(WorksAuthoringController::class.'@show', $show->getActionName());
+
+        $this->actingAsRole('super-admin');
+        $this->postJson('/api/admin/works/authoring/options')->assertMethodNotAllowed();
+        $this->patchJson('/api/admin/works/19/authoring')->assertMethodNotAllowed();
+    }
+
+    public function test_authoring_reads_require_authentication_and_reject_external_roles(): void
+    {
+        $work = Work::factory()->create();
+
+        $this->getJson('/api/admin/works/authoring/options')->assertUnauthorized();
+        $this->getJson($this->authoringEndpoint($work))->assertUnauthorized();
+
+        foreach (['client', 'designer'] as $role) {
+            $this->actingAsRole($role, $this->allAuthoringPermissions());
+            $this->getJson('/api/admin/works/authoring/options')->assertForbidden();
+            $this->getJson($this->authoringEndpoint($work))->assertForbidden();
+        }
+
+        Role::create(['name' => 'authoring-contractor', 'guard_name' => 'web']);
+        $this->actingAsRole('authoring-contractor', $this->allAuthoringPermissions());
+        $this->getJson('/api/admin/works/authoring/options')->assertForbidden();
+        $this->getJson($this->authoringEndpoint($work))->assertForbidden();
+    }
+
+    public function test_options_requires_access_and_create_or_update_but_show_rejects_create_only(): void
+    {
+        $work = Work::factory()->create();
+
+        $this->actingAsRole('admin', ['admin.works.create']);
+        $this->getJson('/api/admin/works/authoring/options')->assertForbidden();
+
+        $this->actingAsRole('admin', ['admin.works.access']);
+        $this->getJson('/api/admin/works/authoring/options')->assertForbidden();
+
+        $this->actingAsRole('admin', [
+            'admin.works.access',
+            'admin.works.create',
+        ]);
+        $this->getJson('/api/admin/works/authoring/options')->assertOk();
+        $this->getJson($this->authoringEndpoint($work))->assertForbidden();
+
+        $this->actingAsRole('staff', [
+            'admin.works.access',
+            'admin.works.update.basic',
+        ]);
+        $this->getJson('/api/admin/works/authoring/options')->assertOk();
+        $this->getJson($this->authoringEndpoint($work))->assertOk();
+    }
+
+    public function test_options_query_contract_is_strict_and_body_is_rejected(): void
+    {
+        $this->actingAsRole('super-admin');
+        $work = Work::factory()->create();
+
+        $this->getJson('/api/admin/works/authoring/options?unknown=1')
+            ->assertUnprocessable();
+        $this->getJson('/api/admin/works/authoring/options?q='.str_repeat('x', 81))
+            ->assertUnprocessable();
+        $this->getJson('/api/admin/works/authoring/options?q[term]=x')
+            ->assertUnprocessable();
+        $this->getJson('/api/admin/works/authoring/options?limit=1.5')
+            ->assertUnprocessable();
+        $this->getJson('/api/admin/works/authoring/options?limit=26')
+            ->assertUnprocessable();
+        $this->json('GET', '/api/admin/works/authoring/options', ['unexpected' => true])
+            ->assertUnprocessable();
+
+        $this->getJson('/api/admin/works/authoring/options?q=%20Designer%20&limit=1')
+            ->assertOk();
+
+        $this->getJson($this->authoringEndpoint($work).'?unknown=1')
+            ->assertUnprocessable();
+        $this->json('GET', $this->authoringEndpoint($work), ['unexpected' => true])
+            ->assertUnprocessable();
+    }
+
+    public function test_designer_options_are_role_scoped_ordered_limited_and_safe(): void
+    {
+        $second = User::factory()->create([
+            'name' => 'Zed Designer',
+            'email' => 'zed-designer@example.test',
+        ]);
+        $second->assignRole('designer');
+        $first = User::factory()->create([
+            'name' => 'Alpha Designer',
+            'email' => 'alpha-designer@example.test',
+        ]);
+        $first->assignRole('designer');
+
+        foreach (['admin', 'staff', 'client'] as $role) {
+            $user = User::factory()->create(['name' => 'Hidden '.$role]);
+            $user->assignRole($role);
+        }
+
+        $this->actingAsRole('admin', [
+            'admin.works.access',
+            'admin.works.update.designer',
+        ]);
+
+        $response = $this->getJson('/api/admin/works/authoring/options?limit=25')
+            ->assertOk()
+            ->assertJsonPath('data.designer_options.0.id', $first->id)
+            ->assertJsonPath('data.designer_options.1.id', $second->id);
+        $options = $response->json('data.designer_options');
+
+        $this->assertSame(['id', 'name'], array_keys($options[0]));
+        $this->assertStringNotContainsString(
+            'example.test',
+            json_encode($options, JSON_THROW_ON_ERROR),
+        );
+        $serializedOptions = json_encode($options, JSON_THROW_ON_ERROR);
+        foreach (['Hidden admin', 'Hidden staff', 'Hidden client'] as $hiddenName) {
+            $this->assertStringNotContainsString($hiddenName, $serializedOptions);
+        }
+        $this->assertCount(1, $this->getJson(
+            '/api/admin/works/authoring/options?q=Alpha&limit=25',
+        )->assertOk()->json('data.designer_options'));
+    }
+
+    public function test_options_hide_designers_without_designer_update_permission(): void
+    {
+        $this->designer();
+        $this->actingAsRole('admin', [
+            'admin.works.access',
+            'admin.works.create',
+        ]);
+
+        $this->getJson('/api/admin/works/authoring/options')
+            ->assertOk()
+            ->assertJsonPath('data.field_access.can_create', true)
+            ->assertJsonPath('data.field_access.can_update_designer', false)
+            ->assertJsonPath('data.designer_options', []);
+    }
+
+    public function test_options_field_access_and_policy_match_existing_authoring_contracts(): void
+    {
+        $this->setMediaLimits(7, 3072, ['image', 'gallery'], 13);
+        $this->actingAsRole('admin', [
+            'admin.works.access',
+            'admin.works.create',
+            'admin.works.update.basic',
+            'admin.works.update.media',
+            'admin.works.update.category',
+            'admin.works.taxonomy.view',
+            'admin.works.taxonomy.categories.view',
+        ]);
+
+        $options = $this->getJson('/api/admin/works/authoring/options')
+            ->assertOk()
+            ->json('data');
+        $created = $this->postJson('/api/admin/works', [
+            'title' => 'Policy comparison',
+            'media_type' => 'image',
+        ])->assertCreated()->json('data');
+
+        $this->assertSame($created['authoring_policy'], $options['authoring_policy']);
+        $this->assertSame(
+            ['can_create' => true, ...$created['field_access']],
+            $options['field_access'],
+        );
+    }
+
+    public function test_authoring_show_returns_protected_description_and_safe_allowlist(): void
+    {
+        $designer = $this->designer();
+        $work = Work::factory()->create([
+            'designer_id' => $designer->id,
+            'description' => 'Protected authoring description',
+            'internal_notes' => 'Private workspace note',
+            'change_request_notes' => 'Please adjust the ending.',
+            'rejection_reason' => 'Must never be exposed',
+            'reviewer_id' => User::factory()->create()->id,
+        ]);
+        $this->actingAsRole('admin', [
+            'admin.works.access',
+            'admin.works.update.basic',
+        ]);
+
+        $response = $this->getJson($this->authoringEndpoint($work))
+            ->assertOk()
+            ->assertJsonPath('data.work.description', 'Protected authoring description')
+            ->assertJsonPath('data.work.change_request_notes', 'Please adjust the ending.')
+            ->assertJsonPath('data.designer.id', $designer->id);
+        $workPayload = $response->json('data.work');
+
+        $this->assertArrayNotHasKey('internal_notes', $workPayload);
+        foreach ([
+            'rejection_reason',
+            'reviewer_id',
+            'views_count',
+            'likes_count',
+            'reports_count',
+            'disk',
+            'path',
+            'settings',
+        ] as $forbiddenKey) {
+            $this->assertArrayNotHasKey($forbiddenKey, $workPayload);
+        }
+        $this->assertArrayNotHasKey('email', $response->json('data.designer'));
+        $this->assertStringNotContainsString(
+            'Must never be exposed',
+            $response->getContent(),
+        );
+        $this->assertStringNotContainsString('review_sla_hours', $response->getContent());
+        $this->assertStringNotContainsString('"disk"', $response->getContent());
+        $this->assertStringNotContainsString('"path"', $response->getContent());
+    }
+
+    public function test_authoring_show_private_notes_follow_their_field_permission(): void
+    {
+        $work = Work::factory()->create(['internal_notes' => 'Visible to private editor']);
+
+        $this->actingAsRole('staff', [
+            'admin.works.access',
+            'admin.works.update.private_notes',
+        ]);
+
+        $this->getJson($this->authoringEndpoint($work))
+            ->assertOk()
+            ->assertJsonPath('data.work.internal_notes', 'Visible to private editor')
+            ->assertJsonPath('data.field_access.can_update_private_notes', true);
+    }
+
+    public function test_authoring_show_returns_taxonomy_ids_only_with_current_assignment_scope(): void
+    {
+        $category = WorkCategory::factory()->create();
+        $tag = WorkTag::factory()->create();
+        $work = Work::factory()->create(['category_id' => $category->id]);
+        $work->tags()->sync([$tag->id]);
+
+        $this->actingAsRole('admin', [
+            'admin.works.access',
+            'admin.works.update.basic',
+        ]);
+        $this->getJson($this->authoringEndpoint($work))
+            ->assertOk()
+            ->assertJsonPath('data.work.category_id', $category->id)
+            ->assertJsonPath('data.work.tag_ids', []);
+
+        $this->actingAsRole('admin', [
+            'admin.works.access',
+            'admin.works.update.basic',
+            'admin.works.taxonomy.view',
+            'admin.works.taxonomy.tags.view',
+        ]);
+        $this->getJson($this->authoringEndpoint($work))
+            ->assertOk()
+            ->assertJsonPath('data.work.category_id', $category->id)
+            ->assertJsonPath('data.work.tag_ids', [$tag->id]);
+    }
+
+    public function test_authoring_show_editable_state_reflects_work_status_without_blocking_read(): void
+    {
+        $this->actingAsRole('super-admin');
+
+        foreach ([
+            Work::STATUS_DRAFT => true,
+            Work::STATUS_CHANGES_REQUESTED => true,
+            Work::STATUS_SUBMITTED => false,
+            Work::STATUS_IN_REVIEW => false,
+            Work::STATUS_APPROVED => false,
+            Work::STATUS_PUBLISHED => false,
+            Work::STATUS_REJECTED => false,
+            Work::STATUS_HIDDEN => false,
+            Work::STATUS_ARCHIVED => false,
+        ] as $status => $editable) {
+            $work = Work::factory()->create(['status' => $status]);
+
+            $this->getJson($this->authoringEndpoint($work))
+                ->assertOk()
+                ->assertJsonPath('data.authoring_state.editable', $editable)
+                ->assertJsonPath('data.authoring_state.allowed_statuses', [
+                    Work::STATUS_DRAFT,
+                    Work::STATUS_CHANGES_REQUESTED,
+                ]);
+        }
+    }
+
+    public function test_authoring_show_missing_work_is_404_and_general_show_still_hides_description(): void
+    {
+        $this->actingAsRole('super-admin');
+        $work = Work::factory()->create([
+            'description' => 'Only authoring may reveal this description',
+        ]);
+
+        $this->getJson('/api/admin/works/999999999/authoring')
+            ->assertNotFound();
+        $general = $this->getJson($this->endpoint($work))
+            ->assertOk();
+
+        $this->assertStringNotContainsString(
+            'Only authoring may reveal this description',
+            $general->getContent(),
+        );
+    }
+
     /** @return list<string> */
     private function allAuthoringPermissions(): array
     {
@@ -970,6 +1287,8 @@ class WorksAdminDraftApiTest extends TestCase
             'admin.works.update.delivery',
             'admin.works.update.designer',
             'admin.works.update.private_notes',
+            'admin.works.update.category',
+            'admin.works.update.tags',
         ];
     }
 
@@ -1001,6 +1320,11 @@ class WorksAdminDraftApiTest extends TestCase
     private function endpoint(Work $work): string
     {
         return '/api/admin/works/'.$work->id;
+    }
+
+    private function authoringEndpoint(Work $work): string
+    {
+        return $this->endpoint($work).'/authoring';
     }
 
     private function globalSetting(): WorkSetting

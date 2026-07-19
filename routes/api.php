@@ -102,7 +102,10 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
     Route::patch('/works/{work}/taxonomy/tags', [AdminWorksTaxonomyAssignmentController::class, 'updateTags'])->whereNumber('work');
     Route::post('/works', [AdminWorksAuthoringController::class, 'store']);
     Route::patch('/works/{work}', [AdminWorksAuthoringController::class, 'update'])->whereNumber('work');
+    Route::get('/works/authoring/options', [AdminWorksAuthoringController::class, 'options']);
     Route::get('/works', [AdminWorksIndexController::class, 'index']);
+    Route::get('/works/{work}/authoring', [AdminWorksAuthoringController::class, 'show'])
+        ->whereNumber('work');
     Route::get('/works/{work}/media', [AdminWorksMediaController::class, 'index'])->whereNumber('work');
     Route::post('/works/{work}/media', [AdminWorksMediaController::class, 'store'])->whereNumber('work');
     Route::patch('/works/{work}/media/order', [AdminWorksMediaController::class, 'reorder'])
