@@ -15,6 +15,19 @@ use Illuminate\Http\JsonResponse;
 
 class WorksIndexController extends Controller
 {
+    /** @var array<string, string> */
+    private const DATE_SORT_COLUMNS = [
+        'created_at' => 'created_at',
+        'updated_at' => 'updated_at',
+        'submitted_at' => 'submitted_at',
+        'reviewed_at' => 'reviewed_at',
+        'approved_at' => 'approved_at',
+        'published_at' => 'published_at',
+        'rejected_at' => 'rejected_at',
+        'hidden_at' => 'hidden_at',
+        'archived_at' => 'archived_at',
+    ];
+
     public function index(WorksIndexRequest $request): JsonResponse
     {
         $viewer = $request->user();
@@ -43,48 +56,8 @@ class WorksIndexController extends Controller
             ? Carbon::parse((string) $validated['to'])->endOfDay()
             : null;
 
-        // نحدد الأعمدة والعلاقات صراحة حتى لا تتسرب الحقول الداخلية من النماذج.
-        $relations = [
-            'designer:id,name',
-            'reviewer:id,name',
-        ];
-
-        if ($taxonomyAccess['can_view_category']) {
-            $relations[] = 'category:id,name_ar,name_en,slug,disabled_at,sort_order';
-        }
-
-        if ($taxonomyAccess['can_view_tags']) {
-            $relations['tags'] = fn (BelongsToMany $query) => $query
-                ->select(['work_tags.id', 'name_ar', 'name_en', 'slug', 'disabled_at', 'sort_order'])
-                ->orderBy('sort_order')
-                ->orderBy('work_tags.id');
-        }
-
-        $works = Work::query()
-            ->select([
-                'id',
-                'title',
-                'slug',
-                'summary',
-                'status',
-                'visibility_status',
-                'media_type',
-                'price_amount',
-                'delivery_days',
-                'designer_id',
-                'reviewer_id',
-                'category_id',
-                'is_featured',
-                'is_pinned',
-                'reports_count',
-                'views_count',
-                'likes_count',
-                'submitted_at',
-                'published_at',
-                'updated_at',
-                'created_at',
-            ])
-            ->with($relations)
+        // تطبق جميع شروط النطاق مرة واحدة، ثم تنسخ للاستعلامات الرقمية والقائمة.
+        $filteredWorks = Work::query()
             ->when($queryText !== '', function (Builder $query) use ($queryText): void {
                 $query->where(function (Builder $searchQuery) use ($queryText): void {
                     $searchQuery
@@ -129,15 +102,90 @@ class WorksIndexController extends Controller
                 $query->where('reports_count', $reported ? '>' : '=', 0);
             })
             ->when($from !== null, fn (Builder $query) => $query->where('created_at', '>=', $from))
-            ->when($to !== null, fn (Builder $query) => $query->where('created_at', '<=', $to))
-            ->orderBy($sort, $direction)
+            ->when($to !== null, fn (Builder $query) => $query->where('created_at', '<=', $to));
+
+        $summary = [
+            'total_filtered' => (clone $filteredWorks)->count(),
+            'published_filtered' => (clone $filteredWorks)->where('status', 'published')->count(),
+            'review_cycle_filtered' => (clone $filteredWorks)
+                ->whereIn('status', ['submitted', 'in_review', 'changes_requested'])
+                ->count(),
+            'reported_filtered' => (clone $filteredWorks)->where('reports_count', '>', 0)->count(),
+        ];
+
+        // نحدد الأعمدة والعلاقات في نسخة العرض فقط حتى تبقى استعلامات العد خفيفة.
+        $relations = [
+            'designer:id,name',
+            'reviewer:id,name',
+        ];
+
+        if ($taxonomyAccess['can_view_category']) {
+            $relations[] = 'category:id,name_ar,name_en,slug,disabled_at,sort_order';
+        }
+
+        if ($taxonomyAccess['can_view_tags']) {
+            $relations['tags'] = fn (BelongsToMany $query) => $query
+                ->select(['work_tags.id', 'name_ar', 'name_en', 'slug', 'disabled_at', 'sort_order'])
+                ->orderBy('sort_order')
+                ->orderBy('work_tags.id');
+        }
+
+        $works = (clone $filteredWorks)
+            ->select([
+                'id',
+                'title',
+                'slug',
+                'summary',
+                'status',
+                'visibility_status',
+                'media_type',
+                'price_amount',
+                'delivery_days',
+                'designer_id',
+                'reviewer_id',
+                'category_id',
+                'is_featured',
+                'is_pinned',
+                'reports_count',
+                'views_count',
+                'likes_count',
+                'submitted_at',
+                'reviewed_at',
+                'approved_at',
+                'published_at',
+                'rejected_at',
+                'hidden_at',
+                'archived_at',
+                'updated_at',
+                'created_at',
+            ])
+            ->with($relations)
+            ->when(
+                isset(self::DATE_SORT_COLUMNS[$sort]),
+                function (Builder $query) use ($sort, $direction): void {
+                    $column = self::DATE_SORT_COLUMNS[$sort];
+
+                    $query
+                        ->orderByRaw("{$column} IS NULL ASC")
+                        ->orderBy($column, $direction);
+                },
+                fn (Builder $query) => $query->orderBy($sort, $direction),
+            )
             ->orderBy('id', $direction)
-            ->paginate($perPage)
+            ->paginate($perPage, ['*'], 'page', null, $summary['total_filtered'])
             ->through(fn (Work $work): array => $this->workPayload(
                 $work,
                 $taxonomyAccess['can_view_category'],
                 $taxonomyAccess['can_view_tags'],
             ));
+
+        $summary = [
+            'total_filtered' => $summary['total_filtered'],
+            'visible_on_page' => count($works->items()),
+            'published_filtered' => $summary['published_filtered'],
+            'review_cycle_filtered' => $summary['review_cycle_filtered'],
+            'reported_filtered' => $summary['reported_filtered'],
+        ];
 
         return response()->json([
             'success' => true,
@@ -149,6 +197,7 @@ class WorksIndexController extends Controller
                     'total' => $works->total(),
                     'last_page' => $works->lastPage(),
                 ],
+                'summary' => $summary,
                 'filters' => [
                     'q' => $queryText !== '' ? $queryText : null,
                     'status' => $validated['status'] ?? null,
@@ -213,7 +262,12 @@ class WorksIndexController extends Controller
             'views_count' => $work->views_count,
             'likes_count' => $work->likes_count,
             'submitted_at' => $work->submitted_at?->toJSON(),
+            'reviewed_at' => $work->reviewed_at?->toJSON(),
+            'approved_at' => $work->approved_at?->toJSON(),
             'published_at' => $work->published_at?->toJSON(),
+            'rejected_at' => $work->rejected_at?->toJSON(),
+            'hidden_at' => $work->hidden_at?->toJSON(),
+            'archived_at' => $work->archived_at?->toJSON(),
             'updated_at' => $work->updated_at?->toJSON(),
             'created_at' => $work->created_at?->toJSON(),
             'taxonomy' => $this->taxonomyPayload($work, $canViewCategory, $canViewTags),

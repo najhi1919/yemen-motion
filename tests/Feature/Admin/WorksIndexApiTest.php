@@ -114,6 +114,13 @@ class WorksIndexApiTest extends TestCase
                 'total' => 1,
                 'last_page' => 1,
             ])
+            ->assertJsonPath('data.summary', [
+                'total_filtered' => 1,
+                'visible_on_page' => 1,
+                'published_filtered' => 0,
+                'review_cycle_filtered' => 0,
+                'reported_filtered' => 0,
+            ])
             ->assertJsonPath('data.filters', [
                 'q' => null,
                 'status' => null,
@@ -134,10 +141,13 @@ class WorksIndexApiTest extends TestCase
         $item = $response->json('data.items.0');
 
         $this->assertSame([
+            'approved_at',
+            'archived_at',
             'category_id',
             'created_at',
             'delivery_days',
             'designer',
+            'hidden_at',
             'id',
             'is_featured',
             'is_pinned',
@@ -145,7 +155,9 @@ class WorksIndexApiTest extends TestCase
             'media_type',
             'price_amount',
             'published_at',
+            'rejected_at',
             'reports_count',
+            'reviewed_at',
             'reviewer',
             'slug',
             'status',
@@ -172,6 +184,114 @@ class WorksIndexApiTest extends TestCase
             'can_view_category' => true,
             'can_view_tags' => true,
         ], $response->json('data.taxonomy_access'));
+    }
+
+    public function test_summary_counts_the_full_filtered_result_while_visible_count_tracks_the_page(): void
+    {
+        $this->actingAsRole('super-admin');
+
+        foreach ([
+            ['status' => 'published', 'reports_count' => 0],
+            ['status' => 'published', 'reports_count' => 2],
+            ['status' => 'submitted', 'reports_count' => 0],
+            ['status' => 'in_review', 'reports_count' => 1],
+            ['status' => 'changes_requested', 'reports_count' => 0],
+            ['status' => 'draft', 'reports_count' => 0],
+        ] as $attributes) {
+            Work::factory()->create([...$attributes, 'media_type' => 'video']);
+        }
+
+        Work::factory()->create([
+            'media_type' => 'image',
+            'status' => 'published',
+            'reports_count' => 9,
+        ]);
+
+        $response = $this->getJson($this->endpoint([
+            'media_type' => 'video',
+            'per_page' => 2,
+            'page' => 2,
+        ]))
+            ->assertOk()
+            ->assertJsonCount(2, 'data.items')
+            ->assertJsonPath('data.pagination.total', 6)
+            ->assertJsonPath('data.summary', [
+                'total_filtered' => 6,
+                'visible_on_page' => 2,
+                'published_filtered' => 2,
+                'review_cycle_filtered' => 3,
+                'reported_filtered' => 2,
+            ]);
+
+        $this->assertSame(
+            $response->json('data.pagination.total'),
+            $response->json('data.summary.total_filtered'),
+        );
+        $this->assertSame(
+            count($response->json('data.items')),
+            $response->json('data.summary.visible_on_page'),
+        );
+    }
+
+    public function test_response_returns_all_safe_lifecycle_dates_as_json_or_null(): void
+    {
+        $this->actingAsRole('super-admin');
+        $datedWork = Work::factory()->create([
+            'submitted_at' => '2026-01-02 03:04:05',
+            'reviewed_at' => '2026-01-03 04:05:06',
+            'approved_at' => '2026-01-04 05:06:07',
+            'published_at' => '2026-01-05 06:07:08',
+            'rejected_at' => '2026-01-06 07:08:09',
+            'hidden_at' => '2026-01-07 08:09:10',
+            'archived_at' => '2026-01-08 09:10:11',
+            'created_at' => '2026-01-01 01:02:03',
+            'updated_at' => '2026-01-09 10:11:12',
+        ]);
+        $nullWork = Work::factory()->create([
+            'submitted_at' => null,
+            'reviewed_at' => null,
+            'approved_at' => null,
+            'published_at' => null,
+            'rejected_at' => null,
+            'hidden_at' => null,
+            'archived_at' => null,
+        ]);
+
+        $items = collect($this->getJson('/api/admin/works?per_page=50')
+            ->assertOk()
+            ->json('data.items'))
+            ->keyBy('id');
+        $datedWork = $datedWork->fresh();
+
+        foreach ([
+            'submitted_at',
+            'reviewed_at',
+            'approved_at',
+            'published_at',
+            'rejected_at',
+            'hidden_at',
+            'archived_at',
+            'updated_at',
+            'created_at',
+        ] as $dateField) {
+            $this->assertSame(
+                $datedWork->{$dateField}?->toJSON(),
+                $items[$datedWork->id][$dateField],
+                "Unexpected JSON value for {$dateField}.",
+            );
+        }
+
+        foreach ([
+            'submitted_at',
+            'reviewed_at',
+            'approved_at',
+            'published_at',
+            'rejected_at',
+            'hidden_at',
+            'archived_at',
+        ] as $nullableDateField) {
+            $this->assertNull($items[$nullWork->id][$nullableDateField]);
+        }
     }
 
     public function test_super_admin_receives_safe_category_and_ordered_active_and_disabled_tags(): void
@@ -331,7 +451,9 @@ class WorksIndexApiTest extends TestCase
             'password',
             'token',
             'cookie',
+            'disk',
             'metadata',
+            'path',
             'payload',
             'user',
             'users',
@@ -578,6 +700,51 @@ class WorksIndexApiTest extends TestCase
             [$high->id, $middle->id, $low->id],
             collect($response->json('data.items'))->pluck('id')->all(),
         );
+    }
+
+    public function test_all_date_columns_sort_in_both_directions_with_nulls_last_and_stable_id_tie_breaker(): void
+    {
+        $this->actingAsRole('super-admin');
+        $dateFields = [
+            'created_at',
+            'updated_at',
+            'submitted_at',
+            'reviewed_at',
+            'approved_at',
+            'published_at',
+            'rejected_at',
+            'hidden_at',
+            'archived_at',
+        ];
+        $older = Work::factory()->create(array_fill_keys($dateFields, '2026-01-01 10:00:00'));
+        $sameDateFirst = Work::factory()->create(array_fill_keys($dateFields, '2026-01-02 10:00:00'));
+        $sameDateSecond = Work::factory()->create(array_fill_keys($dateFields, '2026-01-02 10:00:00'));
+        $nullDate = Work::factory()->create();
+        Work::withoutTimestamps(
+            fn () => $nullDate->update(array_fill_keys($dateFields, null)),
+        );
+
+        foreach ($dateFields as $dateField) {
+            foreach (['asc', 'desc'] as $direction) {
+                $response = $this->getJson($this->endpoint([
+                    'sort' => $dateField,
+                    'direction' => $direction,
+                    'per_page' => 50,
+                ]))->assertOk()
+                    ->assertJsonPath('data.filters.sort', $dateField)
+                    ->assertJsonPath('data.filters.direction', $direction);
+
+                $expectedIds = $direction === 'asc'
+                    ? [$older->id, $sameDateFirst->id, $sameDateSecond->id, $nullDate->id]
+                    : [$sameDateSecond->id, $sameDateFirst->id, $older->id, $nullDate->id];
+
+                $this->assertSame(
+                    $expectedIds,
+                    collect($response->json('data.items'))->pluck('id')->all(),
+                    "Unexpected {$direction} order for {$dateField}.",
+                );
+            }
+        }
     }
 
     public function test_pagination_accepts_fifty_and_rejects_values_above_the_limit(): void

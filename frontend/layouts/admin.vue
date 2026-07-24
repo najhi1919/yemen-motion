@@ -56,21 +56,30 @@ const syncMobileSidebar = () => {
   }
 }
 
+const closeMobileSidebarOnEscape = (event: KeyboardEvent) => {
+  if (event.key === 'Escape' && mobileSidebarQuery?.matches && !sidebarCollapsed.value) {
+    sidebarCollapsed.value = true
+  }
+}
+
 onMounted(() => {
   mobileSidebarQuery = window.matchMedia('(max-width: 768px)')
   syncMobileSidebar()
   mobileSidebarQuery.addEventListener('change', syncMobileSidebar)
+  window.addEventListener('keydown', closeMobileSidebarOnEscape)
 })
 
 onBeforeUnmount(() => {
   mobileSidebarQuery?.removeEventListener('change', syncMobileSidebar)
+  window.removeEventListener('keydown', closeMobileSidebarOnEscape)
 })
 </script>
 
 <style>
 .ym-dashboard-shell {
-  --ym-sidebar-width: 288px;
+  --ym-sidebar-expanded-width: 288px;
   --ym-sidebar-collapsed-width: 96px;
+  --ym-sidebar-current-width: var(--ym-sidebar-expanded-width);
   --ym-text: #f0f6ff;
   --ym-muted: rgba(226, 232, 240, 0.92);
   --ym-shell-surface: linear-gradient(135deg, rgba(15, 23, 42, 0.88), rgba(30, 41, 59, 0.74));
@@ -102,6 +111,10 @@ onBeforeUnmount(() => {
   color: var(--ym-text);
   -webkit-font-smoothing: antialiased;
   text-rendering: geometricPrecision;
+}
+
+.ym-dashboard-shell.is-sidebar-collapsed {
+  --ym-sidebar-current-width: var(--ym-sidebar-collapsed-width);
 }
 
 .ym-dashboard-light {
@@ -139,22 +152,9 @@ onBeforeUnmount(() => {
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
-}
-
-.ym-dashboard-rtl .ym-dashboard-content {
-  margin-right: var(--ym-sidebar-width);
-}
-
-.ym-dashboard-ltr .ym-dashboard-content {
-  margin-left: var(--ym-sidebar-width);
-}
-
-.ym-dashboard-rtl.is-sidebar-collapsed .ym-dashboard-content {
-  margin-right: var(--ym-sidebar-collapsed-width);
-}
-
-.ym-dashboard-ltr.is-sidebar-collapsed .ym-dashboard-content {
-  margin-left: var(--ym-sidebar-collapsed-width);
+  inline-size: calc(100% - var(--ym-sidebar-current-width));
+  margin-inline-start: var(--ym-sidebar-current-width);
+  transition: inline-size 220ms ease, margin-inline-start 220ms ease;
 }
 
 .ym-dashboard-main {
@@ -176,10 +176,13 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 768px) {
+  .ym-dashboard-shell {
+    --ym-sidebar-current-width: 0px;
+  }
+
   .ym-dashboard-content {
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-    width: 100%;
+    inline-size: 100%;
+    margin-inline-start: 0;
   }
 
   .ym-dashboard-main {

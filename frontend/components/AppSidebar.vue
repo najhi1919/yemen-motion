@@ -3,7 +3,7 @@
     :class="[
       'ym-sidebar flex flex-col overflow-hidden transition-all duration-300 ease-out',
       props.theme === 'light' ? 'ym-sidebar--light' : 'ym-sidebar--dark',
-      props.collapsed ? 'ym-sidebar--collapsed w-[96px]' : 'ym-sidebar--expanded w-72',
+      props.collapsed ? 'ym-sidebar--collapsed' : 'ym-sidebar--expanded',
       currentLocale === 'ar' ? 'ym-sidebar--right' : 'ym-sidebar--left'
     ]"
   >
@@ -439,12 +439,14 @@ function hideSidebarTooltip(): void {
   bottom: 0;
   z-index: 50;
   height: 100dvh;
+  width: var(--ym-sidebar-current-width);
   color: rgba(241, 245, 249, 0.92);
   will-change: width;
+  transition: width 220ms ease, transform 220ms ease;
 }
 
 .ym-sidebar--collapsed {
-  z-index: 9999;
+  z-index: 50;
 }
 
 .ym-sidebar--right {
@@ -453,6 +455,12 @@ function hideSidebarTooltip(): void {
 
 .ym-sidebar--left {
   left: 0;
+}
+
+@media (max-width: 768px) {
+  .ym-sidebar {
+    width: var(--ym-sidebar-expanded-width);
+  }
 }
 
 .ym-sidebar--dark {

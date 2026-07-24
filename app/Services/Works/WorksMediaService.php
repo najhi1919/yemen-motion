@@ -489,7 +489,7 @@ class WorksMediaService
             ]);
         }
 
-        $maxFileSizeKb = $this->mediaLimits($settings)['max_file_size_kb'];
+        $maxFileSizeKb = $this->effectiveMaxFileSizeKb($settings);
 
         if (is_int($maxFileSizeKb) && $sizeBytes > ($maxFileSizeKb * 1024)) {
             throw ValidationException::withMessages([
@@ -612,6 +612,7 @@ class WorksMediaService
     private function mediaPolicy(Work $work, array $settings): array
     {
         $limits = $this->mediaLimits($settings);
+        $effectiveMaxFileSizeKb = $this->effectiveMaxFileSizeKb($settings);
 
         return [
             'source' => 'work_settings',
@@ -626,8 +627,9 @@ class WorksMediaService
             ],
             'effective_limits' => [
                 'max_items' => $this->effectiveMaxItems($work->media_type, $settings),
-                'max_file_size_kb' => $limits['max_file_size_kb'],
+                'max_file_size_kb' => $effectiveMaxFileSizeKb,
             ],
+            'effective_max_file_size_kb' => $effectiveMaxFileSizeKb,
             'enforcement' => [
                 'media_type' => true,
                 'max_items' => true,
@@ -754,6 +756,78 @@ class WorksMediaService
         return $mediaType === Work::MEDIA_TYPE_GALLERY && is_int($configuredMax)
             ? $configuredMax
             : null;
+    }
+
+    /** @param array<string, mixed> $settings */
+    private function effectiveMaxFileSizeKb(array $settings): ?int
+    {
+        $limits = array_filter([
+            $this->mediaLimits($settings)['max_file_size_kb'],
+            $this->phpIniSizeKb('upload_max_filesize'),
+            $this->safePostMaxSizeKb(),
+            $this->configuredTransportMaxKb(),
+        ], static fn (mixed $limit): bool => is_int($limit) && $limit > 0);
+
+        return $limits === [] ? null : min($limits);
+    }
+
+    private function safePostMaxSizeKb(): ?int
+    {
+        $postMaxKb = $this->phpIniSizeKb('post_max_size');
+
+        if ($postMaxKb === null) {
+            return null;
+        }
+
+        $multipartMarginKb = min(
+            1024,
+            max(64, (int) ceil($postMaxKb * 0.01)),
+        );
+
+        return max(1, $postMaxKb - $multipartMarginKb);
+    }
+
+    private function configuredTransportMaxKb(): ?int
+    {
+        $value = config('works-media.transport_max_kb');
+
+        if (is_int($value)) {
+            return $value > 0 ? $value : null;
+        }
+
+        if (is_string($value) && ctype_digit($value)) {
+            $parsed = (int) $value;
+
+            return $parsed > 0 ? $parsed : null;
+        }
+
+        return null;
+    }
+
+    private function phpIniSizeKb(string $key): ?int
+    {
+        $value = trim((string) ini_get($key));
+
+        if ($value === '' || $value === '-1' || $value === '0') {
+            return null;
+        }
+
+        if (! preg_match('/^(\d+(?:\.\d+)?)\s*([kmgt]?)$/i', $value, $matches)) {
+            return null;
+        }
+
+        $number = (float) $matches[1];
+        $unit = strtolower($matches[2]);
+        $multiplier = match ($unit) {
+            't' => 1024 ** 3,
+            'g' => 1024 ** 2,
+            'm' => 1024,
+            'k' => 1,
+            default => 1 / 1024,
+        };
+        $kilobytes = (int) floor($number * $multiplier);
+
+        return $kilobytes > 0 ? $kilobytes : null;
     }
 
     /** @param array<string, mixed> $settings */

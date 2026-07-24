@@ -4,6 +4,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Auth\AuthenticationException;
+use Illuminate\Http\Exceptions\PostTooLargeException;
 use Illuminate\Http\Request;
 use App\Http\Middleware\RecordAccessDeniedAuditEvent;
 
@@ -36,6 +37,21 @@ return Application::configure(basePath: dirname(__DIR__))
                     'data' => null,
                     'errors' => null,
                 ], 401);
+            }
+
+            return null;
+        });
+
+        $exceptions->render(function (PostTooLargeException $e, Request $request) {
+            if ($request->is('api/*')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'حجم محتوى الطلب أكبر من الحد المسموح.',
+                    'data' => null,
+                    'errors' => [
+                        'file' => ['حجم الملف أكبر من الحد المسموح للرفع.'],
+                    ],
+                ], 413);
             }
 
             return null;

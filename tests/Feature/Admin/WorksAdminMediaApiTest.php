@@ -15,6 +15,7 @@ use App\Services\Works\WorksSettingsStore;
 use Carbon\Carbon;
 use Database\Seeders\AuthRolesSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Exceptions\PostTooLargeException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
@@ -104,6 +105,24 @@ class WorksAdminMediaApiTest extends TestCase
         $this->getJson($this->reorderEndpoint($work))->assertMethodNotAllowed();
         $this->postJson($this->reorderEndpoint($work))->assertMethodNotAllowed();
         $this->putJson($this->coverEndpoint($work), [])->assertMethodNotAllowed();
+    }
+
+    public function test_post_too_large_exception_returns_safe_json_for_api_requests(): void
+    {
+        Route::post('/api/test/works-media-post-too-large', static function (): never {
+            throw new PostTooLargeException();
+        });
+
+        $this->postJson('/api/test/works-media-post-too-large')
+            ->assertStatus(413)
+            ->assertExactJson([
+                'success' => false,
+                'message' => 'حجم محتوى الطلب أكبر من الحد المسموح.',
+                'data' => null,
+                'errors' => [
+                    'file' => ['حجم الملف أكبر من الحد المسموح للرفع.'],
+                ],
+            ]);
     }
 
     public function test_all_media_routes_require_authentication(): void
@@ -500,7 +519,7 @@ class WorksAdminMediaApiTest extends TestCase
         ], ['Accept' => 'application/json'])->assertCreated();
     }
 
-    public function test_max_file_size_is_applied_and_null_adds_no_settings_limit(): void
+    public function test_max_file_size_is_applied_and_null_policy_uses_transport_limit(): void
     {
         $this->actingAsRole('super-admin');
         $this->setMediaLimits(null, 1, null, 3);
@@ -511,12 +530,36 @@ class WorksAdminMediaApiTest extends TestCase
         ], ['Accept' => 'application/json'])->assertUnprocessable();
 
         $this->setMediaLimits(null, null, null, 4);
+        config()->set('works-media.transport_max_kb', 512);
         $unlimited = $this->work();
         $this->post($this->mediaEndpoint($unlimited), [
-            'file' => UploadedFile::fake()->image('larger.jpg')->size(2048),
+            'file' => UploadedFile::fake()->image('larger.jpg')->size(256),
         ], ['Accept' => 'application/json'])
             ->assertCreated()
-            ->assertJsonPath('data.media_policy.effective_limits.max_file_size_kb', null);
+            ->assertJsonPath('data.media_policy.effective_limits.max_file_size_kb', 512)
+            ->assertJsonPath('data.media_policy.effective_max_file_size_kb', 512);
+    }
+
+    public function test_effective_file_limit_uses_lowest_known_limit_and_rejects_larger_file(): void
+    {
+        $this->actingAsRole('super-admin');
+        config()->set('works-media.transport_max_kb', 128);
+        $this->setMediaLimits(null, 256, null, 5);
+        $work = $this->work();
+
+        $this->getJson($this->mediaEndpoint($work))
+            ->assertOk()
+            ->assertJsonPath('data.media_policy.configured_limits.max_file_size_kb', 256)
+            ->assertJsonPath('data.media_policy.effective_limits.max_file_size_kb', 128)
+            ->assertJsonPath('data.media_policy.effective_max_file_size_kb', 128);
+
+        $this->post($this->mediaEndpoint($work), [
+            'file' => UploadedFile::fake()->image('too-large.jpg')->size(129),
+        ], ['Accept' => 'application/json'])
+            ->assertUnprocessable()
+            ->assertJsonStructure([
+                'errors' => ['file'],
+            ]);
     }
 
     public function test_image_and_video_have_effective_limit_one_and_soft_deleted_rows_do_not_count(): void
@@ -588,7 +631,7 @@ class WorksAdminMediaApiTest extends TestCase
     public function test_media_policy_is_exact_allowlisted_and_handles_null_media_type(): void
     {
         $this->actingAsRole('super-admin');
-        $this->setMediaLimits(12, 51200, ['image', 'gallery'], 3);
+        $this->setMediaLimits(12, 1024, ['image', 'gallery'], 3);
         $work = $this->work(['media_type' => Work::MEDIA_TYPE_GALLERY]);
 
         $policy = $this->getJson($this->mediaEndpoint($work))
@@ -604,12 +647,13 @@ class WorksAdminMediaApiTest extends TestCase
             'allowed_mime_types' => ['image/jpeg', 'image/png', 'image/webp'],
             'configured_limits' => [
                 'max_items' => 12,
-                'max_file_size_kb' => 51200,
+                'max_file_size_kb' => 1024,
             ],
             'effective_limits' => [
                 'max_items' => 12,
-                'max_file_size_kb' => 51200,
+                'max_file_size_kb' => 1024,
             ],
+            'effective_max_file_size_kb' => 1024,
             'enforcement' => [
                 'media_type' => true,
                 'max_items' => true,
@@ -618,12 +662,15 @@ class WorksAdminMediaApiTest extends TestCase
             ],
         ], $policy);
 
+        config()->set('works-media.transport_max_kb', 512);
         $nullPolicy = $this->getJson($this->mediaEndpoint(
             $this->work(['media_type' => null]),
         ))->assertOk()->json('data.media_policy');
         $this->assertSame([], $nullPolicy['allowed_file_kinds']);
         $this->assertSame([], $nullPolicy['allowed_mime_types']);
         $this->assertNull($nullPolicy['effective_limits']['max_items']);
+        $this->assertSame(512, $nullPolicy['effective_limits']['max_file_size_kb']);
+        $this->assertSame(512, $nullPolicy['effective_max_file_size_kb']);
         $this->assertStringNotContainsString(
             'review_sla_hours',
             json_encode($policy, JSON_THROW_ON_ERROR),
