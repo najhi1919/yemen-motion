@@ -1,6 +1,6 @@
 # PROJECT_MAP — يمن موشن (Yemen Motion)
 
-> آخر تحديث: 2026-07-18
+> آخر تحديث: 2026-07-24
 > البيئة: PHP 8.4.21 / Node 24.15.0 / Composer 2.9.4  
 > OS: Linux  
 > **المرجع المعماري والبنائي الرسمي — الإصدار النهائي 2.0**  
@@ -8,7 +8,7 @@
 
 ---
 
-## 0. CURRENT IMPLEMENTATION STATUS — 2026-07-18
+## 0. CURRENT IMPLEMENTATION STATUS — 2026-07-24
 
 > هذا القسم يصف موضع التنفيذ الحالي فقط، ولا يغيّر المواصفات المعمارية أو خطة البناء الأصلية في هذا الملف.
 
@@ -21,9 +21,9 @@
 
 آخر نقطة مستقرة موثقة:
 
-- `1afc3ed feat: apply works direct publish trust`
+- `d10fc37 feat: complete admin works all management workspace`
 
-هذه النقطة موجودة على `main` ومدفوعة إلى `origin/main`، وهي آخر baseline نظيف ومتزامن ومعتمد. تغلق التكامل التشغيلي لثقة النشر المباشر، وتأتي بعد تكامل مهلة المراجعة وإدارة إعدادات Works الدائمة. لا يعني هذا الإغلاق اكتمال منظومة Settings بالكامل أو اكتمال منصة Works العامة؛ وتبقى حدود التنفيذ موضحة في الأقسام `0.31` إلى `0.33`.
+هذه نقطة التنفيذ البرمجي المستقرة لمحطة كل الأعمال والأقسام الإدارية التابعة لها. كانت موجودة على `main` محليًا أثناء إعداد هذا التوثيق، وسيتم رفعها مع تثبيت التوثيق بعد اكتمال مهمة الإغلاق. لا يعني هذا الإغلاق اكتمال Public Works Platform؛ وتبقى الحدود الدقيقة موضحة في القسم `0.34`.
 
 ### 0.3 Completed UI Foundation Work
 
@@ -1768,7 +1768,11 @@ Final baseline: clean and synchronized after a9354d4
 
 مكتمل ومغلق:
 
-- Works Core read/index/show.
+- Internal Admin Works list/index/details.
+- Internal Admin Draft Creation.
+- Internal Admin Work Editing.
+- Internal Taxonomy Assignment.
+- Internal Protected Media Management.
 - Reports.
 - Taxonomy.
 - Individual Taxonomy Assignment.
@@ -1787,12 +1791,11 @@ Final baseline: clean and synchronized after a9354d4
 
 غير مبني ويبقى ضمن Roadmap:
 
-- General Works CRUD وإنشاء وتعديل محتوى الأعمال ووسائطه.
-- Public Works experience.
+- Public Works CRUD experience.
+- Public Works experience and publishing experience.
 - Client Works experience.
 - Designer Works experience.
 - Report creation UI.
-- Media Limits operational integration.
 - Workflow mutation.
 - Topbar Works search.
 - Comments and likes.
@@ -2059,12 +2062,12 @@ Final baseline: clean and synchronized after 1afc3ed
 مكتمل جزئيًا:
 
 - Overall Works Settings.
-- Media Limits integration: التخزين والإدارة مكتملان، والتطبيق التشغيلي مؤجل.
+- Media Limits integration: كان التخزين والإدارة فقط مكتملين عند هذا baseline، ثم اكتمل التطبيق التشغيلي للرفع كما يوثق القسم `0.34`.
 - Workflow management: العرض الوصفي موجود، وMutation غير مبنية.
 
-غير مبني أو مؤجل:
+كان غير مبني أو مؤجل عند هذا baseline:
 
-- تطبيق `media_limits` على إنشاء/تعديل/رفع وسائط الأعمال.
+- تطبيق `media_limits` على رفع وسائط الأعمال؛ اكتمل لاحقًا ضمن القسم `0.34`.
 - Workflow mutation UI/API.
 - Dynamic workflow configuration.
 
@@ -2072,16 +2075,190 @@ Final baseline: clean and synchronized after 1afc3ed
 
 تبقى العناصر التالية ضمن Roadmap دون تحديد المرحلة التنفيذية التالية:
 
-- Media Limits operational integration.
 - Workflow mutation.
-- General Works CRUD.
 - Public/client/designer Works experience.
 - Report creation.
 - Topbar Works search.
 - Comments and likes.
 - Public engagement features.
 
-اكتملت إدارة الإعدادات الدائمة وتكامل سياستي مهلة المراجعة والنشر المباشر، ولا يعني ذلك اكتمال جميع إعدادات الأعمال أو منصة Works العامة.
+اكتملت إدارة الإعدادات الدائمة وتكامل سياستي مهلة المراجعة والنشر المباشر عند هذا baseline. اكتمل لاحقًا التطبيق التشغيلي الآمن لحدود رفع الوسائط ومساحة التأليف الإدارية كما يوثق القسم `0.34`، دون أن يعني ذلك اكتمال جميع إعدادات الأعمال أو منصة Works العامة.
+
+---
+
+### 0.34 Completed Admin Works All Management and Authoring Workspace — 2026-07-24
+
+Task ID:
+
+```text
+YM-WORKS-ALL-CLOSURE-DOCS-BASELINE-001
+```
+
+Implementation Baseline:
+
+```text
+d10fc37 feat: complete admin works all management workspace
+```
+
+هذا الإغلاق يثبت محطة الإدارة الداخلية لكل الأعمال ومساحات التفاصيل والتأليف والوسائط التابعة لها. لا يعلن اكتمال Public Works Platform أو تجارب العميل والمصمم.
+
+#### Closure Scope
+
+يشمل الإغلاق:
+
+- `/admin/works/all`.
+- إنشاء مسودة إدارية.
+- تحرير العمل إداريًا.
+- عرض التفاصيل.
+- إدارة التصنيف والوسوم.
+- إدارة الوسائط المحمية.
+
+لا يشمل:
+
+- Public Works Platform.
+- Client Works experience.
+- Designer Works experience.
+- Comments and likes.
+- Public engagement.
+- Public publishing experience الكاملة.
+- Review Requests station audit الجديد.
+- Visibility station audit الجديد.
+- Workflow mutation الكامل.
+- بقية Settings غير المكتملة.
+
+#### Smart Works Index
+
+- تعيد قائمة الأعمال `summary` حقيقيًا من الاستعلام المفلتر نفسه، مع تطابق `total_filtered` مع `pagination.total` و`visible_on_page` مع عناصر الصفحة.
+- تدعم البحث والفلاتر المختصرة وحقول التاريخ الآمنة ومؤشرات التفاعل وفرز الخادم الحتمي.
+- تطبق nulls last وتحافظ على Pagination متزامن مع البيانات.
+- تمنع response races من استبدال الحالة الأحدث باستجابة قديمة.
+- تعرض جدول Desktop دون تمرير أفقي، وبطاقات منظمة على Tablet وMobile.
+- تستخدم الأرقام اللاتينية عبر أداة تنسيق مركزية.
+
+#### Unified Drawers
+
+- يشترك عرض التفاصيل وإدارة التصنيف والوسوم في `WorksDrawerShell`.
+- يعرض `WorksDetailsDrawer` بيانات العمل بحسب الصلاحيات.
+- يحافظ `WorksTaxonomyAssignmentDrawer` على عقود البحث والحفظ الحالية.
+- تستخدم اللوحات `Teleport` وتغطي طبقات Top Bar وSidebar بصورة آمنة.
+- تدعم Focus Trap وإعادة التركيز والإغلاق بلوحة المفاتيح.
+- تحمي التغييرات غير المحفوظة.
+- تسمح بالانتقال من التفاصيل إلى التصنيف ثم العودة دون تكديس لوحتين.
+
+#### Admin Authoring
+
+- تستخدم صفحات الإنشاء والتحرير `WorksAuthoringWorkspace` المشترك.
+- تدعم إنشاء المسودة وتحرير البيانات الأساسية وفق الصلاحيات والحقول المتاحة.
+- تعرض Stepper في الإنشاء وSection Navigation في التحرير.
+- توفر Sticky Action Bar وحالات dirty وsaving وsaved وerror.
+- تحافظ على optimistic conflict handling وحالة read-only.
+- يبقى حفظ بيانات العمل مستقلًا عن حفظ Taxonomy وMedia.
+
+#### Protected Media Management
+
+- يحافظ الرفع على عقد ملف واحد لكل طلب.
+- تستخدم المعاينة protected content endpoint وعناوين Blob محلية، دون public storage URLs.
+- تنظف دورة حياة Blob URLs عند الاستبدال والإزالة وإلغاء التركيب.
+- تدعم معاينة الصور والفيديو، وsingle media mode، وgallery mode، وPreview Lightbox.
+- تعرض original filename مع دعم أسماء الملفات ثنائية الاتجاه.
+- تدعم تعيين الغلاف وإزالته بحسب العقد والصلاحية.
+- تقدم الحذف المنطقي للمستخدم باسم «إزالة من العمل».
+- تحافظ على الترتيب الآمن مع بدائل لوحة المفاتيح.
+- لا تعرض raw paths أوDisk names أوروابط تخزين عامة.
+
+#### Effective Upload Limits
+
+- يجمع الحد الفعلي بين configured media policy limit و`upload_max_filesize` و`post_max_size`.
+- يطبق هامش Multipart آمنًا على `post_max_size`.
+- يدعم الإعداد الاختياري `WORKS_MEDIA_TRANSPORT_MAX_KB` لسقف Reverse Proxy أوIngress المعروف.
+- يعيد العقد `effective_max_file_size_kb` دون كشف أسماء إعدادات البنية للمستخدم.
+- تمنع الواجهة الملفات غير الصالحة قبل إرسال الطلب.
+- تعالج استجابة HTTP `413` بصيغة JSON آمنة ورسالة مترجمة.
+- لا يرفع التنفيذ حدود PHP أوالخادم تلقائيًا.
+
+كانت القيمة المكتشفة في بيئة الفحص الحالية `99 MB` عندما كانت:
+
+```text
+upload_max_filesize=100M
+post_max_size=100M
+```
+
+هذه ليست حقيقة إنتاجية عالمية؛ فالحد النهائي ديناميكي حسب سياسة العمل وبيئة التشغيل وسقف النقل المعروف.
+
+#### Authorization and Security Boundaries
+
+- يبقى Backend المصدر الموثوق للقرارات.
+- حُفظت field-level permissions والصلاحيات الحالية.
+- لم تتغير Auth أوStorage Driver.
+- لا توجد public media URLs أوraw storage paths.
+- لا تعرض الواجهة Tokens أوCookies.
+- تستخدم المعاينات protected endpoints.
+- حُفظ سلوك الحالات `401` و`403` و`409` و`413` و`422`.
+
+#### Verification Evidence
+
+النتائج التالية نتائج تحقق سابقة مقدمة ضمن تقارير التنفيذ والفحص اليدوي، وليست فحوصات أعاد وكيل الإغلاق تشغيلها:
+
+```text
+Frontend Build: Build complete
+WorksAdminMediaApiTest: 57 tests / 583 assertions
+WorksIndexApiTest: 37 tests / 287 assertions
+Final manual visual QA: Passed with low non-blocking notes
+```
+
+شمل الفحص البصري السابق:
+
+- Arabic RTL.
+- English LTR.
+- Desktop.
+- Tablet.
+- Mobile.
+- Details Drawer.
+- Taxonomy Drawer.
+- Create.
+- Edit.
+- Media Manager.
+- Preview Lightbox.
+
+كما نجح `git diff --check` في الجولات السابقة.
+
+#### Known Non-blocking Notes
+
+- توجد كثافة منخفضة الأولوية في النصوص الثانوية لبعض الجداول.
+- يمكن ضغط ارتفاع منطقة الفلاتر والفرز على الهاتف مستقبلًا.
+- بقيت تحذيرات Build العامة المعروفة: `authStore` mixed static/dynamic import، وchunk size، وsourcemap.
+- تكرار العناصر الثابتة داخل بعض Full-page screenshots أثر من أداة الالتقاط، وليس انحدارًا مثبتًا.
+
+هذه الملاحظات ليست Blockers.
+
+#### Current Works Status
+
+مكتمل ومغلق:
+
+- Internal Admin Works list/index/details.
+- Internal Admin Draft Creation.
+- Internal Admin Work Editing.
+- Internal Taxonomy Assignment.
+- Internal Protected Media Management.
+
+يبقى غير مبني أوغير مغلق:
+
+- Public Works CRUD experience.
+- Client Works experience.
+- Designer Works experience.
+- Public engagement.
+- بقية المحطات الإدارية التي لم تخضع بعد لتدقيق محطة منفصل.
+
+#### Recommended Next Station
+
+التوصية غير الملزمة:
+
+```text
+Admin Works Review Requests Station
+/admin/works/review
+```
+
+الهدف هو مراجعة محطة طلبات المراجعة بصريًا ووظيفيًا بصورة مستقلة. تبدأ فقط بعد تأكيد المستخدم، ولا تدخل ضمن إغلاق كل الأعمال.
 
 ---
 
