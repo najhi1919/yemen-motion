@@ -17,7 +17,18 @@ use Illuminate\Notifications\Notifiable;
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-	use HasFactory, HasApiTokens, Notifiable, HasRoles;
+    use HasFactory, HasApiTokens, Notifiable, HasRoles;
+
+    public static function superAdminRoleName(): string
+    {
+        return (string) config('yemen-motion-permissions.super_admin_role', 'super-admin');
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->hasRole(self::superAdminRoleName());
+    }
+
     /**
      * Get the attributes that should be cast.
      *

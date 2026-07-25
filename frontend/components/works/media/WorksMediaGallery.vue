@@ -42,7 +42,18 @@
         <span class="ym-media-thumb__details">
             <strong dir="auto" :title="item.original_name">{{ item.original_name }}</strong>
           <small>{{ kindLabel(item.kind) }} · {{ formatSize(item.size_bytes) }}</small>
-          <small>{{ processingLabel(item.processing_status, Boolean(previewUrls[item.id])) }}</small>
+          <small>{{ processingLabel(item) }}</small>
+          <span
+            v-if="item.kind === 'video' && item.processing_status === 'pending'"
+            class="ym-media-thumb__processing"
+            role="progressbar"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            :aria-valuenow="safeProgress(item.processing_progress)"
+            :aria-label="processingLabel(item)"
+          >
+            <i :style="{ inlineSize: `${safeProgress(item.processing_progress)}%` }" />
+          </span>
         </span>
       </button>
 
@@ -77,6 +88,8 @@ interface MediaItem {
   original_name: string
   size_bytes: number
   processing_status: 'pending' | 'ready' | 'failed'
+  processing_stage: 'queued' | 'validating' | 'probing' | 'extracting_metadata' | 'generating_poster' | 'finalizing' | 'ready' | 'failed'
+  processing_progress: number
   is_cover: boolean
 }
 
@@ -128,19 +141,79 @@ function kindLabel(kind: MediaItem['kind']): string {
   return kind === 'image' ? 'صورة' : 'فيديو'
 }
 
-function processingLabel(status: MediaItem['processing_status'], previewAvailable: boolean): string {
+function processingLabel(item: MediaItem): string {
+  const status = item.processing_status
+  const previewAvailable = Boolean(props.previewUrls[item.id])
   if (props.locale === 'en') {
     if (status === 'ready') return 'Ready'
-    if (status === 'pending') return previewAvailable ? 'Processing — initial preview available' : 'Processing'
+    if (status === 'pending') {
+      const stage = processingStageLabel(item.processing_stage)
+      return previewAvailable ? `${stage} — initial preview available` : stage
+    }
     return 'Processing failed'
   }
   if (status === 'ready') return 'جاهز'
-  if (status === 'pending') return previewAvailable ? 'قيد المعالجة — المعاينة الأولية متاحة' : 'قيد المعالجة'
+  if (status === 'pending') {
+    const stage = processingStageLabel(item.processing_stage)
+    return previewAvailable ? `${stage} — المعاينة الأولية متاحة` : stage
+  }
   return 'فشلت المعالجة'
+}
+
+function processingStageLabel(stage: MediaItem['processing_stage']): string {
+  const labels = props.locale === 'ar' ? {
+    queued: 'في طابور المعالجة',
+    validating: 'جارٍ التحقق من الملف',
+    probing: 'جارٍ قراءة بيانات الفيديو',
+    extracting_metadata: 'جارٍ حفظ بيانات الفيديو',
+    generating_poster: 'جارٍ إنشاء صورة المعاينة',
+    finalizing: 'جارٍ إنهاء المعالجة',
+    ready: 'جاهز',
+    failed: 'فشلت المعالجة'
+  } : {
+    queued: 'Queued',
+    validating: 'Validating file',
+    probing: 'Reading video metadata',
+    extracting_metadata: 'Saving video metadata',
+    generating_poster: 'Generating preview image',
+    finalizing: 'Finalizing',
+    ready: 'Ready',
+    failed: 'Processing failed'
+  }
+  return labels[stage] ?? (props.locale === 'ar' ? 'قيد المعالجة' : 'Processing')
+}
+
+function safeProgress(value: number): number {
+  return Math.max(0, Math.min(100, Number(value) || 0))
 }
 </script>
 
 <style scoped>
 .ym-media-gallery{display:grid;gap:10px;align-content:start}.ym-media-thumb{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:8px;border:1px solid rgba(148,163,184,.18);border-radius:14px;background:rgba(15,23,42,.2);transition:border-color .17s ease,box-shadow .17s ease,transform .17s ease}.ym-media-thumb:hover{transform:translateY(-1px);border-color:rgba(139,92,246,.42)}.ym-media-thumb.is-selected{border-color:rgba(34,211,238,.68);box-shadow:0 0 0 2px rgba(34,211,238,.11),0 10px 26px rgba(34,211,238,.08)}.ym-media-thumb.is-cover::after{content:"";position:absolute;inset-block:12px;inset-inline-start:0;width:3px;border-radius:999px;background:#f59e0b}.ym-media-thumb.is-dragging{opacity:.52}.ym-media-thumb__select{display:grid;grid-template-columns:82px minmax(0,1fr);gap:10px;align-items:center;min-width:0;padding:0;border:0;background:none;color:inherit;text-align:start;cursor:pointer}.ym-media-thumb__visual{position:relative;display:grid;place-items:center;aspect-ratio:16/10;overflow:hidden;border-radius:10px;background:#020617}.ym-media-thumb__visual img,.ym-media-thumb__visual video{width:100%;height:100%;object-fit:cover}.ym-media-thumb__placeholder{color:#94a3b8;font-size:22px}.ym-media-thumb__position,.ym-media-thumb__visual em{position:absolute;padding:2px 6px;border-radius:999px;font-size:10px;font-style:normal;line-height:1.5}.ym-media-thumb__position{inset-block-start:5px;inset-inline-end:5px;background:rgba(2,6,23,.82);color:#fff}.ym-media-thumb__visual em{inset-block-end:5px;inset-inline-start:5px;background:#f59e0b;color:#111827;font-weight:900}.ym-media-thumb__details{display:grid;gap:3px;min-width:0}.ym-media-thumb__details strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13.5px}.ym-media-thumb__details small{color:var(--ym-media-muted,#a7b2c7);font-size:11.75px}.ym-media-thumb__order{display:grid;grid-template-columns:28px;gap:4px;align-content:center}.ym-media-thumb__order button{display:grid;place-items:center;width:28px;height:28px;padding:0;border:1px solid rgba(139,92,246,.25);border-radius:8px;background:rgba(139,92,246,.08);color:inherit}.ym-media-thumb__handle{text-align:center;color:#8b5cf6;cursor:grab}.ym-media-thumb button:focus-visible{outline:3px solid rgba(34,211,238,.34);outline-offset:2px}.ym-media-thumb button:disabled{opacity:.38;cursor:not-allowed}:global(.ym-media-manager.is-light) .ym-media-thumb{background:rgba(255,255,255,.72);border-color:rgba(100,116,139,.2)}@media(max-width:980px){.ym-media-gallery{grid-template-columns:repeat(3,minmax(0,1fr))}.ym-media-thumb{grid-template-columns:1fr}.ym-media-thumb__select{grid-template-columns:1fr}.ym-media-thumb__order{grid-template-columns:1fr 32px 32px}.ym-media-thumb__handle{align-self:center}.ym-media-thumb__order button{width:32px;height:32px}.ym-media-thumb__details strong{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}}@media(max-width:700px){.ym-media-gallery{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:390px){.ym-media-gallery{grid-template-columns:1fr}.ym-media-thumb__select{grid-template-columns:96px minmax(0,1fr)}}@media(prefers-reduced-motion:reduce){.ym-media-thumb{transition:none}.ym-media-thumb:hover{transform:none}}
 .ym-media-thumb__details strong[dir="auto"]{unicode-bidi:plaintext;text-align:start}
+</style>
+
+<style scoped>
+.ym-media-thumb__processing {
+  display: block;
+  width: 100%;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, .16);
+}
+
+.ym-media-thumb__processing i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #7c3aed, #ec4899, #22d3ee);
+  transition: inline-size .2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ym-media-thumb__processing i {
+    transition: none;
+  }
+}
 </style>

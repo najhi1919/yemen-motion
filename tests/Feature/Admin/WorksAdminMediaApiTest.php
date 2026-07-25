@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Admin;
 
 use App\Http\Controllers\Api\Admin\WorksMediaController;
+use App\Jobs\ProcessWorkMedia;
 use App\Models\AuditEvent;
 use App\Models\User;
 use App\Models\Work;
@@ -18,12 +19,14 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Exceptions\PostTooLargeException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use LogicException;
 use RuntimeException;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
+use Throwable;
 
 class WorksAdminMediaApiTest extends TestCase
 {
@@ -39,6 +42,7 @@ class WorksAdminMediaApiTest extends TestCase
         $this->seed(AuthRolesSeeder::class);
         Storage::fake('works_private');
         Storage::fake('public');
+        Queue::fake([ProcessWorkMedia::class]);
     }
 
     protected function tearDown(): void
@@ -419,6 +423,141 @@ class WorksAdminMediaApiTest extends TestCase
             $this->assertNull($response->json('data.media.height'));
             $this->assertNull($response->json('data.media.duration_ms'));
         }
+    }
+
+    public function test_video_upload_dispatches_processing_job_after_commit(): void
+    {
+        Queue::fake();
+        $this->actingAsRole('super-admin');
+        $work = $this->work(['media_type' => Work::MEDIA_TYPE_VIDEO]);
+
+        $response = $this->post($this->mediaEndpoint($work), [
+            'file' => $this->videoUpload('queued.mp4', 'video/mp4'),
+        ], ['Accept' => 'application/json'])->assertCreated();
+
+        $mediaId = (int) $response->json('data.media.id');
+        $response
+            ->assertJsonPath('data.media.processing_stage', WorkMedia::STAGE_QUEUED)
+            ->assertJsonPath('data.media.processing_progress', 0)
+            ->assertJsonPath('data.media.processing_attempts', 0);
+        Queue::assertPushedOn(
+            'works-media',
+            ProcessWorkMedia::class,
+            fn (ProcessWorkMedia $job): bool => $job->mediaId === $mediaId,
+        );
+    }
+
+    public function test_processing_job_extracts_video_metadata_generates_poster_and_is_idempotent(): void
+    {
+        $work = $this->work(['media_type' => Work::MEDIA_TYPE_VIDEO]);
+        $media = WorkMedia::factory()->video()->create([
+            'work_id' => $work->id,
+            'path' => 'works/'.$work->id.'/processable.mp4',
+            'extension' => 'mp4',
+            'mime_type' => 'video/mp4',
+            'processing_status' => WorkMedia::PROCESSING_PENDING,
+            'processing_stage' => WorkMedia::STAGE_QUEUED,
+        ]);
+        Storage::disk('works_private')->put($media->path, $this->validVideoBytes());
+
+        $job = new ProcessWorkMedia($media->id);
+        $job->handle();
+
+        $processed = $media->fresh();
+        $this->assertSame(WorkMedia::PROCESSING_READY, $processed->processing_status);
+        $this->assertSame(WorkMedia::STAGE_READY, $processed->processing_stage);
+        $this->assertSame(100, $processed->processing_progress);
+        $this->assertSame(1, $processed->processing_attempts);
+        $this->assertSame(32, $processed->width);
+        $this->assertSame(24, $processed->height);
+        $this->assertGreaterThan(0, $processed->duration_ms);
+        $this->assertNotNull($processed->processing_completed_at);
+        $this->assertNotNull($processed->poster_path);
+        Storage::disk('works_private')->assertExists($processed->poster_path);
+
+        $job->handle();
+        $this->assertSame(1, $media->fresh()->processing_attempts);
+    }
+
+    public function test_processing_failure_is_safe_retryable_and_never_exposes_technical_error(): void
+    {
+        $this->actingAsRole('super-admin');
+        $work = $this->work(['media_type' => Work::MEDIA_TYPE_VIDEO]);
+        $media = WorkMedia::factory()->video()->create([
+            'work_id' => $work->id,
+            'path' => 'works/'.$work->id.'/invalid.mp4',
+            'extension' => 'mp4',
+            'mime_type' => 'video/mp4',
+            'processing_status' => WorkMedia::PROCESSING_PENDING,
+            'processing_stage' => WorkMedia::STAGE_QUEUED,
+        ]);
+        Storage::disk('works_private')->put($media->path, 'not-a-video');
+
+        try {
+            (new ProcessWorkMedia($media->id))->handle();
+            $this->fail('Invalid video processing should fail.');
+        } catch (Throwable) {
+            // Expected: the queue will apply the configured limited retries.
+        }
+
+        $failed = $media->fresh();
+        $this->assertSame(WorkMedia::PROCESSING_FAILED, $failed->processing_status);
+        $this->assertSame(WorkMedia::STAGE_FAILED, $failed->processing_stage);
+        $this->assertNotNull($failed->processing_error);
+
+        $payload = $this->getJson($this->mediaEndpoint($work))
+            ->assertOk()
+            ->assertJsonPath('data.media.0.can_retry_processing', true)
+            ->json('data.media.0');
+        $serialized = json_encode($payload, JSON_THROW_ON_ERROR);
+        $this->assertStringNotContainsString('processing_error', $serialized);
+        $this->assertStringNotContainsString($media->path, $serialized);
+        $this->assertStringNotContainsString('ffprobe', strtolower($serialized));
+    }
+
+    public function test_retry_processing_resets_failed_video_and_enforces_update_permission(): void
+    {
+        Queue::fake();
+        $work = $this->work(['media_type' => Work::MEDIA_TYPE_VIDEO]);
+        $media = WorkMedia::factory()->video()->failed()->create([
+            'work_id' => $work->id,
+            'processing_stage' => WorkMedia::STAGE_FAILED,
+            'processing_progress' => 20,
+            'processing_error' => 'private technical failure',
+        ]);
+
+        $this->actingAsRole('admin', ['admin.works.access', 'admin.works.media.view']);
+        $this->postJson($this->retryProcessingEndpoint($work, $media))->assertForbidden();
+
+        $this->actingAsRole('super-admin');
+        $this->postJson($this->retryProcessingEndpoint($work, $media))
+            ->assertOk()
+            ->assertJsonPath('data.changed', true)
+            ->assertJsonPath('data.media.processing_status', WorkMedia::PROCESSING_PENDING)
+            ->assertJsonPath('data.media.processing_stage', WorkMedia::STAGE_QUEUED)
+            ->assertJsonPath('data.media.processing_progress', 0);
+
+        $media->refresh();
+        $this->assertNull($media->processing_error);
+        Queue::assertPushedOn('works-media', ProcessWorkMedia::class);
+    }
+
+    public function test_processing_job_ignores_soft_deleted_media(): void
+    {
+        $work = $this->work(['media_type' => Work::MEDIA_TYPE_VIDEO]);
+        $media = WorkMedia::factory()->video()->create([
+            'work_id' => $work->id,
+            'processing_status' => WorkMedia::PROCESSING_PENDING,
+            'processing_stage' => WorkMedia::STAGE_QUEUED,
+            'processing_attempts' => 0,
+        ]);
+        $media->delete();
+
+        (new ProcessWorkMedia($media->id))->handle();
+
+        $deleted = WorkMedia::withTrashed()->findOrFail($media->id);
+        $this->assertSame(0, $deleted->processing_attempts);
+        $this->assertSame(WorkMedia::PROCESSING_PENDING, $deleted->processing_status);
     }
 
     public function test_video_mode_rejects_images(): void
@@ -809,11 +948,19 @@ class WorksAdminMediaApiTest extends TestCase
             'height',
             'duration_ms',
             'processing_status',
+            'processing_stage',
+            'processing_progress',
+            'processing_started_at',
+            'processing_completed_at',
+            'processing_attempts',
+            'processing_message',
+            'can_retry_processing',
             'is_cover',
             'uploaded_by',
             'created_at',
             'updated_at',
             'content_endpoint',
+            'poster_endpoint',
         ], array_keys($items[0]));
         $this->assertNull($items[0]['uploaded_by']);
         $this->assertSame(
@@ -1666,7 +1813,7 @@ class WorksAdminMediaApiTest extends TestCase
             ->assertOk()
             ->json('data.media.0');
 
-        foreach (['disk', 'path', 'processing_error', 'deleted_at'] as $field) {
+        foreach (['disk', 'path', 'poster_path', 'processing_error', 'deleted_at'] as $field) {
             $this->assertArrayNotHasKey($field, $payload);
         }
         $this->assertArrayNotHasKey('work', $payload);
@@ -1767,6 +1914,99 @@ class WorksAdminMediaApiTest extends TestCase
     private function coverEndpoint(Work $work): string
     {
         return $this->mediaEndpoint($work).'/cover';
+    }
+
+    private function retryProcessingEndpoint(Work $work, WorkMedia $media): string
+    {
+        return $this->mediaItemEndpoint($work, $media).'/retry-processing';
+    }
+
+    public function test_processing_tracking_backfill_normalizes_ready_media_without_promoting_pending_media(): void
+    {
+        $work = $this->work(['media_type' => Work::MEDIA_TYPE_VIDEO]);
+        $updatedAt = Carbon::parse('2026-07-25 10:00:00');
+        $ready = WorkMedia::factory()->video()->create([
+            'work_id' => $work->id,
+            'processing_status' => WorkMedia::PROCESSING_READY,
+            'processing_stage' => WorkMedia::STAGE_QUEUED,
+            'processing_progress' => 0,
+            'processing_completed_at' => null,
+            'processing_error' => 'legacy technical error',
+            'updated_at' => $updatedAt,
+        ]);
+        $pending = WorkMedia::factory()->video()->create([
+            'work_id' => $work->id,
+            'processing_status' => WorkMedia::PROCESSING_PENDING,
+            'processing_stage' => WorkMedia::STAGE_QUEUED,
+            'processing_progress' => 0,
+            'processing_completed_at' => null,
+        ]);
+
+        $migration = require database_path('migrations/2026_07_25_000002_backfill_work_media_processing_tracking.php');
+        $migration->up();
+
+        $ready->refresh();
+        $pending->refresh();
+        $this->assertSame(WorkMedia::STAGE_READY, $ready->processing_stage);
+        $this->assertSame(100, $ready->processing_progress);
+        $this->assertTrue($ready->processing_completed_at?->equalTo($updatedAt) ?? false);
+        $this->assertNull($ready->processing_error);
+        $this->assertSame(WorkMedia::PROCESSING_PENDING, $pending->processing_status);
+        $this->assertSame(WorkMedia::STAGE_QUEUED, $pending->processing_stage);
+        $this->assertSame(0, $pending->processing_progress);
+        $this->assertNull($pending->processing_completed_at);
+    }
+
+    public function test_composer_dev_runs_a_persistent_works_media_worker(): void
+    {
+        $composer = json_decode(
+            (string) file_get_contents(base_path('composer.json')),
+            true,
+            flags: JSON_THROW_ON_ERROR,
+        );
+        $devScript = implode("\n", $composer['scripts']['dev']);
+
+        $this->assertStringContainsString('queue:work redis', $devScript);
+        $this->assertStringContainsString('--queue=works-media,default', $devScript);
+        $this->assertStringContainsString('--sleep=1', $devScript);
+        $this->assertStringContainsString('--tries=3', $devScript);
+        $this->assertStringContainsString('--timeout=600', $devScript);
+        $this->assertStringContainsString('--max-time=3600', $devScript);
+        $this->assertStringContainsString('--restart-tries -1', $devScript);
+        $this->assertStringContainsString('--kill-others-on-fail', $devScript);
+        $this->assertStringNotContainsString('--stop-when-empty', $devScript);
+    }
+
+    private function validVideoBytes(): string
+    {
+        $path = tempnam(sys_get_temp_dir(), 'ym-video-');
+        if ($path === false) {
+            throw new RuntimeException('Unable to create video fixture path.');
+        }
+        @unlink($path);
+        $path .= '.mp4';
+        $this->temporaryFiles[] = $path;
+
+        $process = new \Symfony\Component\Process\Process([
+            'ffmpeg',
+            '-hide_banner',
+            '-loglevel', 'error',
+            '-y',
+            '-f', 'lavfi',
+            '-i', 'color=c=black:s=32x24:d=0.4',
+            '-c:v', 'mpeg4',
+            '-pix_fmt', 'yuv420p',
+            $path,
+        ]);
+        $process->setTimeout(30);
+        $process->mustRun();
+        $bytes = file_get_contents($path);
+
+        if (! is_string($bytes) || $bytes === '') {
+            throw new RuntimeException('Unable to create video fixture.');
+        }
+
+        return $bytes;
     }
 
     private function setMediaLimits(

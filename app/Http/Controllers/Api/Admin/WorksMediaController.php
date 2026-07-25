@@ -15,6 +15,7 @@ use App\Http\Requests\Admin\WorksMediaUploadRequest;
 use App\Models\User;
 use App\Services\Works\WorksMediaService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -73,6 +74,46 @@ class WorksMediaController extends Controller
         string $media,
     ): StreamedResponse {
         return $this->mediaService->content((int) $work, (int) $media);
+    }
+
+    public function poster(
+        WorksMediaContentRequest $request,
+        string $work,
+        string $media,
+    ): StreamedResponse {
+        return $this->mediaService->poster((int) $work, (int) $media);
+    }
+
+    public function retryProcessing(
+        Request $request,
+        string $work,
+        string $media,
+    ): JsonResponse {
+        /** @var User $actor */
+        $actor = $request->user();
+
+        abort_unless(
+            $actor->hasAnyRole(['super-admin', 'admin', 'staff'])
+                && $actor->can('admin.works.access')
+                && $this->canUpdateMedia($actor),
+            403,
+        );
+
+        $result = $this->mediaService->retryProcessing(
+            (int) $work,
+            (int) $media,
+            $actor,
+            $this->requestContext($request),
+        );
+
+        return response()->json([
+            'success' => true,
+            'data' => $result,
+            'message' => $result['changed']
+                ? 'تمت إعادة وسيط الفيديو إلى طابور المعالجة'
+                : 'معالجة وسيط الفيديو جارية بالفعل',
+            'errors' => null,
+        ]);
     }
 
     public function reorder(
@@ -193,7 +234,7 @@ class WorksMediaController extends Controller
 
     /** @return array{ip_address: string|null, user_agent: string|null} */
     private function requestContext(
-        WorksMediaUploadRequest|WorksMediaDeleteRequest|WorksMediaReorderRequest|WorksMediaCoverRequest $request,
+        Request $request,
     ): array {
         return [
             'ip_address' => $request->ip(),

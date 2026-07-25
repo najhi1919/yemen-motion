@@ -1,6 +1,125 @@
 <template>
-  <div class="ym-works-review-page space-y-7">
-    <section class="ym-works-review-hero">
+  <div class="ym-works-review-page ym-admin-page" data-admin-accent="review">
+    <AdminPageHero
+      :breadcrumbs="reviewBreadcrumbs"
+      :breadcrumb-label="reviewUi.breadcrumbLabel"
+      :eyebrow="copy.kicker"
+      :badge="copy.readonly"
+      :title="copy.title"
+      :description="copy.description"
+    >
+      <template #icon>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 4h14v16H5zM8 8h8M8 12h5M8 16h7" />
+        </svg>
+      </template>
+    </AdminPageHero>
+
+    <AdminEmptyState
+      v-if="authPending"
+      class="ym-admin-surface"
+      icon="◌"
+      :title="copy.authLoadingTitle"
+      :description="copy.authLoadingCopy"
+    />
+
+    <AdminEmptyState
+      v-else-if="forbidden"
+      class="ym-admin-surface"
+      icon="!"
+      tone="forbidden"
+      :title="copy.forbiddenTitle"
+      :description="copy.forbiddenCopy"
+    />
+
+    <template v-else>
+      <AdminPolicyBar
+        :items="policyItems"
+        :aria-label="reviewUi.policiesLabel"
+        :close-label="copy.close"
+      />
+
+      <AdminMetricStrip
+        :items="summaryCards"
+        :locale="currentLocale"
+        :aria-label="copy.summaryLabel"
+        :loading="loading && items.length === 0"
+        :updating="updating"
+      />
+
+      <WorksReviewFilters
+        :filters="filters"
+        :status-options="statusOptions"
+        :media-options="mediaOptions"
+        :boolean-options="booleanOptions"
+        :chips="activeFilterChips"
+        :overdue-enabled="reviewPolicy.enabled"
+        :locale="currentLocale"
+        :loading="loading || updating"
+        :error="filterError"
+        :text="reviewFilterText"
+        @patch="updateDraftFilter"
+        @search="applyLiveSearch"
+        @apply="applyFilters"
+        @reset="resetFilters"
+        @remove="removeFilter"
+      />
+
+      <aside
+        v-if="lastReviewAction"
+        class="ym-review-followup ym-admin-surface"
+        aria-live="polite"
+      >
+        <div>
+          <span>{{ copy.lastActionFollowup }}</span>
+          <strong dir="auto">{{ lastReviewAction.work.title }}</strong>
+          <small>{{ actionLabels[lastReviewAction.action] }} · {{ statusLabel(lastReviewAction.work.status) }}</small>
+        </div>
+        <div class="ym-review-followup__actions">
+          <button
+            v-for="action in availableReviewActions(lastReviewAction.work)"
+            :key="action.key"
+            type="button"
+            class="ym-admin-button"
+            :disabled="!action.enabled || actionLoading?.workId === lastReviewAction.work.id"
+            :title="action.reason"
+            @click="requestReviewAction(lastReviewAction.work, action.key)"
+          >
+            {{ action.label }}
+          </button>
+          <button type="button" class="ym-admin-button" :aria-label="copy.dismissFollowup" @click="dismissLastAction">×</button>
+        </div>
+      </aside>
+
+      <WorksReviewQueue
+        :items="items"
+        :pagination="pagination"
+        :action-status="actionStatus"
+        :locale="currentLocale"
+        :loading="loading && items.length === 0"
+        :updating="updating"
+        :error="error"
+        :filtered="hasActiveFilters"
+        :can-view-details="canViewDetails"
+        :busy-work-id="actionLoading?.workId ?? null"
+        :direction="appliedFilters.direction"
+        :sort-key="appliedFilters.sort"
+        :time-field="selectedTimeField"
+        :review-sla-hours="reviewPolicy.enabled ? reviewPolicy.review_sla_hours : null"
+        :action-resolver="availableReviewActions"
+        :text="reviewQueueText"
+        @retry="fetchReviewQueue()"
+        @reset="resetFilters"
+        @page="changePage"
+        @details="openDetails"
+        @action="handleQueueAction"
+        @time-field="setTimeField"
+        @sort-time="sortSelectedTime"
+        @sort-column="changeSort"
+      />
+    </template>
+
+    <section v-if="false" class="ym-works-review-hero">
       <div class="ym-works-review-hero__glow is-one" />
       <div class="ym-works-review-hero__glow is-two" />
       <div class="ym-works-review-hero__grid" aria-hidden="true" />
@@ -25,7 +144,7 @@
     </section>
 
     <section
-      v-if="authPending"
+      v-if="false && authPending"
       class="ym-works-review-access-state"
       role="status"
       aria-live="polite"
@@ -36,7 +155,7 @@
     </section>
 
     <section
-      v-else-if="forbidden"
+      v-else-if="false && forbidden"
       class="ym-works-review-access-state is-forbidden"
       role="status"
     >
@@ -45,7 +164,7 @@
       <p>{{ copy.forbiddenCopy }}</p>
     </section>
 
-    <template v-else>
+    <template v-if="false">
       <aside class="ym-works-review-notice" role="note">
         <span>{{ copy.readonly }}</span>
         <div>
@@ -145,16 +264,6 @@
               placeholder="image"
               dir="ltr"
             />
-          </label>
-
-          <label>
-            <span>{{ copy.designerId }}</span>
-            <input v-model="filters.designer_id" type="number" min="1" inputmode="numeric" />
-          </label>
-
-          <label>
-            <span>{{ copy.reviewerId }}</span>
-            <input v-model="filters.reviewer_id" type="number" min="1" inputmode="numeric" />
           </label>
 
           <label>
@@ -532,8 +641,20 @@
       </section>
     </template>
 
+    <WorksReviewDetailWorkspace
+      v-if="drawerOpen && selectedWorkId !== null"
+      :work-id="selectedWorkId"
+      :title="selectedWorkTitle"
+      :detail="detail"
+      :loading="detailLoading"
+      :error="detailError"
+      :locale="currentLocale"
+      @close="closeDetails"
+      @retry="retrySelectedDetails"
+    />
+
     <div
-      v-if="drawerOpen"
+      v-if="false && drawerOpen"
       class="ym-review-detail-backdrop"
       role="presentation"
       @click.self="closeDetails"
@@ -548,7 +669,6 @@
           <div>
             <span>{{ copy.detailReadonly }}</span>
             <h2 :id="drawerTitleId">{{ selectedWorkTitle || copy.detailsTitle }}</h2>
-            <code v-if="selectedWorkId !== null" dir="ltr">#{{ selectedWorkId }}</code>
           </div>
           <button
             type="button"
@@ -678,7 +798,6 @@
                 <strong v-if="detail.relations.designer" :dir="textDirection(detail.relations.designer.name)">
                   {{ detail.relations.designer.name }}
                 </strong>
-                <small v-if="detail.relations.designer" dir="ltr">#{{ detail.relations.designer.id }}</small>
                 <strong v-else>{{ copy.notLinked }}</strong>
               </article>
               <article>
@@ -686,7 +805,6 @@
                 <strong v-if="detail.relations.reviewer" :dir="textDirection(detail.relations.reviewer.name)">
                   {{ detail.relations.reviewer.name }}
                 </strong>
-                <small v-if="detail.relations.reviewer" dir="ltr">#{{ detail.relations.reviewer.id }}</small>
                 <strong v-else>{{ copy.notLinked }}</strong>
               </article>
             </div>
@@ -761,11 +879,13 @@
       @click.self="cancelReviewAction"
     >
       <section
+        ref="actionDialogElement"
         class="ym-review-action-dialog"
         role="dialog"
         aria-modal="true"
         :aria-labelledby="actionDialogTitleId"
         :aria-describedby="actionDialogDescriptionId"
+        @keydown="trapActionDialogFocus"
       >
         <span class="ym-review-action-dialog__eyebrow">{{ copy.reviewActionConfirmation }}</span>
         <h2 :id="actionDialogTitleId">{{ copy.confirmAction(pendingReviewAction.label) }}</h2>
@@ -776,22 +896,23 @@
           <strong :dir="textDirection(pendingReviewAction.target.title)">
             {{ pendingReviewAction.target.title }}
           </strong>
-          <code dir="ltr">{{ pendingReviewAction.target.slug }} · #{{ pendingReviewAction.target.id }}</code>
+          <code dir="ltr">{{ pendingReviewAction.target.slug }}</code>
         </div>
 
         <label v-if="pendingReviewAction.kind === 'reviewer'" class="ym-review-action-dialog__field">
           <span>{{ copy.reviewerId }}</span>
-          <input
+          <select
             v-model="reviewerIdInput"
-            type="number"
-            min="1"
-            step="1"
-            inputmode="numeric"
             required
             :disabled="actionLoading !== null"
             :aria-invalid="Boolean(actionFieldErrors.reviewer_id)"
             autofocus
-          />
+          >
+            <option value="" disabled>{{ copy.selectReviewer }}</option>
+            <option v-for="reviewer in reviewerOptions" :key="reviewer.id" :value="String(reviewer.id)">
+              {{ reviewer.name }}
+            </option>
+          </select>
           <small>{{ copy.currentReviewer }}: {{ reviewerDisplay(pendingReviewAction.target.reviewer) }}</small>
           <strong v-if="actionFieldErrors.reviewer_id" role="alert">{{ actionFieldErrors.reviewer_id }}</strong>
         </label>
@@ -861,9 +982,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import AdminEmptyState from '~/components/admin/visual/AdminEmptyState.vue'
+import AdminMetricStrip from '~/components/admin/visual/AdminMetricStrip.vue'
+import AdminPageHero from '~/components/admin/visual/AdminPageHero.vue'
+import AdminPolicyBar from '~/components/admin/visual/AdminPolicyBar.vue'
+import WorksReviewFilters from '~/components/works/review/WorksReviewFilters.vue'
+import WorksReviewQueue from '~/components/works/review/WorksReviewQueue.vue'
+import WorksReviewDetailWorkspace from '~/components/works/review/WorksReviewDetailWorkspace.vue'
 import { useApiClient } from '~/composables/useApiClient'
 import { useAuthStore } from '~/stores/authStore'
+import { formatYmDateTime, formatYmNumber } from '~/utils/ymFormatting'
 
 definePageMeta({ layout: 'admin' })
 
@@ -874,7 +1003,8 @@ type VisibilityStatus = 'hidden' | 'public'
 type BooleanFilter = '' | '1' | '0'
 type PageSize = 15 | 25 | 50
 type SortDirection = 'asc' | 'desc'
-type ReviewSortKey = 'submitted_at' | 'updated_at' | 'reports_count' | 'created_at' | 'title' | 'status'
+type ReviewSortKey = 'id' | 'submitted_at' | 'updated_at' | 'reports_count' | 'created_at' | 'title' | 'status'
+type ReviewTimeField = 'submitted_at' | 'reviewed_at' | 'updated_at' | 'deadline'
 type ReviewActionKey = 'start' | 'assign_reviewer' | 'approve' | 'request_changes' | 'reject' | 'publish' | 'reopen'
 type ReviewActionKind = 'simple' | 'reviewer' | 'changes' | 'reject'
 type ReviewActionTone = 'primary' | 'info' | 'positive' | 'warning' | 'danger' | 'promotion' | 'neutral'
@@ -945,6 +1075,7 @@ interface ReviewActionTarget {
   status: WorkStatus
   visibility_status: VisibilityStatus
   reviewer: UserReference | null
+  updated_at: string | null
 }
 
 interface ReviewActionDefinition {
@@ -984,6 +1115,7 @@ interface LastReviewAction {
     status: WorkStatus
     visibility_status: VisibilityStatus
     reviewer: UserReference | null
+    updated_at: string | null
     review_flags: ActionReviewFlags
   }
 }
@@ -1054,6 +1186,7 @@ interface ReviewQueueData {
   summary: ReviewSummary
   review_policy: ReviewPolicy
   publication_policy: PublicationPolicy
+  reviewer_options: UserReference[]
   filters: Record<string, unknown>
 }
 
@@ -1125,8 +1258,6 @@ interface ReviewFilters {
   q: string
   status: '' | ReviewStatus
   media_type: string
-  designer_id: string
-  reviewer_id: string
   assigned: BooleanFilter
   overdue: BooleanFilter
   from: string
@@ -1138,6 +1269,8 @@ interface ReviewFilters {
 
 const authStore = useAuthStore()
 const { apiFetch } = useApiClient()
+const route = useRoute()
+const router = useRouter()
 const currentLocale = useState<Locale>('ym-dashboard-locale', () => 'ar')
 
 const reviewActionDefinitions: ReviewActionDefinition[] = [
@@ -1244,7 +1377,8 @@ const copyMap = {
     status: 'الحالة',
     mediaType: 'نوع الوسائط',
     designerId: 'معرّف المصمم',
-    reviewerId: 'معرّف المراجع',
+    reviewerId: 'المراجع',
+    selectReviewer: 'اختر مراجعًا من الفريق الإداري',
     from: 'أُرسل من',
     to: 'أُرسل إلى',
     perPage: 'لكل صفحة',
@@ -1323,8 +1457,9 @@ const copyMap = {
     actionDenied: 'غير مصرح بتنفيذ هذا الإجراء.',
     actionNotFound: 'لم يعد العمل موجودًا.',
     actionFailed: 'تعذر تنفيذ إجراء المراجعة. حاول مرة أخرى.',
+    actionConflict: 'تغيرت حالة العمل أو نسخته. حُمّلت أحدث بيانات الطابور؛ أعد فتح الإجراء.',
     actionResponseInvalid: 'تعذر اعتماد نتيجة الإجراء. أُبقيت بيانات الصفحة دون تغيير.',
-    reviewerRequired: 'أدخل معرّف مراجع صحيحًا وموجبًا.',
+    reviewerRequired: 'اختر مراجعًا صالحًا من القائمة.',
     notesLengthInvalid: 'يجب أن يكون النص بين 5 و2000 حرف.',
     startDescription: 'سيُنقل العمل إلى حالة تحت المراجعة ويُعيّن المنفذ كمراجع عند عدم وجود مراجع.',
     assignDescription: 'سيُعيّن معرّف المستخدم الداخلي المحدد كمراجع دون تغيير حالة العمل.',
@@ -1448,7 +1583,8 @@ const copyMap = {
     status: 'Status',
     mediaType: 'Media type',
     designerId: 'Designer ID',
-    reviewerId: 'Reviewer ID',
+    reviewerId: 'Reviewer',
+    selectReviewer: 'Select an internal reviewer',
     from: 'Submitted from',
     to: 'Submitted to',
     perPage: 'Per page',
@@ -1527,8 +1663,9 @@ const copyMap = {
     actionDenied: 'You are not authorized to run this action.',
     actionNotFound: 'The work no longer exists.',
     actionFailed: 'The review action could not be completed. Try again.',
+    actionConflict: 'The work state or version changed. The latest queue data was loaded; reopen the action.',
     actionResponseInvalid: 'The action result could not be accepted. Page data was left unchanged.',
-    reviewerRequired: 'Enter a valid positive reviewer ID.',
+    reviewerRequired: 'Select a valid reviewer from the list.',
     notesLengthInvalid: 'The text must contain between 5 and 2000 characters.',
     startDescription: 'The work will move into review and the actor will be assigned when no reviewer exists.',
     assignDescription: 'The selected internal user ID will be assigned without changing the work state.',
@@ -1710,8 +1847,6 @@ function defaultFilters(): ReviewFilters {
     q: '',
     status: '',
     media_type: '',
-    designer_id: '',
-    reviewer_id: '',
     assigned: '',
     overdue: '',
     from: '',
@@ -1726,12 +1861,14 @@ const filters = reactive<ReviewFilters>(defaultFilters())
 const appliedFilters = reactive<ReviewFilters>(defaultFilters())
 const page = ref(1)
 const loading = ref(false)
+const updating = ref(false)
 const error = ref<string | null>(null)
 const filterError = ref<string | null>(null)
 
 const drawerOpen = ref(false)
 const selectedWorkId = ref<number | null>(null)
 const selectedWorkTitle = ref('')
+let detailTriggerElement: HTMLElement | null = null
 const detail = ref<WorkDetailData | null>(null)
 const detailLoading = ref(false)
 const detailError = ref<string | null>(null)
@@ -1740,13 +1877,17 @@ const pendingReviewAction = ref<PendingReviewAction | null>(null)
 const actionLoading = ref<{ workId: number; key: ReviewActionKey } | null>(null)
 const actionStatus = ref<ReviewActionStatus | null>(null)
 const lastReviewAction = ref<LastReviewAction | null>(null)
+const reviewerOptions = ref<UserReference[]>([])
 const reviewerIdInput = ref('')
 const changeRequestNotesInput = ref('')
 const rejectionReasonInput = ref('')
 const actionFieldErrors = reactive<ReviewActionFieldErrors>({})
 const modalActionError = ref<string | null>(null)
+const selectedTimeField = ref<ReviewTimeField>('submitted_at')
 const actionDialogTitleId = 'ym-review-action-dialog-title'
 const actionDialogDescriptionId = 'ym-review-action-dialog-description'
+const actionDialogElement = ref<HTMLElement | null>(null)
+let actionTriggerElement: HTMLElement | null = null
 
 const canConfirmReviewAction = computed(() => {
   const pending = pendingReviewAction.value
@@ -1795,6 +1936,210 @@ const booleanOptions = computed(() => [
   { value: '0' as const, label: copy.value.no }
 ])
 
+const mediaOptions = computed(() => currentLocale.value === 'ar'
+  ? [
+      { value: 'image', label: 'صورة' },
+      { value: 'video', label: 'فيديو' },
+      { value: 'gallery', label: 'معرض صور' }
+    ]
+  : [
+      { value: 'image', label: 'Image' },
+      { value: 'video', label: 'Video' },
+      { value: 'gallery', label: 'Gallery' }
+    ])
+
+const reviewBreadcrumbs = computed(() => currentLocale.value === 'ar'
+  ? ['الأعمال', 'كل الأعمال', 'طلبات المراجعة']
+  : ['Works', 'All works', 'Review requests'])
+
+const reviewUi = computed(() => currentLocale.value === 'ar'
+  ? {
+      breadcrumbLabel: 'مسار التنقل',
+      policiesLabel: 'سياسات وصلاحيات محطة المراجعة',
+      permissionsTitle: 'نطاق الإجراءات',
+      permissionsState: 'محكوم بالصلاحيات',
+      close: 'إغلاق'
+    }
+  : {
+      breadcrumbLabel: 'Breadcrumb',
+      policiesLabel: 'Review station policies and permissions',
+      permissionsTitle: 'Action scope',
+      permissionsState: 'Permission controlled',
+      close: 'Close'
+    })
+
+const reviewFilterText = computed(() => currentLocale.value === 'ar'
+  ? {
+      search: 'البحث',
+      searchPlaceholder: 'العنوان أو المعرّف النصي أو الملخص',
+      status: 'الحالة',
+      mediaType: 'نوع الوسائط',
+      all: 'الكل',
+      date: 'التاريخ',
+      dateAria: 'تصفية طلبات المراجعة حسب نطاق التاريخ',
+      from: 'من',
+      to: 'إلى',
+      clearDate: 'مسح التاريخ',
+      properties: 'الخصائص',
+      propertiesAria: 'فلاتر الإسناد والتأخر وعدد العناصر',
+      assigned: 'الإسناد',
+      overdue: 'التأخر',
+      overdueDisabled: copy.value.overdueFilterDisabled,
+      perPage: 'العرض',
+      apply: copy.value.apply,
+      reset: copy.value.reset,
+      close: copy.value.close,
+      activeFilters: 'الفلاتر المطبقة',
+      removeFilter: 'إزالة الفلتر',
+      none: 'الكل',
+      selected: 'محدد'
+    }
+  : {
+      search: 'Search',
+      searchPlaceholder: 'Title, slug, or summary',
+      status: 'Status',
+      mediaType: 'Media type',
+      all: 'All',
+      date: 'Date',
+      dateAria: 'Filter review requests by date range',
+      from: 'From',
+      to: 'To',
+      clearDate: 'Clear date',
+      properties: 'Properties',
+      propertiesAria: 'Assignment, overdue, and page size filters',
+      assigned: 'Assignment',
+      overdue: 'Overdue',
+      overdueDisabled: copy.value.overdueFilterDisabled,
+      perPage: 'View',
+      apply: copy.value.apply,
+      reset: copy.value.reset,
+      close: copy.value.close,
+      activeFilters: 'Applied filters',
+      removeFilter: 'Remove filter',
+      none: 'All',
+      selected: 'selected'
+    })
+
+const reviewQueueText = computed<Record<string, string>>(() => currentLocale.value === 'ar'
+  ? {
+      eyebrow: 'مساحة المراجعة',
+      title: 'طابور طلبات المراجعة',
+      description: 'طابور مضغوط يحافظ على جميع البيانات والإجراءات المصرح بها.',
+      timeField: 'التاريخ الأساسي',
+      submittedAt: 'أرسل للمراجعة',
+      reviewedAt: 'بدأت المراجعة',
+      updatedAt: 'آخر تحديث',
+      createdAt: 'تاريخ الإنشاء',
+      deadline: 'انتهاء المهلة',
+      sortDirection: 'تغيير اتجاه الفرز',
+      ascending: 'تصاعدي',
+      descending: 'تنازلي',
+      notSorted: 'غير مرتب',
+      changed: 'تم التغيير',
+      unchanged: 'دون تغيير',
+      loadingTitle: copy.value.loadingTitle,
+      loadingDescription: copy.value.loadingCopy,
+      errorTitle: copy.value.errorTitle,
+      retry: copy.value.retry,
+      emptyTitle: 'لا توجد طلبات مراجعة مطابقة',
+      emptyDescription: 'لا يحتوي طابور المراجعة على طلبات حاليًا.',
+      filteredEmptyDescription: 'لا توجد طلبات مراجعة مطابقة للفلاتر المطبقة.',
+      reset: copy.value.reset,
+      order: 'الترتيب',
+      work: 'العمل',
+      reviewState: 'حالة المراجعة',
+      assignment: 'الإسناد',
+      signals: 'الإشارات',
+      actions: 'الإجراءات',
+      moreAbout: 'معلومات العمل',
+      close: copy.value.close,
+      slug: 'المعرّف النصي',
+      summary: 'الملخص',
+      noSummary: copy.value.noSummary,
+      unassigned: 'غير مسند',
+      designer: copy.value.designer,
+      reviewer: copy.value.reviewer,
+      timeDetails: 'كل التواريخ',
+      overdue: copy.value.overdue,
+      reports: copy.value.reports,
+      needsAttention: copy.value.needsAttention,
+      views: copy.value.views,
+      likes: copy.value.likes,
+      assigned: copy.value.assigned,
+      awaiting: 'بانتظار الإسناد',
+      decisionMade: 'صدر قرار',
+      stable: 'مستقر',
+      topSignal: 'أهم إشارة',
+      details: copy.value.viewDetails,
+      detailsHint: copy.value.viewDetailsHint,
+      detailsUnavailable: copy.value.detailsPermissionRequired,
+      actionInProgress: copy.value.actionInProgress,
+      visible: 'الظاهر',
+      total: 'الإجمالي',
+      pagination: copy.value.paginationLabel,
+      previous: copy.value.previous,
+      next: copy.value.next
+    }
+  : {
+      eyebrow: 'Review workspace',
+      title: 'Review request queue',
+      description: 'A compact queue preserving all available data and permitted actions.',
+      timeField: 'Primary date',
+      submittedAt: 'Submitted for review',
+      reviewedAt: 'Review started',
+      updatedAt: 'Last updated',
+      createdAt: 'Created at',
+      deadline: 'SLA deadline',
+      sortDirection: 'Change sort direction',
+      ascending: 'Ascending',
+      descending: 'Descending',
+      notSorted: 'Not sorted',
+      changed: 'Changed',
+      unchanged: 'Unchanged',
+      loadingTitle: copy.value.loadingTitle,
+      loadingDescription: copy.value.loadingCopy,
+      errorTitle: copy.value.errorTitle,
+      retry: copy.value.retry,
+      emptyTitle: 'No matching review requests',
+      emptyDescription: 'The review queue currently contains no requests.',
+      filteredEmptyDescription: 'No review requests match the applied filters.',
+      reset: copy.value.reset,
+      order: 'Order',
+      work: 'Work',
+      reviewState: 'Review state',
+      assignment: 'Assignment',
+      signals: 'Signals',
+      actions: 'Actions',
+      moreAbout: 'Work information',
+      close: copy.value.close,
+      slug: 'Slug',
+      summary: 'Summary',
+      noSummary: copy.value.noSummary,
+      unassigned: 'Unassigned',
+      designer: copy.value.designer,
+      reviewer: copy.value.reviewer,
+      timeDetails: 'All dates',
+      overdue: copy.value.overdue,
+      reports: copy.value.reports,
+      needsAttention: copy.value.needsAttention,
+      views: copy.value.views,
+      likes: copy.value.likes,
+      assigned: copy.value.assigned,
+      awaiting: 'Awaiting assignment',
+      decisionMade: 'Decision made',
+      stable: 'Stable',
+      topSignal: 'Top signal',
+      details: copy.value.viewDetails,
+      detailsHint: copy.value.viewDetailsHint,
+      detailsUnavailable: copy.value.detailsPermissionRequired,
+      actionInProgress: copy.value.actionInProgress,
+      visible: 'Visible',
+      total: 'Total',
+      pagination: copy.value.paginationLabel,
+      previous: copy.value.previous,
+      next: copy.value.next
+    })
+
 const reviewPolicyTitle = computed(() => (
   reviewPolicy.value.enabled && reviewPolicy.value.review_sla_hours !== null
     ? copy.value.reviewSlaEnabled(reviewPolicy.value.review_sla_hours)
@@ -1819,6 +2164,35 @@ const publicationPolicyDescription = computed(() => (
     : copy.value.directPublishDisabledDescription
 ))
 
+const policyItems = computed(() => [
+  {
+    key: 'permissions',
+    title: reviewUi.value.permissionsTitle,
+    state: reviewUi.value.permissionsState,
+    description: copy.value.notice,
+    icon: '⌘',
+    tone: 'info' as const
+  },
+  {
+    key: 'sla',
+    title: copy.value.reviewPolicyLabel,
+    state: reviewPolicyTitle.value,
+    description: reviewPolicyDescription.value,
+    meta: copy.value.settingsVersion(reviewPolicy.value.settings_version),
+    icon: '◷',
+    tone: reviewPolicy.value.enabled ? 'success' as const : 'neutral' as const
+  },
+  {
+    key: 'publication',
+    title: copy.value.publicationPolicyLabel,
+    state: publicationPolicyTitle.value,
+    description: publicationPolicyDescription.value,
+    meta: copy.value.settingsVersion(publicationPolicy.value.settings_version),
+    icon: '↑',
+    tone: publicationPolicy.value.direct_publish_trust_enabled ? 'success' as const : 'warning' as const
+  }
+])
+
 const overdueSummaryHint = computed(() => (
   reviewPolicy.value.enabled && reviewPolicy.value.review_sla_hours !== null
     ? copy.value.overdueHint(reviewPolicy.value.review_sla_hours)
@@ -1826,15 +2200,40 @@ const overdueSummaryHint = computed(() => (
 ))
 
 const summaryCards = computed(() => [
-  { key: 'total', label: copy.value.total, value: summary.total, hint: copy.value.totalHint, color: '#8b5cf6' },
-  { key: 'submitted', label: copy.value.submitted, value: summary.submitted, hint: copy.value.submittedHint, color: '#38bdf8' },
-  { key: 'in_review', label: copy.value.inReview, value: summary.in_review, hint: copy.value.inReviewHint, color: '#6366f1' },
-  { key: 'changes_requested', label: copy.value.changesRequested, value: summary.changes_requested, hint: copy.value.changesRequestedHint, color: '#f59e0b' },
-  { key: 'assigned', label: copy.value.assigned, value: summary.assigned, hint: copy.value.assignedHint, color: '#14b8a6' },
-  { key: 'unassigned', label: copy.value.unassigned, value: summary.unassigned, hint: copy.value.unassignedHint, color: '#94a3b8' },
-  { key: 'overdue', label: copy.value.overdue, value: summary.overdue, hint: overdueSummaryHint.value, color: '#f43f5e' },
-  { key: 'reported', label: copy.value.reported, value: summary.reported, hint: copy.value.reportedHint, color: '#e879f9' }
+  { key: 'total', label: copy.value.total, value: summary.total, hint: copy.value.totalHint, description: copy.value.totalHint, color: '#8b5cf6', tone: 'violet' as const, icon: 'Σ' },
+  { key: 'submitted', label: copy.value.submitted, value: summary.submitted, hint: copy.value.submittedHint, description: copy.value.submittedHint, color: '#22d3ee', tone: 'cyan' as const, icon: '◷' },
+  { key: 'in_review', label: copy.value.inReview, value: summary.in_review, hint: copy.value.inReviewHint, description: copy.value.inReviewHint, color: '#6366f1', tone: 'indigo' as const, icon: '◎' },
+  { key: 'changes_requested', label: copy.value.changesRequested, value: summary.changes_requested, hint: copy.value.changesRequestedHint, description: copy.value.changesRequestedHint, color: '#f59e0b', tone: 'amber' as const, icon: '↺' },
+  { key: 'assigned', label: copy.value.assigned, value: summary.assigned, hint: copy.value.assignedHint, description: copy.value.assignedHint, color: '#10b981', tone: 'emerald' as const, icon: '✓' },
+  { key: 'unassigned', label: copy.value.unassigned, value: summary.unassigned, hint: copy.value.unassignedHint, description: copy.value.unassignedHint, color: '#94a3b8', tone: 'neutral' as const, icon: '○' },
+  { key: 'overdue', label: copy.value.overdue, value: summary.overdue, hint: overdueSummaryHint.value, description: overdueSummaryHint.value, color: '#f43f5e', tone: 'rose' as const, icon: '!' },
+  { key: 'reported', label: copy.value.reported, value: summary.reported, hint: copy.value.reportedHint, description: copy.value.reportedHint, color: '#ec4899', tone: 'magenta' as const, icon: '⚑' }
 ])
+
+const activeFilterChips = computed(() => {
+  const chips: Array<{ key: string; label: string }> = []
+  if (appliedFilters.q) chips.push({ key: 'q', label: `${copy.value.search}: ${appliedFilters.q}` })
+  if (appliedFilters.status) chips.push({ key: 'status', label: statusLabel(appliedFilters.status) })
+  if (appliedFilters.media_type) {
+    chips.push({
+      key: 'media_type',
+      label: mediaOptions.value.find(option => option.value === appliedFilters.media_type)?.label || appliedFilters.media_type
+    })
+  }
+  if (appliedFilters.assigned) {
+    chips.push({ key: 'assigned', label: `${copy.value.assigned}: ${appliedFilters.assigned === '1' ? copy.value.yes : copy.value.no}` })
+  }
+  if (appliedFilters.overdue) {
+    chips.push({ key: 'overdue', label: `${copy.value.overdue}: ${appliedFilters.overdue === '1' ? copy.value.yes : copy.value.no}` })
+  }
+  if (appliedFilters.from || appliedFilters.to) {
+    chips.push({ key: 'date', label: `${copy.value.from}: ${appliedFilters.from || '—'} – ${appliedFilters.to || '—'}` })
+  }
+  if (appliedFilters.per_page !== 15) chips.push({ key: 'per_page', label: `${copy.value.perPage}: ${appliedFilters.per_page}` })
+  return chips
+})
+
+const hasActiveFilters = computed(() => activeFilterChips.value.length > 0)
 
 const lifecycleItems = computed(() => {
   const work = detail.value?.work
@@ -1853,19 +2252,11 @@ const lifecycleItems = computed(() => {
 })
 
 function formatNumber(value: number): string {
-  return new Intl.NumberFormat(currentLocale.value === 'ar' ? 'ar-YE' : 'en-US').format(value)
+  return formatYmNumber(value, currentLocale.value)
 }
 
 function formatDateTime(value: string | null): string {
-  if (!value) return '—'
-
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-
-  return new Intl.DateTimeFormat(currentLocale.value === 'ar' ? 'ar-YE' : 'en-US', {
-    dateStyle: 'medium',
-    timeStyle: 'short'
-  }).format(date)
+  return formatYmDateTime(value, currentLocale.value)
 }
 
 function textDirection(value: string | null | undefined): 'rtl' | 'ltr' {
@@ -1924,7 +2315,7 @@ function textLength(value: string): number {
 }
 
 function reviewerDisplay(reviewer: UserReference | null): string {
-  return reviewer ? reviewer.name + ' (#' + reviewer.id + ')' : '—'
+  return reviewer?.name || '—'
 }
 
 function hasActionPermission(permission: string): boolean {
@@ -1998,11 +2389,16 @@ function reviewActionAvailability(
 function availableReviewActions(target: ReviewActionTarget): ReviewActionView[] {
   return reviewActionDefinitions
     .filter((action) => hasActionPermission(action.permission))
-    .map((action) => ({
-      ...action,
-      label: actionLabels.value[action.key],
-      ...reviewActionAvailability(target, action.key)
-    }))
+    .map((action) => {
+      const availability = reviewActionAvailability(target, action.key)
+      const label = actionLabels.value[action.key]
+      return {
+        ...action,
+        label,
+        ...availability,
+        reason: availability.enabled ? label : availability.reason
+      }
+    })
 }
 
 function toActionTarget(source: ReviewActionTarget): ReviewActionTarget {
@@ -2014,7 +2410,8 @@ function toActionTarget(source: ReviewActionTarget): ReviewActionTarget {
     visibility_status: source.visibility_status,
     reviewer: source.reviewer
       ? { id: source.reviewer.id, name: source.reviewer.name }
-      : null
+      : null,
+    updated_at: source.updated_at
   }
 }
 
@@ -2041,6 +2438,9 @@ function requestReviewAction(target: ReviewActionTarget, key: ReviewActionKey): 
   const availability = reviewActionAvailability(target, key)
   if (!availability.enabled) return
 
+  actionTriggerElement = document.activeElement instanceof HTMLElement
+    ? document.activeElement
+    : null
   clearActionInputs()
   if (definition.kind === 'reviewer' && target.reviewer) {
     reviewerIdInput.value = String(target.reviewer.id)
@@ -2051,12 +2451,45 @@ function requestReviewAction(target: ReviewActionTarget, key: ReviewActionKey): 
     label: actionLabels.value[key],
     target: toActionTarget(target)
   }
+  void nextTick(() => {
+    actionDialogElement.value
+      ?.querySelector<HTMLElement>('select, textarea, button:not(:disabled)')
+      ?.focus()
+  })
 }
 
 function cancelReviewAction(): void {
   if (actionLoading.value) return
   pendingReviewAction.value = null
   clearActionInputs()
+  restoreActionFocus()
+}
+
+function restoreActionFocus(): void {
+  const trigger = actionTriggerElement
+  actionTriggerElement = null
+  void nextTick(() => {
+    if (trigger?.isConnected) trigger.focus()
+  })
+}
+
+function trapActionDialogFocus(event: KeyboardEvent): void {
+  if (event.key !== 'Tab' || !actionDialogElement.value) return
+
+  const focusable = [...actionDialogElement.value.querySelectorAll<HTMLElement>(
+    'button:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
+  )]
+  if (!focusable.length) return
+
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last?.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first?.focus()
+  }
 }
 
 function dismissLastAction(): void {
@@ -2339,13 +2772,19 @@ async function confirmReviewAction(): Promise<void> {
   actionStatus.value = null
   modalActionError.value = null
 
-  const options: { method: 'PATCH'; body?: Record<string, string | number> } = { method: 'PATCH' }
+  const options: { method: 'PATCH'; body: Record<string, string | number> } = {
+    method: 'PATCH',
+    body: {}
+  }
+  if (pending.target.updated_at) {
+    options.body.expected_updated_at = pending.target.updated_at
+  }
   if (pending.kind === 'reviewer') {
-    options.body = { reviewer_id: Number(reviewerIdInput.value) }
+    options.body.reviewer_id = Number(reviewerIdInput.value)
   } else if (pending.kind === 'changes') {
-    options.body = { change_request_notes: changeRequestNotesInput.value.trim() }
+    options.body.change_request_notes = changeRequestNotesInput.value.trim()
   } else if (pending.kind === 'reject') {
-    options.body = { rejection_reason: rejectionReasonInput.value.trim() }
+    options.body.rejection_reason = rejectionReasonInput.value.trim()
   }
 
   try {
@@ -2393,6 +2832,7 @@ async function confirmReviewAction(): Promise<void> {
         reviewer: safeWork.reviewer
           ? { id: safeWork.reviewer.id, name: safeWork.reviewer.name }
           : null,
+        updated_at: safeWork.updated_at,
         review_flags: {
           assigned: safeWork.review_flags.assigned,
           in_queue: safeWork.review_flags.in_queue,
@@ -2415,6 +2855,7 @@ async function confirmReviewAction(): Promise<void> {
 
     pendingReviewAction.value = null
     clearActionInputs()
+    restoreActionFocus()
 
     if (drawerOpen.value && selectedWorkId.value === safeWork.id && canViewDetails.value) {
       void fetchWorkDetails(safeWork.id)
@@ -2424,7 +2865,14 @@ async function confirmReviewAction(): Promise<void> {
     const status = errorStatus(requestError)
     let message = copy.value.actionFailed
 
-    if (status === 422) {
+    if (status === 409) {
+      message = copy.value.actionConflict
+      modalActionError.value = message
+      void fetchReviewQueue(true)
+      if (drawerOpen.value && selectedWorkId.value === pending.target.id) {
+        void fetchWorkDetails(pending.target.id)
+      }
+    } else if (status === 422) {
       applyServerFieldErrors(requestError)
       message = actionFieldErrors.reviewer_id
         || actionFieldErrors.change_request_notes
@@ -2436,6 +2884,7 @@ async function confirmReviewAction(): Promise<void> {
       message = copy.value.actionDenied
       pendingReviewAction.value = null
       clearActionInputs()
+      restoreActionFocus()
     } else if (status === 404) {
       message = copy.value.actionNotFound
       items.value = items.value.filter((item) => item.id !== pending.target.id)
@@ -2443,6 +2892,7 @@ async function confirmReviewAction(): Promise<void> {
       if (drawerOpen.value && selectedWorkId.value === pending.target.id) closeDetails()
       pendingReviewAction.value = null
       clearActionInputs()
+      restoreActionFocus()
       void fetchReviewQueue(true)
     } else {
       modalActionError.value = message
@@ -2512,18 +2962,6 @@ function validateFilters(): boolean {
     return false
   }
 
-  const identifiers = [filters.designer_id, filters.reviewer_id]
-  const hasInvalidIdentifier = identifiers.some((value) => {
-    if (value.trim() === '') return false
-    const parsed = Number(value)
-    return !Number.isInteger(parsed) || parsed < 1
-  })
-
-  if (hasInvalidIdentifier) {
-    filterError.value = copy.value.invalidIdentifiers
-    return false
-  }
-
   return true
 }
 
@@ -2540,8 +2978,6 @@ function buildListQuery(): Record<string, string | number> {
     ['q', appliedFilters.q.trim()],
     ['status', appliedFilters.status],
     ['media_type', appliedFilters.media_type.trim()],
-    ['designer_id', appliedFilters.designer_id.trim()],
-    ['reviewer_id', appliedFilters.reviewer_id.trim()],
     ['assigned', appliedFilters.assigned],
     ['from', appliedFilters.from],
     ['to', appliedFilters.to]
@@ -2566,6 +3002,8 @@ async function fetchReviewQueue(silent = false): Promise<void> {
   if (!silent) {
     loading.value = true
     error.value = null
+  } else {
+    updating.value = true
   }
 
   try {
@@ -2602,6 +3040,7 @@ async function fetchReviewQueue(silent = false): Promise<void> {
       return
     }
     publicationPolicy.value = safePublicationPolicy
+    reviewerOptions.value = response.data.reviewer_options
     if (!response.data.review_policy.enabled) {
       filters.overdue = ''
       appliedFilters.overdue = ''
@@ -2616,6 +3055,15 @@ async function fetchReviewQueue(silent = false): Promise<void> {
     Object.assign(pagination, response.data.pagination)
     Object.assign(summary, response.data.summary)
     page.value = response.data.pagination.current_page
+    if (
+      response.data.items.length === 0
+      && response.data.pagination.total > 0
+      && page.value > response.data.pagination.last_page
+    ) {
+      page.value = Math.max(1, response.data.pagination.last_page)
+      void fetchReviewQueue(silent)
+      return
+    }
     serverForbidden.value = false
   } catch (requestError: unknown) {
     if (
@@ -2641,10 +3089,70 @@ async function fetchReviewQueue(silent = false): Promise<void> {
 
     if (!silent) error.value = copy.value.genericError
   } finally {
-    if (!silent && requestAccessRevision === accessRevision && currentRequestRevision === listRequestRevision) {
-      loading.value = false
+    if (requestAccessRevision === accessRevision && currentRequestRevision === listRequestRevision) {
+      if (silent) updating.value = false
+      else loading.value = false
     }
   }
+}
+
+function updateDraftFilter(key: string, value: string | number): void {
+  if (![
+    'q',
+    'status',
+    'media_type',
+    'assigned',
+    'overdue',
+    'from',
+    'to',
+    'per_page'
+  ].includes(key)) return
+
+  ;(filters as unknown as Record<string, string | number>)[key] = value
+  filterError.value = null
+}
+
+function removeFilter(key: string): void {
+  if (key === 'date') {
+    filters.from = ''
+    filters.to = ''
+  } else if (key === 'per_page') {
+    filters.per_page = 15
+  } else if (['q', 'status', 'media_type', 'assigned', 'overdue'].includes(key)) {
+    ;(filters as unknown as Record<string, string>)[key] = ''
+  } else {
+    return
+  }
+
+  Object.assign(appliedFilters, filters)
+  page.value = 1
+  void fetchReviewQueue()
+}
+
+function setTimeField(field: string): void {
+  if (['submitted_at', 'reviewed_at', 'updated_at', 'deadline'].includes(field)) {
+    selectedTimeField.value = field as ReviewTimeField
+  }
+}
+
+function sortSelectedTime(): void {
+  const field = selectedTimeField.value
+  changeSort(field === 'submitted_at' || field === 'deadline' ? 'submitted_at' : 'updated_at')
+}
+
+function handleQueueAction(work: ReviewQueueItem, key: string): void {
+  if (reviewActionDefinitions.some(action => action.key === key)) {
+    requestReviewAction(work, key as ReviewActionKey)
+  }
+}
+
+function cleanTechnicalFilterQuery(): void {
+  if (!('designer_id' in route.query) && !('reviewer_id' in route.query)) return
+
+  const cleanQuery = { ...route.query }
+  delete cleanQuery.designer_id
+  delete cleanQuery.reviewer_id
+  void router.replace({ query: cleanQuery })
 }
 
 function applyFilters(): void {
@@ -2653,6 +3161,20 @@ function applyFilters(): void {
   Object.assign(appliedFilters, filters)
   page.value = 1
   void fetchReviewQueue()
+}
+
+function applyLiveSearch(value: string): void {
+  const query = value.trim()
+  if (query.length === 1) {
+    filterError.value = copy.value.searchTooShort
+    return
+  }
+  if (query === appliedFilters.q) return
+
+  filterError.value = null
+  appliedFilters.q = query
+  page.value = 1
+  void fetchReviewQueue(items.value.length > 0)
 }
 
 function resetFilters(): void {
@@ -2695,6 +3217,9 @@ function changePage(nextPage: number): void {
 function openDetails(work: ReviewQueueItem): void {
   if (!canViewDetails.value) return
 
+  detailTriggerElement = document.activeElement instanceof HTMLElement
+    ? document.activeElement
+    : null
   drawerOpen.value = true
   selectedWorkId.value = work.id
   selectedWorkTitle.value = work.title
@@ -2761,6 +3286,8 @@ async function fetchWorkDetails(workId: number): Promise<void> {
 }
 
 function closeDetails(): void {
+  const triggerElement = detailTriggerElement
+  detailTriggerElement = null
   detailRequestRevision += 1
   drawerOpen.value = false
   selectedWorkId.value = null
@@ -2768,6 +3295,7 @@ function closeDetails(): void {
   detail.value = null
   detailError.value = null
   detailLoading.value = false
+  void nextTick(() => triggerElement?.focus())
 }
 
 function retrySelectedDetails(): void {
@@ -2778,6 +3306,7 @@ function retrySelectedDetails(): void {
 
 function clearQueueData(): void {
   items.value = []
+  reviewerOptions.value = []
   Object.assign(summary, emptySummary())
   reviewPolicy.value = disabledReviewPolicy()
   publicationPolicy.value = disabledPublicationPolicy()
@@ -2796,6 +3325,7 @@ function clearPageState(): void {
   listRequestRevision += 1
   clearQueueData()
   loading.value = false
+  updating.value = false
   error.value = null
   filterError.value = null
   pendingReviewAction.value = null
@@ -2839,6 +3369,7 @@ watch(
 onMounted(() => {
   pageMounted = true
   window.addEventListener('keydown', handleActionEscape)
+  cleanTechnicalFilterQuery()
   syncReviewAccessState()
 })
 
@@ -2850,6 +3381,41 @@ onBeforeUnmount(() => {
 <style scoped>
 .ym-works-review-page {
   color: var(--ym-text);
+}
+
+.ym-review-followup {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px 13px;
+}
+
+.ym-review-followup > div:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.ym-review-followup span,
+.ym-review-followup small {
+  color: var(--ym-admin-muted);
+  font-size: 12px;
+}
+
+.ym-review-followup strong {
+  overflow: hidden;
+  color: var(--ym-admin-text);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ym-review-followup__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
 }
 
 .ym-works-review-hero,
@@ -3424,7 +3990,7 @@ onBeforeUnmount(() => {
 }
 
 .ym-works-review-table-wrap {
-  overflow-x: auto;
+  overflow: visible;
   border: 1px solid var(--ym-soft-border);
   border-radius: 20px;
   scrollbar-color: rgba(148, 163, 184, 0.55) transparent;
@@ -3432,7 +3998,7 @@ onBeforeUnmount(() => {
 
 .ym-works-review-table {
   width: 100%;
-  min-width: 2460px;
+  min-width: 0;
   border-collapse: collapse;
   background: color-mix(in srgb, var(--ym-card-bg) 88%, transparent);
 }
@@ -3896,6 +4462,10 @@ onBeforeUnmount(() => {
   backdrop-filter: blur(6px);
 }
 
+:global(.ym-dashboard-rtl) .ym-review-detail-backdrop {
+  justify-content: flex-start;
+}
+
 .ym-review-action-backdrop {
   position: fixed;
   inset: 0;
@@ -3975,6 +4545,7 @@ onBeforeUnmount(() => {
 }
 
 .ym-review-action-dialog__field input,
+.ym-review-action-dialog__field select,
 .ym-review-action-dialog__field textarea {
   width: 100%;
   border: 1px solid var(--ym-control-border);
@@ -3993,6 +4564,7 @@ onBeforeUnmount(() => {
 }
 
 .ym-review-action-dialog__field input:focus,
+.ym-review-action-dialog__field select:focus,
 .ym-review-action-dialog__field textarea:focus,
 .ym-review-action-dialog button:focus-visible {
   border-color: #818cf8;
@@ -4378,6 +4950,19 @@ onBeforeUnmount(() => {
   .ym-review-detail-drawer__head,
   .ym-review-detail-content {
     padding-inline: 1rem;
+  }
+
+  .ym-review-followup {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ym-review-followup__actions {
+    justify-content: stretch;
+  }
+
+  .ym-review-followup__actions .ym-admin-button {
+    flex: 1 1 140px;
   }
 }
 

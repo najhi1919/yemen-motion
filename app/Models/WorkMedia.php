@@ -29,6 +29,33 @@ class WorkMedia extends Model
 
     public const PROCESSING_FAILED = 'failed';
 
+    public const STAGE_QUEUED = 'queued';
+
+    public const STAGE_VALIDATING = 'validating';
+
+    public const STAGE_PROBING = 'probing';
+
+    public const STAGE_EXTRACTING_METADATA = 'extracting_metadata';
+
+    public const STAGE_GENERATING_POSTER = 'generating_poster';
+
+    public const STAGE_FINALIZING = 'finalizing';
+
+    public const STAGE_READY = 'ready';
+
+    public const STAGE_FAILED = 'failed';
+
+    public const PROCESSING_STAGES = [
+        self::STAGE_QUEUED,
+        self::STAGE_VALIDATING,
+        self::STAGE_PROBING,
+        self::STAGE_EXTRACTING_METADATA,
+        self::STAGE_GENERATING_POSTER,
+        self::STAGE_FINALIZING,
+        self::STAGE_READY,
+        self::STAGE_FAILED,
+    ];
+
     public const PROCESSING_STATUSES = [
         self::PROCESSING_PENDING,
         self::PROCESSING_READY,
@@ -42,6 +69,7 @@ class WorkMedia extends Model
     protected $hidden = [
         'disk',
         'path',
+        'poster_path',
         'processing_error',
     ];
 
@@ -58,6 +86,10 @@ class WorkMedia extends Model
             'width' => 'integer',
             'height' => 'integer',
             'duration_ms' => 'integer',
+            'processing_progress' => 'integer',
+            'processing_attempts' => 'integer',
+            'processing_started_at' => 'datetime',
+            'processing_completed_at' => 'datetime',
             'deleted_at' => 'datetime',
         ];
     }

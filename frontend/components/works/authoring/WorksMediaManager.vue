@@ -144,6 +144,7 @@
             @move="move(selectedIndex, $event)"
             @remove="openRemoveDialog(selectedMedia, $event)"
             @retry="retryPreview(selectedMedia)"
+            @retry-processing="retryProcessing(selectedMedia)"
           />
         </section>
       </div>
@@ -178,7 +179,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import WorksMediaConfirmDialog from '~/components/works/media/WorksMediaConfirmDialog.vue'
 import WorksMediaGallery from '~/components/works/media/WorksMediaGallery.vue'
 import WorksMediaPreview from '~/components/works/media/WorksMediaPreview.vue'
@@ -206,11 +207,19 @@ interface MediaItem {
   height: number | null
   duration_ms: number | null
   processing_status: 'pending' | 'ready' | 'failed'
+  processing_stage: 'queued' | 'validating' | 'probing' | 'extracting_metadata' | 'generating_poster' | 'finalizing' | 'ready' | 'failed'
+  processing_progress: number
+  processing_started_at: string | null
+  processing_completed_at: string | null
+  processing_attempts: number
+  processing_message: string
+  can_retry_processing: boolean
   is_cover: boolean
   uploaded_by: { id: number; name: string } | null
   created_at: string | null
   updated_at: string | null
   content_endpoint: string
+  poster_endpoint: string | null
 }
 interface MediaPolicy {
   source: string
@@ -251,6 +260,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   stateChange: [payload: { work?: MediaWork; media: MediaItem[]; media_policy?: MediaPolicy; counts: Counts }]
   orderDirtyChange: [dirty: boolean]
+  busyChange: [busy: boolean]
 }>()
 
 const { apiFetch, tokenCookie } = useApiClient()
@@ -268,6 +278,7 @@ const uploading = ref(false)
 const ordering = ref(false)
 const covering = ref(false)
 const deletingId = ref<number | null>(null)
+const retryingId = ref<number | null>(null)
 const pendingRemoval = ref<MediaItem | null>(null)
 const removeDialogAnchor = ref<HTMLElement | null>(null)
 const draggedId = ref<number | null>(null)
@@ -276,6 +287,8 @@ const previewErrors = ref<Record<number, boolean>>({})
 const previewSignatures = ref<Record<number, string>>({})
 const previewRevision = ref(0)
 const previewControllers = new Map<number, AbortController>()
+let processingPollTimer: ReturnType<typeof setTimeout> | null = null
+let processingPollController: AbortController | null = null
 const fileError = ref('')
 const message = ref('')
 const messageTone = ref<'success' | 'error' | 'info'>('info')
@@ -368,7 +381,7 @@ const text = computed(() => props.locale === 'ar' ? {
   noFile: 'No valid file has been selected for upload.'
 })
 
-const busy = computed(() => uploading.value || ordering.value || covering.value || deletingId.value !== null)
+const busy = computed(() => uploading.value || ordering.value || covering.value || deletingId.value !== null || retryingId.value !== null)
 const actionsDisabled = computed(() => !props.editable || !props.canUpdateMedia || authorizationLost.value)
 const singleMediaMode = computed(() => props.mediaPolicy.effective_limits.max_items === 1)
 const canOrganize = computed(() => !actionsDisabled.value && !singleMediaMode.value && localMedia.value.length > 1)
@@ -457,6 +470,12 @@ const orderStatusLabel = computed(() => orderDirty.value
   : text.value.orderClean)
 
 watch(orderDirty, dirty => emit('orderDirtyChange', dirty), { immediate: true })
+watch(busy, value => emit('busyChange', value), { immediate: true })
+watch(
+  () => localMedia.value.map(item => `${item.id}:${item.processing_status}`).join('|'),
+  () => syncProcessingPolling(),
+  { immediate: true }
+)
 
 watch(
   () => props.media,
@@ -847,6 +866,106 @@ async function retryPreview(item: MediaItem) {
   await refreshPreviews(localMedia.value)
 }
 
+async function retryProcessing(item: MediaItem) {
+  if (!item.can_retry_processing || retryingId.value !== null || actionsDisabled.value) return
+  retryingId.value = item.id
+  message.value = ''
+  try {
+    const response = await apiFetch<ApiResponse<{ changed: boolean; media: MediaItem }>>(
+      `/admin/works/${props.work.id}/media/${item.id}/retry-processing`,
+      { method: 'POST' }
+    )
+    const media = localMedia.value.map(entry => entry.id === item.id ? response.data.media : entry)
+    localMedia.value = media
+    message.value = response.message || localized(
+      'أُعيد الفيديو إلى طابور المعالجة.',
+      'The video was returned to the processing queue.'
+    )
+    messageTone.value = 'success'
+    syncProcessingPolling()
+  } catch (error: unknown) {
+    handleAuth(error)
+    message.value = localized(
+      'تعذرت إعادة معالجة الفيديو. حاول مرة أخرى أوأزل الملف وارفع نسخة أخرى.',
+      'Video processing could not be retried. Try again or remove the file and upload another copy.'
+    )
+    messageTone.value = 'error'
+  } finally {
+    retryingId.value = null
+  }
+}
+
+function syncProcessingPolling() {
+  if (!import.meta.client) return
+  if (processingPollTimer) {
+    clearTimeout(processingPollTimer)
+    processingPollTimer = null
+  }
+
+  const shouldPoll = document.visibilityState === 'visible'
+    && localMedia.value.some(item => item.processing_status === 'pending')
+  if (shouldPoll) processingPollTimer = setTimeout(() => void pollProcessing(), 2000)
+}
+
+async function pollProcessing() {
+  if (!import.meta.client || document.visibilityState !== 'visible') {
+    syncProcessingPolling()
+    return
+  }
+
+  processingPollController?.abort()
+  const controller = new AbortController()
+  processingPollController = controller
+  const previous = new Map(localMedia.value.map(item => [item.id, item.processing_status]))
+
+  try {
+    const response = await $fetch<ApiResponse<{
+      work: MediaWork
+      media: MediaItem[]
+      media_policy: MediaPolicy
+      counts?: Counts
+    }>>(`${baseUrl}/admin/works/${props.work.id}/media`, {
+      headers: authenticatedHeaders(),
+      signal: controller.signal
+    })
+    if (controller.signal.aborted) return
+
+    localMedia.value = response.data.media.map(item => ({ ...item }))
+    const settled = response.data.media.some(item => (
+      previous.get(item.id) === 'pending'
+      && item.processing_status !== 'pending'
+    ))
+
+    if (settled) {
+      const counts = response.data.counts || props.counts
+      emit('stateChange', {
+        work: response.data.work,
+        media: response.data.media,
+        media_policy: response.data.media_policy,
+        counts
+      })
+      await refreshPreviews(response.data.media)
+    }
+  } catch (error: unknown) {
+    if (!controller.signal.aborted) handleAuth(error)
+  } finally {
+    if (processingPollController === controller) processingPollController = null
+    syncProcessingPolling()
+  }
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState === 'hidden') {
+    if (processingPollTimer) clearTimeout(processingPollTimer)
+    processingPollTimer = null
+    processingPollController?.abort()
+    processingPollController = null
+    return
+  }
+
+  syncProcessingPolling()
+}
+
 function revokePreview(id: number) {
   previewControllers.get(id)?.abort()
   previewControllers.delete(id)
@@ -927,7 +1046,17 @@ function localized(arabic: string, english: string): string {
   return props.locale === 'ar' ? arabic : english
 }
 
-onBeforeUnmount(revokeAllPreviews)
+onMounted(() => {
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+  syncProcessingPolling()
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  if (processingPollTimer) clearTimeout(processingPollTimer)
+  processingPollController?.abort()
+  revokeAllPreviews()
+})
 </script>
 
 <style scoped>

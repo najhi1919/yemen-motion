@@ -25,8 +25,10 @@ class DatabaseSeeder extends Seeder
             ],
         );
 
-        if (! $superAdmin->hasRole('super-admin')) {
-            $superAdmin->assignRole('super-admin');
+        $superAdminRole = (string) config('yemen-motion-permissions.super_admin_role', 'super-admin');
+
+        if (! $superAdmin->hasRole($superAdminRole)) {
+            $superAdmin->assignRole($superAdminRole);
         }
 
         User::firstOrCreate(

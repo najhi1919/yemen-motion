@@ -44,6 +44,15 @@ class WorksReviewQueueController extends Controller
         $validated = $request->validated();
         $queryText = trim((string) ($validated['q'] ?? ''));
         $sort = (string) ($validated['sort'] ?? 'submitted_at');
+        $sortColumn = match ($sort) {
+            'id' => 'works.id',
+            'title' => 'works.title',
+            'submitted_at' => 'works.submitted_at',
+            'updated_at' => 'works.updated_at',
+            'reports_count' => 'works.reports_count',
+            'created_at' => 'works.created_at',
+            'status' => 'works.status',
+        };
         $direction = (string) ($validated['direction'] ?? 'asc');
         $perPage = (int) ($validated['per_page'] ?? 15);
         $assigned = $this->booleanFilter($request, $validated, 'assigned');
@@ -93,8 +102,8 @@ class WorksReviewQueueController extends Controller
                 'designer:id,name',
                 'reviewer:id,name',
             ])
-            ->orderBy($sort, $direction)
-            ->orderBy('id', $direction)
+            ->orderBy($sortColumn, $direction)
+            ->when($sort !== 'id', fn (Builder $query) => $query->orderBy('works.id', $direction))
             ->paginate($perPage)
             ->through(fn (Work $work): array => $this->workPayload($work, $overdueCutoff));
 
@@ -124,6 +133,7 @@ class WorksReviewQueueController extends Controller
                         : 'approve_only',
                     'settings_version' => $settingsVersion,
                 ],
+                'reviewer_options' => $this->reviewerOptions($request),
                 'filters' => [
                     'q' => $queryText !== '' ? $queryText : null,
                     'status' => $validated['status'] ?? null,
@@ -141,6 +151,37 @@ class WorksReviewQueueController extends Controller
             'message' => 'تم جلب طلبات مراجعة الأعمال بنجاح',
             'errors' => null,
         ]);
+    }
+
+    /** @return list<array{id: int, name: string}> */
+    private function reviewerOptions(WorksReviewQueueRequest $request): array
+    {
+        $user = $request->user();
+
+        if (! $user || ! $user->can('admin.works.review.assign_reviewer')) {
+            return [];
+        }
+
+        return User::query()
+            ->select(['id', 'name'])
+            ->whereHas('roles', fn (Builder $query) => $query->whereIn('name', [
+                'super-admin',
+                'admin',
+                'staff',
+            ]))
+            ->whereDoesntHave('roles', fn (Builder $query) => $query->whereIn('name', [
+                'client',
+                'designer',
+            ]))
+            ->orderBy('name')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (User $reviewer): array => [
+                'id' => (int) $reviewer->id,
+                'name' => $reviewer->name,
+            ])
+            ->values()
+            ->all();
     }
 
     /**

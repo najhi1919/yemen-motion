@@ -1,6 +1,6 @@
 # PROJECT_MAP — يمن موشن (Yemen Motion)
 
-> آخر تحديث: 2026-07-24
+> آخر تحديث: 2026-07-25
 > البيئة: PHP 8.4.21 / Node 24.15.0 / Composer 2.9.4  
 > OS: Linux  
 > **المرجع المعماري والبنائي الرسمي — الإصدار النهائي 2.0**  
@@ -8,7 +8,7 @@
 
 ---
 
-## 0. CURRENT IMPLEMENTATION STATUS — 2026-07-24
+## 0. CURRENT IMPLEMENTATION STATUS — 2026-07-25
 
 > هذا القسم يصف موضع التنفيذ الحالي فقط، ولا يغيّر المواصفات المعمارية أو خطة البناء الأصلية في هذا الملف.
 
@@ -19,11 +19,13 @@
 
 ### 0.2 Current Stable Point
 
-آخر نقطة مستقرة موثقة:
+آخر نقطة مستقرة موثقة قبل إغلاق دورة المراجعة:
 
 - `d10fc37 feat: complete admin works all management workspace`
 
-هذه نقطة التنفيذ البرمجي المستقرة لمحطة كل الأعمال والأقسام الإدارية التابعة لها، وهي موجودة على `main` ومدفوعة إلى `origin/main`. يسجل تثبيت التوثيق `bb0bc83` حالة الإغلاق النهائية، ويشكل التثبيتان معًا نقطة أساس نظيفة ومتزامنة ومعتمدة. لا يعني هذا الإغلاق اكتمال Public Works Platform؛ وتبقى الحدود الدقيقة موضحة في القسم `0.34`.
+هذه نقطة التنفيذ البرمجي المستقرة لمحطة كل الأعمال والأقسام الإدارية التابعة لها، وهي موجودة على `main` ومدفوعة إلى `origin/main`. يسجل تثبيت التوثيق `bb0bc83` حالة الإغلاق السابقة.
+
+يضيف تثبيت `feat(works): complete admin review workflow` نقطة الأساس التالية لمحطة الأعمال ودورة المراجعة، ويوثق القسم `0.35` نطاقها ونتائج تحققها. لا يعني هذا الإغلاق اكتمال Public Works Platform؛ وتبقى الحدود الدقيقة موضحة في القسمين `0.34` و`0.35`.
 
 ### 0.3 Completed UI Foundation Work
 
@@ -2251,14 +2253,93 @@ Final manual visual QA: Passed with low non-blocking notes
 
 #### Recommended Next Station
 
-التوصية غير الملزمة:
+اكتملت هذه المحطة لاحقًا، ويوثق القسم `0.35` إغلاقها.
 
 ```text
 Admin Works Review Requests Station
 /admin/works/review
 ```
 
-الهدف هو مراجعة محطة طلبات المراجعة بصريًا ووظيفيًا بصورة مستقلة. تبدأ فقط بعد تأكيد المستخدم، ولا تدخل ضمن إغلاق كل الأعمال.
+كانت هذه التوصية هي الحد التالي لإغلاق `0.34`، ولا تدخل بأثر رجعي ضمن نقطة أساس محطة كل الأعمال السابقة.
+
+### 0.35 Completed Admin Works Review Workflow Station — 2026-07-25
+
+**Task ID:** `YM-WORKS-REVIEW-STATION-CLOSURE-006`
+
+**Closure baseline:** `feat(works): complete admin review workflow`
+
+أُغلقت محطة إدارة الأعمال ودورة المراجعة الداخلية بعد تثبيت دورة الحالات، وجاهزية المسودة، ومعالجة الوسائط، وطابور المراجعة، وإجراءات المراجع. هذا الإغلاق خاص بالمساحات الإدارية ولا يعلن اكتمال Public Works Platform أو تجارب العميل والمصمم.
+
+#### Closed Administrative Surfaces
+
+- `/admin/works/all`
+- `/admin/works/create`
+- تحرير العمل الإداري وأقسام الجاهزية والتصنيف والوسائط.
+- `/admin/works/taxonomy`
+- `/admin/works/review`
+- جدار تفاصيل المراجعة ومعاينة الوسائط المحمية.
+
+#### Workflow and Readiness Contract
+
+- تقيم `WorksReviewReadinessService` البيانات المحفوظة في الخادم، وتفصل النواقص المانعة عن التوصيات غير المانعة.
+- يستخدم الإرسال معاملة وقفل صف و`expected_updated_at`، ويعيد `409` عند تعارض النسخة أوالحالة.
+- دورة المراجعة المغلقة هي: `draft` أو`changes_requested` إلى `submitted`، ثم الإسناد و`in_review`، ثم `changes_requested` أو`approved` أو`rejected`، مع `published` بعد الاعتماد وفق السياسة.
+- لا يتجاوز Super Admin قواعد الجاهزية أوالتحقق أوانتقالات الحالة؛ يقتصر التجاوز المركزي على الصلاحيات المسجلة.
+
+#### Protected Media Processing
+
+- تُرسل معالجة الفيديو إلى قائمة `works-media` بعد تثبيت الرفع، وتنتقل الوسائط من `pending` إلى `ready` أو`failed`.
+- تستخرج المعالجة بيانات الفيديو وتولد Poster خاصًا دون نشر روابط تخزين عامة.
+- يعرض مدير الوسائط المرحلة والتقدم الآمنين ويحدث جاهزية المراجعة عند استقرار الحالة.
+- يشغل `composer run dev` عامل Queue الدائم، ويوجد نموذج إنتاج في `deploy/supervisor/yemen-motion-works-media.conf.example`.
+
+#### Review Queue and Actions
+
+- يدعم الطابور البحث والفلاتر والفرز والترقيم و`reviewer_options` المقيدة بالمستخدمين الداخليين الصالحين.
+- يدعم جدار التفاصيل الصور والفيديو والمعرض عبر المحتوى المحمي وBlob URLs.
+- تعمل إجراءات الإسناد وبدء المراجعة وطلب التعديلات والاعتماد والرفض والنشر بعد الاعتماد وفق الصلاحية والحالة.
+- تمنع المعاملات والتزامن المتفائل الطلبات القديمة أوالمكررة، ولا يسجل Audit Event إلا بعد نجاح الانتقال داخل المعاملة.
+
+#### Verification Evidence
+
+نفذ وكيل الإغلاق الفحوص المستهدفة التالية بتاريخ `2026-07-25`:
+
+```text
+Closure feature tests: 348 passed / 3693 assertions
+Frontend production build: Build complete (Client, Server, Nitro)
+git diff --check: passed
+```
+
+أكد المستخدم نجاح الفحص اليدوي والبصري للدورة الكاملة، بما يشمل المعالجة والإرسال والطابور والإجراءات والتعارض والمعاينة والبحث والفرز والترقيم. لم يعد وكيل الإغلاق تنفيذ هذا الفحص اليدوي.
+
+بقيت تحذيرات البناء العامة غير المانعة فقط: sourcemap، و`authStore` mixed static/dynamic import، وchunk size.
+
+#### Authorization and Security Boundaries
+
+- يبقى Backend مصدر التفويض والقرار النهائي.
+- يطبق تجاوز Super Admin من معرف الدور الثابت، دون Grants فردية ودون الاعتماد على اسم العرض.
+- لا تتجاوز الصلاحية Validation أوReadiness أوState Machine أوTransactions أوحدود الوسائط.
+- لا توجد public media URLs أوraw paths أوTokens أوCookies في عقود الواجهة.
+
+#### Remaining Product Boundaries
+
+يبقى خارج هذا الإغلاق:
+
+- Public Works Platform وتجارب العميل والمصمم.
+- التعليقات والإعجابات والتفاعل العام.
+- تجربة النشر العامة الكاملة.
+- المحطات الإدارية الأخرى التي لم تُغلق بتدقيق مستقل.
+
+#### Recommended Next Station
+
+التوصية التالية غير الملزمة:
+
+```text
+Admin Works Visibility Station
+/admin/works/visibility
+```
+
+تبدأ بعد تأكيد المستخدم، ولا تدخل ضمن إغلاق محطة الأعمال ودورة المراجعة.
 
 ---
 

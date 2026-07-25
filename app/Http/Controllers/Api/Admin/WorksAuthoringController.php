@@ -267,6 +267,10 @@ class WorksAuthoringController extends Controller
                 'admin.works.taxonomy.tags.view',
                 'admin.works.update.tags',
             ]),
+            'can_submit_review' => $this->hasPermissions($actor, [
+                'admin.works.access',
+                'admin.works.review.submit',
+            ]),
         ];
     }
 

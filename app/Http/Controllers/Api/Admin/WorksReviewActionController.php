@@ -8,7 +8,9 @@ use App\Models\User;
 use App\Models\Work;
 use App\Services\Audit\AuditEventLogger;
 use App\Services\Works\WorksSettingsStore;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Throwable;
@@ -98,6 +100,12 @@ class WorksReviewActionController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            $this->assertExpectedVersion(
+                $currentWork,
+                isset($validated['expected_updated_at'])
+                    ? (string) $validated['expected_updated_at']
+                    : null,
+            );
             $oldState = $this->reviewState($currentWork);
             $changes = $this->changesFor(
                 $currentWork,
@@ -217,11 +225,15 @@ class WorksReviewActionController extends Controller
     private function startChanges(Work $work, int $actorId): array
     {
         if (! in_array($work->status, [Work::STATUS_SUBMITTED, Work::STATUS_IN_REVIEW], true)) {
-            throw new HttpException(422, 'لا يمكن بدء مراجعة العمل من حالته الحالية.');
+            $this->throwConflict($work, 'لا يمكن بدء مراجعة العمل من حالته الحالية.');
         }
 
         if ($work->status === Work::STATUS_IN_REVIEW) {
-            return $work->reviewer_id === null ? ['reviewer_id' => $actorId] : [];
+            if ($work->reviewer_id === null) {
+                return ['reviewer_id' => $actorId];
+            }
+
+            $this->throwConflict($work, 'مراجعة العمل بدأت بالفعل.');
         }
 
         $changes = [
@@ -244,7 +256,7 @@ class WorksReviewActionController extends Controller
             Work::STATUS_IN_REVIEW,
             Work::STATUS_CHANGES_REQUESTED,
         ], true)) {
-            throw new HttpException(422, 'لا يمكن تعيين مراجع للعمل من حالته الحالية.');
+            $this->throwConflict($work, 'لا يمكن تعيين مراجع للعمل من حالته الحالية.');
         }
 
         return $work->reviewer_id === $reviewerId ? [] : ['reviewer_id' => $reviewerId];
@@ -258,11 +270,11 @@ class WorksReviewActionController extends Controller
     ): array
     {
         if ($work->status === Work::STATUS_APPROVED) {
-            return [];
+            $this->throwConflict($work, 'تم اعتماد العمل بالفعل.');
         }
 
         if ($work->status !== Work::STATUS_IN_REVIEW) {
-            throw new HttpException(422, 'لا يمكن اعتماد العمل من حالته الحالية.');
+            $this->throwConflict($work, 'لا يمكن اعتماد العمل من حالته الحالية.');
         }
 
         $decisionTime = now();
@@ -294,7 +306,7 @@ class WorksReviewActionController extends Controller
         }
 
         if ($work->status !== Work::STATUS_IN_REVIEW) {
-            throw new HttpException(422, 'لا يمكن طلب تعديلات على العمل من حالته الحالية.');
+            $this->throwConflict($work, 'لا يمكن طلب تعديلات على العمل من حالته الحالية.');
         }
 
         return [
@@ -319,7 +331,7 @@ class WorksReviewActionController extends Controller
         }
 
         if ($work->status !== Work::STATUS_IN_REVIEW) {
-            throw new HttpException(422, 'لا يمكن رفض العمل من حالته الحالية.');
+            $this->throwConflict($work, 'لا يمكن رفض العمل من حالته الحالية.');
         }
 
         $decisionTime = now();
@@ -341,14 +353,14 @@ class WorksReviewActionController extends Controller
     {
         if ($work->status === Work::STATUS_PUBLISHED) {
             if ($work->visibility_status === Work::VISIBILITY_PUBLIC) {
-                return [];
+                $this->throwConflict($work, 'تم نشر العمل بالفعل.');
             }
 
-            throw new HttpException(422, 'لا يمكن اعتماد نشر عمل منشور لكنه غير عام.');
+            $this->throwConflict($work, 'لا يمكن اعتماد نشر عمل منشور لكنه غير عام.');
         }
 
         if ($work->status !== Work::STATUS_APPROVED) {
-            throw new HttpException(422, 'لا يمكن نشر العمل قبل اعتماده.');
+            $this->throwConflict($work, 'لا يمكن نشر العمل قبل اعتماده.');
         }
 
         return [
@@ -362,7 +374,11 @@ class WorksReviewActionController extends Controller
     private function reopenChanges(Work $work, int $actorId): array
     {
         if ($work->status === Work::STATUS_IN_REVIEW) {
-            return $work->reviewer_id === null ? ['reviewer_id' => $actorId] : [];
+            if ($work->reviewer_id === null) {
+                return ['reviewer_id' => $actorId];
+            }
+
+            $this->throwConflict($work, 'المراجعة مفتوحة بالفعل.');
         }
 
         if (! in_array($work->status, [
@@ -370,7 +386,7 @@ class WorksReviewActionController extends Controller
             Work::STATUS_REJECTED,
             Work::STATUS_APPROVED,
         ], true)) {
-            throw new HttpException(422, 'لا يمكن إعادة فتح مراجعة العمل من حالته الحالية.');
+            $this->throwConflict($work, 'لا يمكن إعادة فتح مراجعة العمل من حالته الحالية.');
         }
 
         return [
@@ -452,6 +468,33 @@ class WorksReviewActionController extends Controller
             'has_change_request_notes' => filled($work->change_request_notes),
             'has_rejection_reason' => filled($work->rejection_reason),
         ];
+    }
+
+    private function assertExpectedVersion(Work $work, ?string $expectedUpdatedAt): void
+    {
+        if ($expectedUpdatedAt === null) {
+            return;
+        }
+
+        $expected = Carbon::parse($expectedUpdatedAt)->utc();
+        $current = $work->updated_at?->copy()->utc();
+
+        if ($current === null || ! $current->equalTo($expected)) {
+            $this->throwConflict($work, 'تغيرت نسخة العمل في الخادم. حمّل النسخة الأحدث ثم أعد المحاولة.');
+        }
+    }
+
+    private function throwConflict(Work $work, string $message): never
+    {
+        throw new HttpResponseException(response()->json([
+            'success' => false,
+            'data' => [
+                'current_status' => $work->status,
+                'current_updated_at' => $work->updated_at?->toISOString(),
+            ],
+            'message' => $message,
+            'errors' => null,
+        ], 409));
     }
 
     /**

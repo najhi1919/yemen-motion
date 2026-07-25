@@ -131,6 +131,15 @@ class WorksReviewQueueApiTest extends TestCase
         $this->actingAsRole('super-admin');
         $designer = User::factory()->create(['name' => 'Review Designer']);
         $reviewer = User::factory()->create(['name' => 'Review Assignee']);
+        $allowedReviewer = User::factory()->create([
+            'name' => 'Allowed Internal Reviewer',
+            'email' => 'allowed-reviewer-private@example.test',
+        ]);
+        $allowedReviewer->assignRole('staff');
+        $externalReviewer = User::factory()->create(['name' => 'Blocked External Reviewer']);
+        $externalReviewer->assignRole('designer');
+        $mixedReviewer = User::factory()->create(['name' => 'Blocked Mixed Reviewer']);
+        $mixedReviewer->assignRole(['staff', 'client']);
         Work::factory()->create([
             'title' => 'Review Queue Work',
             'slug' => 'review-queue-work',
@@ -203,8 +212,21 @@ class WorksReviewQueueApiTest extends TestCase
             collect(array_keys($item['review_flags']))->sort()->values()->all(),
         );
         $this->assertSame(
-            ['filters', 'items', 'pagination', 'publication_policy', 'review_policy', 'summary'],
+            ['filters', 'items', 'pagination', 'publication_policy', 'review_policy', 'reviewer_options', 'summary'],
             collect(array_keys($response->json('data')))->sort()->values()->all(),
+        );
+
+        $reviewerOptions = collect($response->json('data.reviewer_options'));
+        $this->assertTrue($reviewerOptions->contains('id', $allowedReviewer->id));
+        $this->assertFalse($reviewerOptions->contains('id', $externalReviewer->id));
+        $this->assertFalse($reviewerOptions->contains('id', $mixedReviewer->id));
+        $this->assertFalse($reviewerOptions->contains('id', $reviewer->id));
+        $this->assertTrue($reviewerOptions->every(
+            fn (array $option): bool => array_keys($option) === ['id', 'name'],
+        ));
+        $this->assertStringNotContainsString(
+            'allowed-reviewer-private@example.test',
+            $response->getContent(),
         );
     }
 
@@ -569,6 +591,24 @@ class WorksReviewQueueApiTest extends TestCase
         $this->assertSame(
             ['Alpha Review', 'Bravo Review', 'Charlie Review'],
             collect($response->json('data.items'))->pluck('title')->all(),
+        );
+    }
+
+    public function test_id_sorting_uses_the_stable_whitelisted_identifier(): void
+    {
+        $this->actingAsRole('super-admin');
+        $first = Work::factory()->submitted()->create();
+        $second = Work::factory()->submitted()->create();
+        $third = Work::factory()->submitted()->create();
+
+        $response = $this->getJson('/api/admin/works/review?sort=id&direction=desc')
+            ->assertOk()
+            ->assertJsonPath('data.filters.sort', 'id')
+            ->assertJsonPath('data.filters.direction', 'desc');
+
+        $this->assertSame(
+            [$third->id, $second->id, $first->id],
+            collect($response->json('data.items'))->pluck('id')->all(),
         );
     }
 

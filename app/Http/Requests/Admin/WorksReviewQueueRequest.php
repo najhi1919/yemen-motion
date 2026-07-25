@@ -33,6 +33,7 @@ class WorksReviewQueueRequest extends FormRequest
      * @var list<string>
      */
     private const SORTABLE_COLUMNS = [
+        'id',
         'submitted_at',
         'updated_at',
         'reports_count',

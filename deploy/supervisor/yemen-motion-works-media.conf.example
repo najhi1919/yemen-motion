@@ -1,0 +1,21 @@
+; Replace YM_APP_DIR, YM_RUN_USER, and YM_LOG_DIR in the Supervisor
+; service environment before enabling this program. No secrets belong here.
+;
+; Deploy in this order before restarting the managed processes:
+;   php artisan migrate --force
+;   php artisan queue:restart
+
+[program:yemen-motion-works-media]
+directory=%(ENV_YM_APP_DIR)s
+command=/usr/bin/php %(ENV_YM_APP_DIR)s/artisan queue:work redis --queue=works-media,default --sleep=1 --tries=3 --timeout=600 --max-time=3600
+user=%(ENV_YM_RUN_USER)s
+autostart=true
+autorestart=true
+startsecs=2
+stopasgroup=true
+killasgroup=true
+stopwaitsecs=630
+redirect_stderr=true
+stdout_logfile=%(ENV_YM_LOG_DIR)s/works-media-worker.log
+stdout_logfile_maxbytes=20MB
+stdout_logfile_backups=5

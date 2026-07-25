@@ -11,6 +11,7 @@ export interface AuthData {
   token: string
   role: string
   permissions: string[]
+  is_super_admin: boolean
 }
 
 export interface ApiResponse<T = unknown> {

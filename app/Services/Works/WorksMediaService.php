@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Works;
 
 use App\Exceptions\WorksMediaConflictException;
+use App\Jobs\ProcessWorkMedia;
 use App\Models\User;
 use App\Models\Work;
 use App\Models\WorkMedia;
@@ -56,6 +57,22 @@ class WorksMediaService
         private readonly WorksSettingsStore $settingsStore,
         private readonly AuditEventLogger $auditEventLogger,
     ) {}
+
+    /** @param array<string, mixed> $settings */
+    public function readinessPolicy(Work $work, array $settings): array
+    {
+        return $this->mediaPolicy($work, $settings);
+    }
+
+    public function isCompatibleForReview(Work $work, WorkMedia $media): bool
+    {
+        $expectedExtension = self::MIME_EXTENSIONS[$media->mime_type] ?? null;
+
+        return in_array($media->kind, $this->allowedFileKinds($work->media_type), true)
+            && in_array($media->mime_type, $this->allowedMimeTypes($work->media_type), true)
+            && $expectedExtension !== null
+            && strtolower($media->extension) === $expectedExtension;
+    }
 
     /** @return array<string, mixed> */
     public function index(int $workId): array
@@ -139,6 +156,7 @@ class WorksMediaService
                     'uploaded_by' => $actor->getKey(),
                     'disk' => self::DISK,
                     'path' => $path,
+                    'poster_path' => null,
                     'original_name' => $fileMetadata['original_name'],
                     'mime_type' => $fileMetadata['mime_type'],
                     'extension' => $fileMetadata['extension'],
@@ -151,8 +169,19 @@ class WorksMediaService
                     'processing_status' => $fileMetadata['kind'] === WorkMedia::KIND_IMAGE
                         ? WorkMedia::PROCESSING_READY
                         : WorkMedia::PROCESSING_PENDING,
+                    'processing_stage' => $fileMetadata['kind'] === WorkMedia::KIND_IMAGE
+                        ? WorkMedia::STAGE_READY
+                        : WorkMedia::STAGE_QUEUED,
+                    'processing_progress' => $fileMetadata['kind'] === WorkMedia::KIND_IMAGE ? 100 : 0,
+                    'processing_attempts' => 0,
+                    'processing_started_at' => null,
+                    'processing_completed_at' => $fileMetadata['kind'] === WorkMedia::KIND_IMAGE ? now() : null,
                     'processing_error' => null,
                 ]);
+
+                if ($media->kind === WorkMedia::KIND_VIDEO) {
+                    ProcessWorkMedia::dispatch($media->id)->afterCommit();
+                }
 
                 $this->recordAuditEvent(
                     $media,
@@ -213,6 +242,113 @@ class WorksMediaService
             ],
             'inline',
         );
+    }
+
+    public function poster(int $workId, int $mediaId): StreamedResponse
+    {
+        Work::query()->findOrFail($workId);
+        $media = WorkMedia::query()
+            ->where('work_id', $workId)
+            ->whereKey($mediaId)
+            ->first();
+
+        if ($media === null
+            || $media->disk !== self::DISK
+            || $media->poster_path === null
+            || $media->processing_status !== WorkMedia::PROCESSING_READY) {
+            abort(404, 'صورة معاينة وسيط العمل غير موجودة.');
+        }
+
+        $disk = Storage::disk(self::DISK);
+        if (! $disk->exists($media->poster_path)) {
+            abort(404, 'صورة معاينة وسيط العمل غير موجودة.');
+        }
+
+        return $disk->response(
+            $media->poster_path,
+            'video-poster-'.$media->id.'.jpg',
+            [
+                'Content-Type' => 'image/jpeg',
+                'X-Content-Type-Options' => 'nosniff',
+            ],
+            'inline',
+        );
+    }
+
+    /**
+     * @param array<string, string|null> $requestContext
+     * @return array<string, mixed>
+     */
+    public function retryProcessing(
+        int $workId,
+        int $mediaId,
+        User $actor,
+        array $requestContext,
+    ): array {
+        return DB::transaction(function () use ($workId, $mediaId, $actor, $requestContext): array {
+            $work = Work::query()->lockForUpdate()->findOrFail($workId);
+            $this->assertEditable($work);
+            $media = WorkMedia::query()
+                ->where('work_id', $work->id)
+                ->whereKey($mediaId)
+                ->lockForUpdate()
+                ->first();
+
+            if ($media === null) {
+                abort(404, 'وسيط العمل غير موجود.');
+            }
+
+            if ($media->kind !== WorkMedia::KIND_VIDEO) {
+                throw ValidationException::withMessages([
+                    'media' => ['إعادة المعالجة متاحة لوسائط الفيديو فقط.'],
+                ]);
+            }
+
+            $stalled = $this->processingIsStalled($media);
+            $retryable = $media->processing_status === WorkMedia::PROCESSING_FAILED || $stalled;
+            $changed = false;
+
+            if ($retryable) {
+                $disk = Storage::disk($media->disk);
+                if ($media->poster_path !== null) {
+                    $disk->delete($media->poster_path);
+                }
+
+                $media->forceFill([
+                    'poster_path' => null,
+                    'processing_status' => WorkMedia::PROCESSING_PENDING,
+                    'processing_stage' => WorkMedia::STAGE_QUEUED,
+                    'processing_progress' => 0,
+                    'processing_started_at' => null,
+                    'processing_completed_at' => null,
+                    'processing_error' => null,
+                ])->save();
+                $changed = true;
+
+                $this->recordAuditEvent(
+                    $media,
+                    $actor,
+                    $requestContext,
+                    'works.media.processing_retried',
+                    'retry_processing',
+                    [
+                        'work_id' => $work->id,
+                        'processing_attempts' => $media->processing_attempts,
+                        'stalled' => $stalled,
+                    ],
+                );
+
+                ProcessWorkMedia::dispatch($media->id)->afterCommit();
+            }
+
+            $media->load('uploader:id,name');
+
+            return [
+                'action' => 'retry_processing',
+                'changed' => $changed,
+                'media' => $this->mediaPayload($media, $work),
+            ];
+        });
     }
 
     /**
@@ -698,6 +834,15 @@ class WorksMediaService
             'height' => $media->height,
             'duration_ms' => $media->duration_ms,
             'processing_status' => $media->processing_status,
+            'processing_stage' => $media->processing_stage,
+            'processing_progress' => max(0, min(100, (int) $media->processing_progress)),
+            'processing_started_at' => $media->processing_started_at?->toJSON(),
+            'processing_completed_at' => $media->processing_completed_at?->toJSON(),
+            'processing_attempts' => (int) $media->processing_attempts,
+            'processing_message' => $this->processingMessage($media),
+            'can_retry_processing' => $media->kind === WorkMedia::KIND_VIDEO
+                && ($media->processing_status === WorkMedia::PROCESSING_FAILED
+                    || $this->processingIsStalled($media)),
             'is_cover' => $work->cover_media_id === $media->id,
             'uploaded_by' => $media->uploader === null
                 ? null
@@ -709,7 +854,45 @@ class WorksMediaService
             'updated_at' => $media->updated_at?->toJSON(),
             'content_endpoint' => '/api/admin/works/'.$work->id
                 .'/media/'.$media->id.'/content',
+            'poster_endpoint' => $media->poster_path === null
+                ? null
+                : '/api/admin/works/'.$work->id.'/media/'.$media->id.'/poster',
         ];
+    }
+
+    private function processingIsStalled(WorkMedia $media): bool
+    {
+        return $media->processing_status === WorkMedia::PROCESSING_PENDING
+            && $media->updated_at !== null
+            && $media->updated_at->lte(now()->subMinutes(5));
+    }
+
+    private function processingMessage(WorkMedia $media): string
+    {
+        if ($media->processing_status === WorkMedia::PROCESSING_READY) {
+            return 'اكتملت معالجة الوسيط.';
+        }
+
+        if ($media->processing_status === WorkMedia::PROCESSING_FAILED) {
+            $technicalStage = str($media->processing_error)->before('|')->toString();
+
+            return match ($technicalStage) {
+                WorkMedia::STAGE_GENERATING_POSTER,
+                WorkMedia::STAGE_FINALIZING => 'تعذر إنشاء صورة المعاينة.',
+                WorkMedia::STAGE_PROBING,
+                WorkMedia::STAGE_EXTRACTING_METADATA => 'تعذر قراءة بيانات الفيديو.',
+                default => 'توقفت المعالجة قبل اكتمالها.',
+            };
+        }
+
+        return match ($media->processing_stage) {
+            WorkMedia::STAGE_VALIDATING => 'جارٍ التحقق من ملف الفيديو.',
+            WorkMedia::STAGE_PROBING => 'جارٍ قراءة بيانات الفيديو.',
+            WorkMedia::STAGE_EXTRACTING_METADATA => 'جارٍ حفظ بيانات الفيديو.',
+            WorkMedia::STAGE_GENERATING_POSTER => 'جارٍ إنشاء صورة المعاينة.',
+            WorkMedia::STAGE_FINALIZING => 'جارٍ إنهاء معالجة الفيديو.',
+            default => 'الفيديو في طابور المعالجة.',
+        };
     }
 
     /** @param array<string, mixed> $settings */

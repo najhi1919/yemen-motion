@@ -498,10 +498,16 @@ class WorksTaxonomyAssignmentApiTest extends TestCase
 
         $routeList = collect(Route::getRoutes()->getRoutes());
         $bulkCategoryPosition = $routeList->search(fn ($route): bool => $route->uri() === 'api/admin/works/taxonomy/assign/category');
-        $firstDynamicWorkPosition = $routeList->search(fn ($route): bool => str_contains($route->uri(), '{work}'));
+        $bulkTagsPosition = $routeList->search(fn ($route): bool => $route->uri() === 'api/admin/works/taxonomy/assign/tags');
+        $genericWorkUpdatePosition = $routeList->search(
+            fn ($route): bool => $route->uri() === 'api/admin/works/{work}'
+                && in_array('PATCH', $route->methods(), true),
+        );
         $this->assertIsInt($bulkCategoryPosition);
-        $this->assertIsInt($firstDynamicWorkPosition);
-        $this->assertLessThan($firstDynamicWorkPosition, $bulkCategoryPosition);
+        $this->assertIsInt($bulkTagsPosition);
+        $this->assertIsInt($genericWorkUpdatePosition);
+        $this->assertLessThan($genericWorkUpdatePosition, $bulkCategoryPosition);
+        $this->assertLessThan($genericWorkUpdatePosition, $bulkTagsPosition);
 
         foreach (['POST', 'PUT', 'DELETE'] as $method) {
             $this->json($method, self::BULK_CATEGORY)->assertMethodNotAllowed();

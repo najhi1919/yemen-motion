@@ -1210,16 +1210,18 @@ const copyMap = {
 
 const copy = computed(() => copyMap[currentLocale.value])
 const authPending = computed(() => !authStore.isInitialized)
-const isSuperAdmin = computed(() => authStore.role === 'super-admin')
+const isSuperAdmin = computed(() => authStore.isSuperAdmin)
 const isInternalRole = computed(() => ['admin', 'staff'].includes(authStore.role || ''))
-const hasPermission = (permission: string): boolean => isSuperAdmin.value || authStore.permissions.includes(permission)
+const hasPermission = (permission: string): boolean => authStore.can(permission)
 const hasTaxonomyAccess = computed(() => {
   if (!authStore.isInitialized || !authStore.isAuthenticated) return false
   if (isSuperAdmin.value) return true
   if (!isInternalRole.value) return false
 
-  return authStore.permissions.includes('admin.works.access')
-    && authStore.permissions.includes('admin.works.taxonomy.view')
+  return authStore.canAll([
+    'admin.works.access',
+    'admin.works.taxonomy.view'
+  ])
 })
 const canViewCategories = computed(() => hasTaxonomyAccess.value && hasPermission('admin.works.taxonomy.categories.view'))
 const canCreateCategories = computed(() => canViewCategories.value && hasPermission('admin.works.taxonomy.categories.create'))
@@ -1288,6 +1290,7 @@ const authorizationSignature = computed(() => [
   authStore.isInitialized ? 'ready' : 'pending',
   authStore.isAuthenticated ? 'authenticated' : 'guest',
   authStore.role || '',
+  isSuperAdmin.value ? 'super' : 'standard',
   [...authStore.permissions].sort().join(',')
 ].join('|'))
 

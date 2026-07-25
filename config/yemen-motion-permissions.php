@@ -7,13 +7,17 @@ return [
     |--------------------------------------------------------------------------
     |
     | This registry defines baseline system permissions.
-    | Super Admin receives all registered permissions.
+    | Super Admin authorization bypasses every ability through Gate::before.
+    | Seeder grants remain synchronized for permission-catalog visibility, but
+    | runtime authorization never depends on those grant pivots.
     | Other roles receive only their baseline permissions.
     |
     | Runtime UI-managed custom permissions may be added later without changing
     | this registry.
     |
     */
+
+    'super_admin_role' => 'super-admin',
 
     'protected_roles' => [
         'super-admin',
@@ -218,6 +222,11 @@ return [
             'name' => 'admin.works.review.start',
             'group' => 'admin.works',
             'label_ar' => 'بدء مراجعة العمل',
+        ],
+        [
+            'name' => 'admin.works.review.submit',
+            'group' => 'admin.works',
+            'label_ar' => 'إرسال العمل إلى المراجعة',
         ],
         [
             'name' => 'admin.works.review.approve',

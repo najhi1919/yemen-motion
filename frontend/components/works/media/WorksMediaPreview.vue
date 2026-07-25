@@ -39,6 +39,68 @@
       </button>
     </div>
 
+    <section
+      v-if="item.kind === 'video' && item.processing_status !== 'ready'"
+      class="ym-media-processing"
+      :class="`is-${item.processing_status}`"
+      :aria-labelledby="processingTitleId"
+    >
+      <header>
+        <div>
+          <p>{{ copy.backgroundProcessing }}</p>
+          <h4 :id="processingTitleId">{{ processingStageLabel }}</h4>
+          <span>{{ processingDescription }}</span>
+        </div>
+        <strong>{{ formatYmNumber(processingProgress, locale) }}%</strong>
+      </header>
+      <div
+        class="ym-media-processing__bar"
+        role="progressbar"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        :aria-valuenow="processingProgress"
+        :aria-label="processingStageLabel"
+      >
+        <i :style="{ inlineSize: `${processingProgress}%` }" />
+      </div>
+      <div class="ym-media-processing__timing" role="status" aria-live="polite">
+        <span v-if="elapsedSeconds !== null">
+          {{ copy.elapsed }}: {{ formatRuntime(elapsedSeconds) }}
+        </span>
+        <span v-if="processingProgress === 0">
+          {{ copy.etaUnavailable }}
+        </span>
+        <span v-else-if="etaSeconds !== null">
+          {{ copy.etaApproximate }} {{ formatRuntime(etaSeconds) }}
+        </span>
+      </div>
+      <ol>
+        <li
+          v-for="stage in processingStages"
+          :key="stage.key"
+          :class="stageState(stage.progress)"
+        >
+          <span aria-hidden="true">{{ stageState(stage.progress) === 'is-complete' ? '✓' : '•' }}</span>
+          {{ stage.label }}
+        </li>
+      </ol>
+      <p v-if="pendingStartDelayed" class="ym-media-processing__stalled">
+        {{ copy.notStarted }}
+      </p>
+      <p v-else-if="item.processing_status === 'failed'" class="ym-media-processing__stalled">
+        {{ copy.stalled }}
+      </p>
+      <button
+        v-if="item.can_retry_processing && editable"
+        type="button"
+        class="ym-media-processing__retry"
+        :disabled="busy"
+        @click="$emit('retryProcessing')"
+      >
+        {{ copy.retryProcessing }}
+      </button>
+    </section>
+
     <dl class="ym-media-preview__meta">
       <div><dt>{{ copy.type }}</dt><dd dir="ltr">{{ item.mime_type }}</dd></div>
       <div><dt>{{ copy.size }}</dt><dd>{{ formatSize(item.size_bytes) }}</dd></div>
@@ -124,7 +186,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { formatYmDateTime, formatYmNumber } from '~/utils/ymFormatting'
 
 interface MediaItem {
@@ -137,6 +199,13 @@ interface MediaItem {
   height: number | null
   duration_ms: number | null
   processing_status: 'pending' | 'ready' | 'failed'
+  processing_stage: 'queued' | 'validating' | 'probing' | 'extracting_metadata' | 'generating_poster' | 'finalizing' | 'ready' | 'failed'
+  processing_progress: number
+  processing_started_at: string | null
+  processing_completed_at: string | null
+  processing_attempts: number
+  processing_message: string
+  can_retry_processing: boolean
   is_cover: boolean
   created_at: string | null
 }
@@ -161,13 +230,18 @@ const emit = defineEmits<{
   move: [delta: number]
   remove: [anchor: HTMLElement]
   retry: []
+  retryProcessing: []
 }>()
 
 const lightboxOpen = ref(false)
 const lightboxPanel = ref<HTMLElement | null>(null)
 const enlargeButton = ref<HTMLButtonElement | null>(null)
 const lightboxTitleId = 'ym-media-lightbox-title'
+const processingTitleId = 'ym-media-processing-title'
+const clockNow = ref(0)
+const progressSamples = ref<Array<{ attempt: number; at: number; progress: number }>>([])
 let previousBodyOverflow = ''
+let clockTimer: ReturnType<typeof setInterval> | null = null
 
 const copy = computed(() => props.locale === 'ar' ? {
   preview: 'معاينة',
@@ -194,6 +268,13 @@ const copy = computed(() => props.locale === 'ar' ? {
   noCover: 'لا يوجد غلاف محدد لهذا العمل.',
   coverReadyOnly: 'الغلاف متاح للصور الجاهزة فقط.',
   retry: 'إعادة تحميل المعاينة',
+  backgroundProcessing: 'المعالجة مستمرة في الخلفية',
+  retryProcessing: 'إعادة محاولة المعالجة',
+  elapsed: 'الوقت المنقضي',
+  etaUnavailable: 'الوقت المتبقي غير متاح حتى تبدأ المعالجة.',
+  etaApproximate: 'الوقت المتبقي نحو',
+  notStarted: 'لم تبدأ المعالجة بعد؛ خدمة المعالجة قد تكون غير متاحة.',
+  stalled: 'توقفت المعالجة قبل اكتمالها. أعد المحاولة، أوأزل الملف وارفع نسخة أخرى.',
   close: 'إغلاق المعاينة المكبرة'
 } : {
   preview: 'Preview',
@@ -220,6 +301,13 @@ const copy = computed(() => props.locale === 'ar' ? {
   noCover: 'No cover is selected for this work.',
   coverReadyOnly: 'A cover is available for ready images only.',
   retry: 'Retry preview',
+  backgroundProcessing: 'Processing continues in the background',
+  retryProcessing: 'Retry processing',
+  elapsed: 'Elapsed',
+  etaUnavailable: 'Remaining time is unavailable until processing starts.',
+  etaApproximate: 'Approximately',
+  notStarted: 'Processing has not started yet; the processing service may be unavailable.',
+  stalled: 'Processing stopped before completion. Retry, or remove the file and upload another copy.',
   close: 'Close enlarged preview'
 })
 
@@ -258,6 +346,81 @@ const processingLabel = computed(() => {
   }
   return 'فشلت المعالجة'
 })
+const processingProgress = computed(() => Math.max(0, Math.min(100, Number(props.item.processing_progress) || 0)))
+const pendingStartDelayed = computed(() => {
+  if (props.item.processing_status !== 'pending' || processingProgress.value !== 0 || clockNow.value === 0) {
+    return false
+  }
+  const queuedAt = Date.parse(props.item.processing_started_at ?? props.item.created_at ?? '')
+  return Number.isFinite(queuedAt) && clockNow.value - queuedAt >= 120_000
+})
+const elapsedSeconds = computed(() => {
+  if (!props.item.processing_started_at || clockNow.value === 0) return null
+  const startedAt = Date.parse(props.item.processing_started_at)
+  if (!Number.isFinite(startedAt)) return null
+  const finishedAt = props.item.processing_completed_at
+    ? Date.parse(props.item.processing_completed_at)
+    : clockNow.value
+  if (!Number.isFinite(finishedAt) || finishedAt < startedAt) return null
+  return Math.floor((finishedAt - startedAt) / 1000)
+})
+const etaSeconds = computed(() => {
+  if (props.item.processing_status !== 'pending' || processingProgress.value <= 0) return null
+  const samples = progressSamples.value
+  if (samples.length < 2 || clockNow.value === 0) return null
+  const previous = samples[samples.length - 2]!
+  const current = samples[samples.length - 1]!
+  if (current.attempt !== previous.attempt || current.progress <= previous.progress) return null
+  if (clockNow.value - current.at > 8_000) return null
+  const elapsedMs = current.at - previous.at
+  if (elapsedMs <= 0) return null
+  const estimate = Math.ceil(((100 - current.progress) * elapsedMs) / ((current.progress - previous.progress) * 1000))
+  return estimate > 0 && estimate <= 86_400 ? estimate : null
+})
+const stageCopies = computed(() => props.locale === 'ar' ? {
+  queued: 'في طابور المعالجة',
+  validating: 'التحقق من الملف',
+  probing: 'قراءة بيانات الفيديو',
+  extracting_metadata: 'حفظ بيانات الفيديو',
+  generating_poster: 'إنشاء صورة المعاينة',
+  finalizing: 'إنهاء المعالجة',
+  ready: 'اكتملت المعالجة',
+  failed: 'فشلت المعالجة'
+} : {
+  queued: 'Queued',
+  validating: 'Validating file',
+  probing: 'Reading video metadata',
+  extracting_metadata: 'Saving video metadata',
+  generating_poster: 'Generating preview image',
+  finalizing: 'Finalizing processing',
+  ready: 'Processing complete',
+  failed: 'Processing failed'
+})
+const processingStageLabel = computed(() => stageCopies.value[props.item.processing_stage] ?? processingLabel.value)
+const processingDescription = computed(() => {
+  if (props.item.processing_status === 'failed') {
+    return props.locale === 'ar'
+      ? 'تعذر إكمال معالجة الفيديو. لم تُعرض تفاصيل النظام حفاظًا على الأمان.'
+      : 'Video processing could not be completed. System details are hidden for security.'
+  }
+  return props.locale === 'ar'
+    ? 'يمكنك متابعة العمل، وستتحدث الجاهزية تلقائيًا بعد اكتمال المعالجة.'
+    : 'You can continue working; readiness updates automatically when processing completes.'
+})
+const processingStages = computed(() => [
+  { key: 'queued', progress: 0, label: stageCopies.value.queued },
+  { key: 'validating', progress: 5, label: stageCopies.value.validating },
+  { key: 'probing', progress: 20, label: stageCopies.value.probing },
+  { key: 'extracting_metadata', progress: 45, label: stageCopies.value.extracting_metadata },
+  { key: 'generating_poster', progress: 65, label: stageCopies.value.generating_poster },
+  { key: 'finalizing', progress: 90, label: stageCopies.value.finalizing }
+])
+
+function stageState(stageProgress: number): string {
+  if (processingProgress.value > stageProgress) return 'is-complete'
+  if (processingProgress.value === stageProgress && props.item.processing_status === 'pending') return 'is-current'
+  return 'is-upcoming'
+}
 
 function formatSize(bytes: number): string {
   if (bytes < 1024 * 1024) {
@@ -267,6 +430,24 @@ function formatSize(bytes: number): string {
     return `${formatYmNumber(bytes / (1024 * 1024), props.locale, { maximumFractionDigits: 1 })} MB`
   }
   return `${formatYmNumber(bytes / (1024 * 1024 * 1024), props.locale, { maximumFractionDigits: 2 })} GB`
+}
+
+function formatRuntime(totalSeconds: number): string {
+  const safeSeconds = Math.max(0, Math.floor(totalSeconds))
+  const hours = Math.floor(safeSeconds / 3600)
+  const minutes = Math.floor((safeSeconds % 3600) / 60)
+  const seconds = safeSeconds % 60
+  const parts: string[] = []
+  if (hours > 0) {
+    parts.push(`${formatYmNumber(hours, props.locale)} ${props.locale === 'ar' ? 'س' : 'hr'}`)
+  }
+  if (minutes > 0 || hours > 0) {
+    parts.push(`${formatYmNumber(minutes, props.locale)} ${props.locale === 'ar' ? 'د' : 'min'}`)
+  }
+  if (hours === 0) {
+    parts.push(`${formatYmNumber(seconds, props.locale)} ${props.locale === 'ar' ? 'ث' : 'sec'}`)
+  }
+  return parts.join(' ')
 }
 
 function requestRemove(event: MouseEvent) {
@@ -319,7 +500,49 @@ function onLightboxKeydown(event: KeyboardEvent) {
   }
 }
 
+watch(
+  () => ({
+    attempt: Number(props.item.processing_attempts) || 0,
+    id: props.item.id,
+    progress: processingProgress.value,
+    status: props.item.processing_status,
+  }),
+  (current, previous) => {
+    clockNow.value = Date.now()
+    if (
+      current.status !== 'pending'
+      || (previous && (current.id !== previous.id
+        || current.attempt !== previous.attempt
+        || current.progress < previous.progress))
+    ) {
+      progressSamples.value = []
+    }
+    if (
+      current.status === 'pending'
+      && current.progress > 0
+      && (!previous
+        || current.id !== previous.id
+        || current.attempt !== previous.attempt
+        || current.progress > previous.progress)
+    ) {
+      progressSamples.value = [
+        ...progressSamples.value.slice(-1),
+        { attempt: current.attempt, at: clockNow.value, progress: current.progress },
+      ]
+    }
+  },
+  { immediate: true },
+)
+
+onMounted(() => {
+  clockNow.value = Date.now()
+  clockTimer = setInterval(() => {
+    clockNow.value = Date.now()
+  }, 1_000)
+})
+
 onBeforeUnmount(() => {
+  if (clockTimer !== null) clearInterval(clockTimer)
   document.removeEventListener('keydown', onLightboxKeydown)
   if (lightboxOpen.value) document.body.style.overflow = previousBodyOverflow
 })
@@ -330,4 +553,188 @@ onBeforeUnmount(() => {
 .ym-media-preview__identity > div{min-width:0;flex:1}
 .ym-media-preview__identity h3{max-inline-size:min(100%,620px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;unicode-bidi:plaintext;text-align:start}
 .ym-media-lightbox__panel h2[dir="auto"]{unicode-bidi:plaintext;text-align:start}
+</style>
+
+<style scoped>
+.ym-media-processing {
+  display: grid;
+  gap: 13px;
+  border: 1px solid rgba(139, 92, 246, .28);
+  border-radius: 15px;
+  padding: 15px;
+  background: rgba(124, 58, 237, .06);
+}
+
+.ym-media-processing.is-failed {
+  border-color: rgba(244, 63, 94, .34);
+  background: rgba(244, 63, 94, .06);
+}
+
+.ym-media-processing header {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ym-media-processing header > div {
+  min-width: 0;
+}
+
+.ym-media-processing header p,
+.ym-media-processing header h4,
+.ym-media-processing header span {
+  margin: 0;
+}
+
+.ym-media-processing header p {
+  color: #22d3ee;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.ym-media-processing header h4 {
+  margin-top: 3px;
+  font-size: 16px;
+}
+
+.ym-media-processing header span {
+  display: block;
+  margin-top: 4px;
+  color: var(--ym-media-muted, #a7b2c7);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.ym-media-processing header > strong {
+  flex: 0 0 auto;
+  color: #c4b5fd;
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ym-media-processing__bar {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, .16);
+}
+
+.ym-media-processing__bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #7c3aed, #ec4899, #22d3ee);
+  transition: inline-size .2s ease;
+}
+
+.ym-media-processing__timing {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  color: var(--ym-media-muted, #a7b2c7);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ym-media-processing ol {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ym-media-processing li {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  color: var(--ym-media-muted, #a7b2c7);
+  font-size: 11.75px;
+}
+
+.ym-media-processing li span {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  place-items: center;
+  border: 1px solid rgba(148, 163, 184, .24);
+  border-radius: 50%;
+  font-size: 10px;
+}
+
+.ym-media-processing li.is-complete {
+  color: #34d399;
+}
+
+.ym-media-processing li.is-current {
+  color: #c4b5fd;
+  font-weight: 850;
+}
+
+.ym-media-processing li.is-current span {
+  border-color: #8b5cf6;
+  background: rgba(139, 92, 246, .18);
+}
+
+.ym-media-processing__stalled {
+  margin: 0;
+  color: #fbbf24;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.ym-media-processing__retry {
+  min-height: 44px;
+  justify-self: start;
+  border: 1px solid rgba(244, 63, 94, .4);
+  border-radius: 11px;
+  padding: 0 14px;
+  color: #fecdd3;
+  background: rgba(244, 63, 94, .1);
+  font-weight: 850;
+}
+
+:global(.ym-media-manager.is-light) .ym-media-processing header > strong,
+:global(.ym-media-manager.is-light) .ym-media-processing li.is-current {
+  color: #6d28d9;
+}
+
+:global(.ym-media-manager.is-light) .ym-media-processing__stalled {
+  color: #92400e;
+}
+
+:global(.ym-media-manager.is-light) .ym-media-processing__retry {
+  color: #be123c;
+}
+
+@media (max-width: 700px) {
+  .ym-media-processing ol {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 420px) {
+  .ym-media-processing header {
+    flex-direction: column;
+  }
+
+  .ym-media-processing ol {
+    grid-template-columns: 1fr;
+  }
+
+  .ym-media-processing__retry {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ym-media-processing__bar i {
+    transition: none;
+  }
+}
 </style>

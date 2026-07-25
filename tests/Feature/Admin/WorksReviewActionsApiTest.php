@@ -152,7 +152,7 @@ class WorksReviewActionsApiTest extends TestCase
         $this->assertNull($fresh->reviewed_at);
     }
 
-    public function test_start_preserves_existing_reviewer_and_is_idempotent_in_review(): void
+    public function test_start_preserves_existing_reviewer_and_rejects_repeated_start(): void
     {
         $this->actingAsRole('super-admin');
         $reviewer = User::factory()->create();
@@ -164,8 +164,8 @@ class WorksReviewActionsApiTest extends TestCase
             ->assertJsonPath('data.work.reviewer.id', $reviewer->id);
 
         $this->patchJson($this->actionUrl($work, 'start'))
-            ->assertOk()
-            ->assertJsonPath('data.changed', false);
+            ->assertConflict()
+            ->assertJsonPath('data.current_status', Work::STATUS_IN_REVIEW);
 
         $this->assertSame($reviewer->id, $work->fresh()->reviewer_id);
         $this->assertSame(1, AuditEvent::query()->count());
@@ -183,7 +183,7 @@ class WorksReviewActionsApiTest extends TestCase
 
         foreach ($this->statusesExcept([Work::STATUS_SUBMITTED, Work::STATUS_IN_REVIEW]) as $status) {
             $invalid = Work::factory()->create(['status' => $status]);
-            $this->patchJson($this->actionUrl($invalid, 'start'))->assertUnprocessable();
+            $this->patchJson($this->actionUrl($invalid, 'start'))->assertConflict();
         }
     }
 
@@ -215,6 +215,25 @@ class WorksReviewActionsApiTest extends TestCase
                     ->assertJsonPath('data.changed', false);
             }
         }
+    }
+
+    public function test_review_queue_returns_only_valid_internal_reviewer_options(): void
+    {
+        $this->actingAsRole('super-admin');
+        $staff = User::factory()->create(['name' => 'Allowed Staff']);
+        $staff->assignRole('staff');
+        $designer = User::factory()->create(['name' => 'Blocked Designer']);
+        $designer->assignRole('designer');
+        $mixed = User::factory()->create(['name' => 'Blocked Mixed']);
+        $mixed->assignRole(['staff', 'client']);
+
+        $response = $this->getJson('/api/admin/works/review')->assertOk();
+        $reviewers = collect($response->json('data.reviewer_options'));
+
+        $this->assertTrue($reviewers->contains('id', $staff->id));
+        $this->assertFalse($reviewers->contains('id', $designer->id));
+        $this->assertFalse($reviewers->contains('id', $mixed->id));
+        $this->assertSame(['id', 'name'], array_keys($reviewers->firstWhere('id', $staff->id)));
     }
 
     public function test_assign_reviewer_rejects_external_non_internal_and_unsupported_targets(): void
@@ -254,7 +273,7 @@ class WorksReviewActionsApiTest extends TestCase
         ]) as $status) {
             $invalid = Work::factory()->create(['status' => $status]);
             $this->patchJson($this->actionUrl($invalid, 'assign-reviewer'), ['reviewer_id' => $internal->id])
-                ->assertUnprocessable();
+                ->assertConflict();
         }
     }
 
@@ -324,7 +343,7 @@ class WorksReviewActionsApiTest extends TestCase
         $this->assertNull($fresh->change_request_notes);
     }
 
-    public function test_approve_is_idempotent_and_rejects_unsupported_states(): void
+    public function test_approve_rejects_repeated_and_unsupported_state_transitions(): void
     {
         $this->actingAsRole('super-admin');
         $work = Work::factory()->approved()->create();
@@ -332,14 +351,14 @@ class WorksReviewActionsApiTest extends TestCase
         $approvedAt = $work->approved_at;
 
         $this->patchJson($this->actionUrl($work, 'approve'))
-            ->assertOk()
-            ->assertJsonPath('data.changed', false);
+            ->assertConflict()
+            ->assertJsonPath('data.current_status', Work::STATUS_APPROVED);
         $this->assertTrue($work->fresh()->reviewed_at->equalTo($reviewedAt));
         $this->assertTrue($work->fresh()->approved_at->equalTo($approvedAt));
 
         foreach ($this->statusesExcept([Work::STATUS_IN_REVIEW, Work::STATUS_APPROVED]) as $status) {
             $invalid = Work::factory()->create(['status' => $status]);
-            $this->patchJson($this->actionUrl($invalid, 'approve'))->assertUnprocessable();
+            $this->patchJson($this->actionUrl($invalid, 'approve'))->assertConflict();
         }
     }
 
@@ -470,12 +489,10 @@ class WorksReviewActionsApiTest extends TestCase
 
         $approved = Work::factory()->approved()->create();
         $this->patchJson($this->actionUrl($approved, 'approve'))
-            ->assertOk()
-            ->assertJsonPath('data.changed', false)
-            ->assertJsonPath('data.auto_published', false);
+            ->assertConflict();
 
         $submitted = Work::factory()->submitted()->create();
-        $this->patchJson($this->actionUrl($submitted, 'approve'))->assertUnprocessable();
+        $this->patchJson($this->actionUrl($submitted, 'approve'))->assertConflict();
 
         $this->assertSame(0, AuditEvent::query()
             ->where('event_type', 'works.review.published')
@@ -583,7 +600,7 @@ class WorksReviewActionsApiTest extends TestCase
             $invalid = Work::factory()->create(['status' => $status]);
             $this->patchJson($this->actionUrl($invalid, 'request-changes'), [
                 'change_request_notes' => 'ملاحظات تعديل صحيحة',
-            ])->assertUnprocessable();
+            ])->assertConflict();
         }
     }
 
@@ -641,7 +658,7 @@ class WorksReviewActionsApiTest extends TestCase
             $invalid = Work::factory()->create(['status' => $status]);
             $this->patchJson($this->actionUrl($invalid, 'reject'), [
                 'rejection_reason' => 'سبب رفض صحيح وآمن',
-            ])->assertUnprocessable();
+            ])->assertConflict();
         }
     }
 
@@ -673,18 +690,18 @@ class WorksReviewActionsApiTest extends TestCase
         $this->assertSame($reviewerId, $fresh->reviewer_id);
 
         $this->patchJson($this->actionUrl($work, 'publish'))
-            ->assertOk()->assertJsonPath('data.changed', false);
+            ->assertConflict();
     }
 
     public function test_publish_rejects_published_hidden_archived_and_all_other_unsupported_states(): void
     {
         $this->actingAsRole('super-admin');
         $publishedHidden = Work::factory()->published()->create(['visibility_status' => Work::VISIBILITY_HIDDEN]);
-        $this->patchJson($this->actionUrl($publishedHidden, 'publish'))->assertUnprocessable();
+        $this->patchJson($this->actionUrl($publishedHidden, 'publish'))->assertConflict();
 
         foreach ($this->statusesExcept([Work::STATUS_APPROVED, Work::STATUS_PUBLISHED]) as $status) {
             $invalid = Work::factory()->create(['status' => $status]);
-            $this->patchJson($this->actionUrl($invalid, 'publish'))->assertUnprocessable();
+            $this->patchJson($this->actionUrl($invalid, 'publish'))->assertConflict();
         }
     }
 
@@ -723,7 +740,7 @@ class WorksReviewActionsApiTest extends TestCase
         }
     }
 
-    public function test_reopen_is_idempotent_in_review_assigns_actor_if_needed_and_rejects_other_states(): void
+    public function test_reopen_assigns_actor_if_needed_and_rejects_repeated_or_unsupported_states(): void
     {
         $actor = $this->actingAsRole('super-admin');
         $unassigned = Work::factory()->inReview()->create(['reviewer_id' => null]);
@@ -732,7 +749,7 @@ class WorksReviewActionsApiTest extends TestCase
             ->assertJsonPath('data.changed', true)
             ->assertJsonPath('data.work.reviewer.id', $actor->id);
         $this->patchJson($this->actionUrl($unassigned, 'reopen'))
-            ->assertOk()->assertJsonPath('data.changed', false);
+            ->assertConflict();
 
         foreach ([
             Work::STATUS_DRAFT,
@@ -742,7 +759,7 @@ class WorksReviewActionsApiTest extends TestCase
             Work::STATUS_ARCHIVED,
         ] as $status) {
             $invalid = Work::factory()->create(['status' => $status]);
-            $this->patchJson($this->actionUrl($invalid, 'reopen'))->assertUnprocessable();
+            $this->patchJson($this->actionUrl($invalid, 'reopen'))->assertConflict();
         }
     }
 
@@ -822,6 +839,24 @@ class WorksReviewActionsApiTest extends TestCase
         ] as $value) {
             $this->assertStringNotContainsString($value, $response->getContent());
         }
+    }
+
+    public function test_stale_expected_updated_at_returns_conflict_without_change_or_audit(): void
+    {
+        $this->actingAsRole('super-admin');
+        $work = Work::factory()->inReview()->create();
+        $staleVersion = $work->updated_at->copy()->subMinute()->toISOString();
+
+        $this->patchJson($this->actionUrl($work, 'approve'), [
+            'expected_updated_at' => $staleVersion,
+        ])
+            ->assertConflict()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('data.current_status', Work::STATUS_IN_REVIEW)
+            ->assertJsonPath('data.current_updated_at', $work->updated_at->toISOString());
+
+        $this->assertSame(Work::STATUS_IN_REVIEW, $work->fresh()->status);
+        $this->assertSame(0, AuditEvent::query()->count());
     }
 
     public function test_query_unknown_and_sensitive_body_fields_return_422_without_changes(): void
@@ -979,7 +1014,7 @@ class WorksReviewActionsApiTest extends TestCase
         $eventCount = AuditEvent::query()->count();
         $approved = Work::factory()->approved()->create();
         $this->patchJson($this->actionUrl($approved, 'approve'))
-            ->assertOk()->assertJsonPath('data.changed', false);
+            ->assertConflict();
         $this->assertSame($eventCount, AuditEvent::query()->count());
     }
 

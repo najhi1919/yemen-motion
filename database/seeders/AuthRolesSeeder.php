@@ -42,7 +42,7 @@ class AuthRolesSeeder extends Seeder
             ->pluck('name')
             ->all();
 
-        $superAdmin = Role::where('name', 'super-admin')
+        $superAdmin = Role::where('name', (string) ($config['super_admin_role'] ?? 'super-admin'))
             ->where('guard_name', 'web')
             ->firstOrFail();
 

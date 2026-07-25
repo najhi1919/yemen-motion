@@ -32,7 +32,9 @@ export default defineNuxtRouteMiddleware(async (to) => {
   }
 
   if (authStore.isAuthenticated && isPublicRoute) {
-    const target = roleHomeMap[authStore.role || ''] || '/'
+    const target = authStore.isSuperAdmin
+      ? '/admin'
+      : roleHomeMap[authStore.role || ''] || '/'
     if (to.path !== target) {
       return navigateTo(target)
     }
@@ -49,7 +51,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
     }
 
     const allowedRoles = routeRoleMap[matchedProtectedPrefix]
-    if (!allowedRoles.includes(authStore.role || '')) {
+    if (!authStore.isSuperAdmin && !allowedRoles.includes(authStore.role || '')) {
       const fallback = roleHomeMap[authStore.role || ''] || '/'
       if (to.path !== fallback) {
         return navigateTo(fallback)

@@ -230,10 +230,39 @@
               :locale="currentLocale"
               @state-change="applyMediaState"
               @order-dirty-change="mediaOrderDirty = $event"
+              @busy-change="mediaBusy = $event"
             />
           </div>
         </section>
+
+        <WorksReviewReadinessPanel
+          v-if="mode === 'edit' && work && fieldAccess.can_submit_review"
+          id="authoring-review"
+          data-authoring-section
+          :locale="currentLocale"
+          :readiness="readiness"
+          :updating="readinessUpdating"
+          :error="readinessError"
+          :status="work.status"
+          :change-notes="work.change_request_notes"
+          @retry="loadReadiness"
+          @navigate="navigateSection"
+        />
       </main>
+
+      <WorksSubmitReviewDialog
+        v-if="work"
+        :open="submitDialogOpen"
+        :busy="submittingReview"
+        :locale="currentLocale"
+        :work-title="work.title"
+        :warnings-count="readiness?.warnings_count || 0"
+        :media-ready="readinessSectionReady('media')"
+        :category-ready="readinessSectionReady('organization')"
+        :resubmission="work.status === 'changes_requested'"
+        @close="submitDialogOpen = false"
+        @confirm="submitForReview"
+      />
 
       <WorksAuthoringActionBar
         :mode="mode"
@@ -245,10 +274,16 @@
         :readonly="mode === 'edit' && !editable"
         :conflict="Boolean(conflict)"
         :pending-elsewhere="categoryDirty || tagsDirty || mediaOrderDirty"
+        :show-submit-review="canShowSubmitReview"
+        :submit-label="work?.status === 'changes_requested' ? copy.resubmit : copy.submit"
+        :submit-disabled="Boolean(submitReviewDisabledReason)"
+        :submit-disabled-reason="canShowSubmitReview ? submitReviewDisabledReason : ''"
+        :submitting="submittingReview"
         :tone="actionTone"
         @save="save"
         @reset="resetDraft"
         @back="router.push('/admin/works/all')"
+        @submit-review="openSubmitDialog"
       />
     </template>
   </div>
@@ -262,6 +297,8 @@ import WorksAuthoringHeader from '~/components/works/authoring/WorksAuthoringHea
 import WorksAuthoringSectionNav from '~/components/works/authoring/WorksAuthoringSectionNav.vue'
 import WorksAuthoringStepper from '~/components/works/authoring/WorksAuthoringStepper.vue'
 import WorksMediaManager from '~/components/works/authoring/WorksMediaManager.vue'
+import WorksReviewReadinessPanel from '~/components/works/authoring/WorksReviewReadinessPanel.vue'
+import WorksSubmitReviewDialog from '~/components/works/authoring/WorksSubmitReviewDialog.vue'
 import { useApiClient } from '~/composables/useApiClient'
 import { useAuthStore } from '~/stores/authStore'
 import { formatYmDateTime, formatYmNumber, toLatinDigits } from '~/utils/ymFormatting'
@@ -279,6 +316,7 @@ interface FieldAccess {
   can_update_private_notes: boolean
   can_assign_category: boolean
   can_assign_tags: boolean
+  can_submit_review: boolean
 }
 interface AuthoringPolicy {
   source: string
@@ -340,6 +378,12 @@ interface MediaPolicy {
 }
 interface Counts { active: number; remaining: number | null }
 interface ApiResponse<T> { success: boolean; data: T; message?: string; errors?: Record<string, string[]> | null }
+interface ReadinessItem { code:string;severity:'blocker'|'warning';satisfied:boolean;target:string }
+interface ReadinessSection { key:string;status:'ready'|'warning'|'blocked';items:ReadinessItem[] }
+interface ReviewReadiness {
+  ready:boolean;blockers_count:number;warnings_count:number;evaluated_at:string
+  work_updated_at:string|null;sections:ReadinessSection[]
+}
 
 const props = defineProps<{ mode: Mode; workId?: number }>()
 const authStore = useAuthStore()
@@ -374,6 +418,13 @@ const selectedCategoryId = ref<number | null>(null)
 const selectedTagIds = ref<number[]>([])
 const taxonomyError = ref('')
 const mediaOrderDirty = ref(false)
+const mediaBusy = ref(false)
+const readiness = ref<ReviewReadiness | null>(null)
+const readinessUpdating = ref(false)
+const readinessError = ref('')
+const submittingReview = ref(false)
+const submitDialogOpen = ref(false)
+let readinessSequence = 0
 const activeSection = ref('authoring-basic')
 const mediaState = reactive<{ media: MediaItem[]; policy: MediaPolicy | null; counts: Counts }>({
   media: [],
@@ -399,7 +450,9 @@ const copyMap = {
     taxonomyKicker:'تنظيم العمل',taxonomyTitle:'التصنيف والوسوم',taxonomyCopy:'تُحفظ هذه الإسنادات بصورة مستقلة عن بيانات العمل الأساسية.',category:'التصنيف',categoryCurrent:'التصنيف المحدد حاليًا',noCategory:'لا يوجد تصنيف مرتبط',chooseCategory:'اختيار التصنيف',removeCategory:'دون تصنيف',saveCategory:'حفظ التصنيف',
     tags:'الوسوم',selectedTags:'وسوم محددة',noTags:'لا توجد وسوم محددة',saveTags:'حفظ الوسوم',
     mediaKicker:'وسائط العمل',mediaTitle:'الوسائط والغلاف',mediaCopy:'إدارة مستقلة للرفع والغلاف والترتيب وفق العقود الحالية.',
-    navBasic:'البيانات الأساسية',navTaxonomy:'التصنيف والوسوم',navMedia:'الوسائط'
+    navBasic:'البيانات الأساسية',navTaxonomy:'التصنيف والوسوم',navMedia:'الوسائط',navReview:'المراجعة',
+    submit:'إرسال للمراجعة',resubmit:'إعادة الإرسال للمراجعة',saveBeforeSubmit:'احفظ جميع التغييرات قبل إرسال العمل للمراجعة.',
+    waitForOperation:'انتظر اكتمال العملية الحالية.',completeReadiness:'أكمل متطلبات الجاهزية أولًا.',readinessLoading:'انتظر اكتمال فحص الجاهزية.'
   },
   en: {
     loading:'Preparing the workspace',loadingCopy:'Checking permissions and loading the latest server snapshot.',retry:'Retry',
@@ -417,7 +470,9 @@ const copyMap = {
     taxonomyKicker:'Work organization',taxonomyTitle:'Category and tags',taxonomyCopy:'These assignments are saved independently from the core work data.',category:'Category',categoryCurrent:'Currently selected category',noCategory:'No category assigned',chooseCategory:'Choose category',removeCategory:'Uncategorized',saveCategory:'Save category',
     tags:'Tags',selectedTags:'Selected tags',noTags:'No tags selected',saveTags:'Save tags',
     mediaKicker:'Work media',mediaTitle:'Media and cover',mediaCopy:'Independent upload, cover, and ordering management through the existing contracts.',
-    navBasic:'Basic data',navTaxonomy:'Category and tags',navMedia:'Media'
+    navBasic:'Basic data',navTaxonomy:'Category and tags',navMedia:'Media',navReview:'Review',
+    submit:'Submit for review',resubmit:'Resubmit for review',saveBeforeSubmit:'Save all changes before submitting for review.',
+    waitForOperation:'Wait for the current operation to finish.',completeReadiness:'Complete the readiness requirements first.',readinessLoading:'Wait for the readiness check to finish.'
   }
 } as const
 const copy = computed(() => copyMap[currentLocale.value])
@@ -447,6 +502,17 @@ const categoryDirty = computed(() => (
 const hasUnsavedChanges = computed(() => (
   isDirty.value || tagsDirty.value || categoryDirty.value || mediaOrderDirty.value
 ))
+const canShowSubmitReview = computed(() => props.mode === 'edit'
+  && editable.value
+  && fieldAccess.can_submit_review
+  && ['draft','changes_requested'].includes(work.value?.status || ''))
+const submitReviewDisabledReason = computed(() => {
+  if (hasUnsavedChanges.value) return copy.value.saveBeforeSubmit
+  if (saving.value || taxonomySaving.value || mediaBusy.value) return copy.value.waitForOperation
+  if (readinessUpdating.value || readiness.value === null) return copy.value.readinessLoading
+  if (!readiness.value.ready) return copy.value.completeReadiness
+  return ''
+})
 const categoryOptions = computed(() => categories.value.filter(
   item => item.is_active || item.id === work.value?.category_id
 ))
@@ -474,7 +540,8 @@ const showMediaSection = computed(() => (
 const sectionNavItems = computed(() => [
   { id: 'authoring-basic', label: copy.value.navBasic, icon: '◇' },
   ...(showTaxonomySection.value ? [{ id: 'authoring-taxonomy', label: copy.value.navTaxonomy, icon: '#' }] : []),
-  ...(showMediaSection.value ? [{ id: 'authoring-media', label: copy.value.navMedia, icon: '▣' }] : [])
+  ...(showMediaSection.value ? [{ id: 'authoring-media', label: copy.value.navMedia, icon: '▣' }] : []),
+  ...(props.mode === 'edit' && fieldAccess.can_submit_review ? [{ id: 'authoring-review', label: copy.value.navReview, icon: '✓' }] : [])
 ])
 const selectedCategoryName = computed(() => {
   if (selectedCategoryId.value === null) return copy.value.noCategory
@@ -498,6 +565,7 @@ onMounted(async () => {
 })
 onBeforeUnmount(() => {
   if (designerTimer.value) clearTimeout(designerTimer.value)
+  readinessSequence++
   sectionObserver?.disconnect()
   if (import.meta.client) window.removeEventListener('beforeunload', beforeUnload)
 })
@@ -564,6 +632,7 @@ async function loadWorkspace() {
       ...(fieldAccess.can_assign_tags ? [loadTaxonomy('tags')] : [])
     ]
     await Promise.all(requests)
+    if (fieldAccess.can_submit_review) await loadReadiness()
   } catch (error: unknown) {
     applyLoadError(error)
   } finally {
@@ -640,6 +709,7 @@ async function save() {
     Object.assign(fieldAccess, response.data.field_access)
     Object.assign(policy, response.data.authoring_policy)
     setDraft(work.value)
+    await loadReadiness()
   } catch (error: unknown) {
     const status = statusOf(error)
     if (status === 422) applyFieldErrors(error)
@@ -811,6 +881,7 @@ async function saveCategory() {
     work.value.category_id = response.data.work.category_id
     liveMessage.value = response.message || 'تم تحديث التصنيف.'
     liveTone.value = 'success'
+    await loadReadiness()
   } catch (error: unknown) {
     if (statusOf(error) === 403) editable.value = false
     taxonomyError.value = firstAnyFieldError(error) || serverMessage(error) || 'تعذر تحديث التصنيف.'
@@ -829,6 +900,7 @@ async function saveTags() {
     selectedTagIds.value = [...response.data.work.tag_ids]
     liveMessage.value = response.message || 'تم تحديث الوسوم.'
     liveTone.value = 'success'
+    await loadReadiness()
   } catch (error: unknown) {
     if (statusOf(error) === 403) editable.value = false
     taxonomyError.value = firstAnyFieldError(error) || serverMessage(error) || 'تعذر تحديث الوسوم.'
@@ -840,6 +912,101 @@ function applyMediaState(payload: { work?: { cover_media_id:number|null }; media
   mediaState.counts = payload.counts
   if (payload.media_policy) mediaState.policy = payload.media_policy
   if (payload.work && work.value) work.value.cover_media_id = payload.work.cover_media_id
+  void loadReadiness()
+}
+
+async function loadReadiness() {
+  if (props.mode !== 'edit' || !work.value || !fieldAccess.can_submit_review) return
+  const sequence = ++readinessSequence
+  readinessUpdating.value = true
+  readinessError.value = ''
+  try {
+    const response = await apiFetch<ApiResponse<{ readiness:ReviewReadiness }>>(
+      `/admin/works/${work.value.id}/review/readiness`
+    )
+    if (sequence === readinessSequence) {
+      readiness.value = response.data.readiness
+      if (response.data.readiness.work_updated_at) {
+        work.value.updated_at = response.data.readiness.work_updated_at
+      }
+    }
+  } catch (error:unknown) {
+    if (sequence !== readinessSequence) return
+    if (statusOf(error) === 403) {
+      fieldAccess.can_submit_review = false
+      readiness.value = null
+      return
+    }
+    readinessError.value = serverMessage(error) || (
+      currentLocale.value === 'ar' ? 'تعذر تحديث جاهزية المراجعة.' : 'Could not update review readiness.'
+    )
+  } finally {
+    if (sequence === readinessSequence) readinessUpdating.value = false
+  }
+}
+
+function readinessSectionReady(key:string):boolean {
+  return readiness.value?.sections.find(section => section.key === key)?.status !== 'blocked'
+}
+
+function openSubmitDialog() {
+  if (!canShowSubmitReview.value || submitReviewDisabledReason.value || submittingReview.value) return
+  submitDialogOpen.value = true
+}
+
+async function submitForReview() {
+  if (!work.value || submittingReview.value || submitReviewDisabledReason.value) return
+  submittingReview.value = true
+  liveMessage.value = ''
+  conflict.value = ''
+  try {
+    const response = await apiFetch<ApiResponse<{
+      action:string;changed:boolean;resubmission:boolean
+      work:{id:number;status:string;visibility_status:string;submitted_at:string;updated_at:string}
+      readiness:ReviewReadiness
+    }>>(`/admin/works/${work.value.id}/review/submit`, {
+      method:'PATCH',
+      body:{ expected_updated_at:readiness.value?.work_updated_at || work.value.updated_at }
+    })
+    work.value = { ...work.value, ...response.data.work }
+    readiness.value = response.data.readiness
+    editable.value = false
+    submitDialogOpen.value = false
+    liveMessage.value = response.message || (
+      currentLocale.value === 'ar' ? 'تم إرسال العمل للمراجعة بنجاح.' : 'Work submitted for review.'
+    )
+    liveTone.value = 'success'
+  } catch (error:unknown) {
+    const status = statusOf(error)
+    const data = (error as any)?.data?.data || (error as any)?.response?._data?.data
+    if ((status === 409 || status === 422) && data?.readiness) readiness.value = data.readiness
+    if (status === 409) {
+      conflict.value = currentLocale.value === 'ar'
+        ? 'تغيرت نسخة العمل في الخادم. حمّل النسخة الأحدث قبل الإرسال.'
+        : 'The work changed on the server. Load the latest version before submitting.'
+      submitDialogOpen.value = false
+    } else if (status === 422) {
+      liveMessage.value = currentLocale.value === 'ar'
+        ? 'ظهرت متطلبات جديدة تمنع الإرسال. راجع بطاقة الجاهزية.'
+        : 'New requirements block submission. Review the readiness panel.'
+      liveTone.value = 'error'
+      submitDialogOpen.value = false
+    } else if (status === 403) {
+      fieldAccess.can_submit_review = false
+      submitDialogOpen.value = false
+      liveMessage.value = currentLocale.value === 'ar'
+        ? 'لا تملك صلاحية إرسال العمل للمراجعة.'
+        : 'You do not have permission to submit this work.'
+      liveTone.value = 'error'
+    } else {
+      liveMessage.value = serverMessage(error) || (
+        currentLocale.value === 'ar' ? 'تعذر إرسال العمل للمراجعة. حاول مجددًا.' : 'Could not submit the work. Try again.'
+      )
+      liveTone.value = 'error'
+    }
+  } finally {
+    submittingReview.value = false
+  }
 }
 
 function countsFromPolicy(currentPolicy: MediaPolicy, active: number): Counts {
@@ -850,7 +1017,7 @@ function emptyDraft(): Draft {
   return { title:'',summary:'',description:'',media_type:null,price_amount:'',delivery_days:'',designer_id:null,internal_notes:'' }
 }
 function emptyAccess(): FieldAccess {
-  return { can_create:false,can_update_basic:false,can_update_media:false,can_update_pricing:false,can_update_delivery:false,can_update_designer:false,can_update_private_notes:false,can_assign_category:false,can_assign_tags:false }
+  return { can_create:false,can_update_basic:false,can_update_media:false,can_update_pricing:false,can_update_delivery:false,can_update_designer:false,can_update_private_notes:false,can_assign_category:false,can_assign_tags:false,can_submit_review:false }
 }
 function emptyPolicy(): AuthoringPolicy {
   return { source:'work_settings',settings_version:1,allowed_media_types:[],media_limits:{max_items:null,max_file_size_kb:null},enforcement:{} }

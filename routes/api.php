@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\Admin\WorksReportActionController as AdminWorksRepo
 use App\Http\Controllers\Api\Admin\WorksTrackedReportsController as AdminWorksTrackedReportsController;
 use App\Http\Controllers\Api\Admin\WorksReviewActionController as AdminWorksReviewActionController;
 use App\Http\Controllers\Api\Admin\WorksReviewQueueController as AdminWorksReviewQueueController;
+use App\Http\Controllers\Api\Admin\WorksReviewSubmissionController as AdminWorksReviewSubmissionController;
 use App\Http\Controllers\Api\Admin\WorksSettingsController as AdminWorksSettingsController;
 use App\Http\Controllers\Api\Admin\WorksShowController as AdminWorksShowController;
 use App\Http\Controllers\Api\Admin\WorksTaxonomyCatalogController as AdminWorksTaxonomyCatalogController;
@@ -62,6 +63,8 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
     Route::get('/works/activity', [AdminWorksActivityController::class, 'index']);
     Route::get('/works/overview', [AdminWorksOverviewController::class, 'index']);
     Route::get('/works/review', [AdminWorksReviewQueueController::class, 'index']);
+    Route::get('/works/{work}/review/readiness', [AdminWorksReviewSubmissionController::class, 'readiness'])->whereNumber('work');
+    Route::patch('/works/{work}/review/submit', [AdminWorksReviewSubmissionController::class, 'submit'])->whereNumber('work');
     Route::patch('/works/taxonomy/assign/category', [AdminWorksTaxonomyAssignmentController::class, 'bulkUpdateCategory']);
     Route::patch('/works/taxonomy/assign/tags', [AdminWorksTaxonomyAssignmentController::class, 'bulkUpdateTags']);
     Route::patch('/works/{work}/review/start', [AdminWorksReviewActionController::class, 'start'])->whereNumber('work');
@@ -113,6 +116,12 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
     Route::patch('/works/{work}/media/cover', [AdminWorksMediaController::class, 'updateCover'])
         ->whereNumber('work');
     Route::get('/works/{work}/media/{media}/content', [AdminWorksMediaController::class, 'content'])
+        ->whereNumber('work')
+        ->whereNumber('media');
+    Route::get('/works/{work}/media/{media}/poster', [AdminWorksMediaController::class, 'poster'])
+        ->whereNumber('work')
+        ->whereNumber('media');
+    Route::post('/works/{work}/media/{media}/retry-processing', [AdminWorksMediaController::class, 'retryProcessing'])
         ->whereNumber('work')
         ->whereNumber('media');
     Route::delete('/works/{work}/media/{media}', [AdminWorksMediaController::class, 'destroy'])

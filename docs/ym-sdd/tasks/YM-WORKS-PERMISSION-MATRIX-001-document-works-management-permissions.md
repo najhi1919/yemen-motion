@@ -6,7 +6,9 @@
 
 ## Internal-only access rule
 
-- `super-admin` مسموح له بجميع صلاحيات إدارة الأعمال.
+- `super-admin` هو المعرّف الثابت لمسؤول النظام الأعلى، ويمر عبر تجاوز
+  `Gate::before` المركزي لجميع فحوص الصلاحيات دون الاعتماد على grant أو pivot
+  فردي. لا يشمل التجاوز التحقق أو قواعد حالات العمل أو التزامن أو المعاملات.
 - يخضع `admin` و`staff` وبقية الأدوار الداخلية للصلاحيات الدقيقة.
 - يمنع `client` و`designer` من `/admin/works` وكل مساراته حتى عند منحهما صلاحيات بالخطأ.
 - تخفي الواجهة أو تعطل العناصر غير المسموحة، لكن Backend هو الحارس النهائي عند التنفيذ.
@@ -55,6 +57,7 @@ admin.works.update.private_notes
 ### Review workflow permissions
 
 ```text
+admin.works.review.submit
 admin.works.review.start
 admin.works.review.approve
 admin.works.review.request_changes

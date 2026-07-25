@@ -7,20 +7,45 @@ export const useAuthStore = defineStore('auth', {
     token: null as string | null,
     role: null as string | null,
     permissions: [] as string[],
+    superAdmin: false,
     isAuthenticated: false,
     isLoading: false,
     isInitialized: false,
     error: null as string | null
   }),
 
+  getters: {
+    isSuperAdmin: (state): boolean => state.isAuthenticated && state.superAdmin
+  },
+
   actions: {
     _setAuth(data: AuthData) {
       this.user = data.user
       this.token = data.token
       this.role = data.role
-      this.permissions = data.permissions
+      this.permissions = Array.isArray(data.permissions) ? data.permissions : []
+      this.superAdmin = data.is_super_admin === true
       this.isAuthenticated = true
       this.error = null
+    },
+
+    can(permission: string): boolean {
+      if (!this.isAuthenticated || !permission) return false
+      if (this.isSuperAdmin) return true
+
+      return this.permissions.includes(permission)
+    },
+
+    canAny(permissions: string[]): boolean {
+      if (!this.isAuthenticated || permissions.length === 0) return false
+
+      return permissions.some(permission => this.can(permission))
+    },
+
+    canAll(permissions: string[]): boolean {
+      if (!this.isAuthenticated || permissions.length === 0) return false
+
+      return permissions.every(permission => this.can(permission))
     },
 
     async register(payload: RegisterPayload) {
@@ -82,6 +107,7 @@ export const useAuthStore = defineStore('auth', {
         this.token = null
         this.role = null
         this.permissions = []
+        this.superAdmin = false
         this.isAuthenticated = false
         this.error = null
         this.isLoading = false
@@ -92,11 +118,17 @@ export const useAuthStore = defineStore('auth', {
       this.isLoading = true
       try {
         const { apiFetch } = useApiClient()
-        const response = await apiFetch<ApiResponse<{ user: User; role?: string; permissions?: string[] }>>('/user')
+        const response = await apiFetch<ApiResponse<{
+          user: User
+          role?: string
+          permissions?: string[]
+          is_super_admin?: boolean
+        }>>('/user')
         if (response.success && response.data) {
           this.user = response.data.user
           this.role = response.data.role ?? null
           this.permissions = response.data.permissions ?? []
+          this.superAdmin = response.data.is_super_admin === true
           this.isAuthenticated = true
         }
         return response
@@ -170,6 +202,7 @@ export const useAuthStore = defineStore('auth', {
       this.token = null
       this.role = null
       this.permissions = []
+      this.superAdmin = false
       this.isAuthenticated = false
       this.isInitialized = true
       this.error = null

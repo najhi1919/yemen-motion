@@ -22,13 +22,13 @@ class WorksReviewActionRequest extends FormRequest
 
     /** @var array<string, list<string>> */
     private const ALLOWED_BODY_FIELDS = [
-        'start' => [],
-        'assignReviewer' => ['reviewer_id'],
-        'approve' => [],
-        'requestChanges' => ['change_request_notes'],
-        'reject' => ['rejection_reason'],
-        'publishAfterApproval' => [],
-        'reopen' => [],
+        'start' => ['expected_updated_at'],
+        'assignReviewer' => ['reviewer_id', 'expected_updated_at'],
+        'approve' => ['expected_updated_at'],
+        'requestChanges' => ['change_request_notes', 'expected_updated_at'],
+        'reject' => ['rejection_reason', 'expected_updated_at'],
+        'publishAfterApproval' => ['expected_updated_at'],
+        'reopen' => ['expected_updated_at'],
     ];
 
     public function authorize(): bool
@@ -58,7 +58,9 @@ class WorksReviewActionRequest extends FormRequest
     /** @return array<string, list<mixed>> */
     public function rules(): array
     {
-        return match ($this->actionMethod()) {
+        return [
+            'expected_updated_at' => ['sometimes', 'required', 'date'],
+            ...match ($this->actionMethod()) {
             'assignReviewer' => [
                 'reviewer_id' => ['bail', 'required', 'integer', Rule::exists('users', 'id')],
             ],
@@ -69,7 +71,8 @@ class WorksReviewActionRequest extends FormRequest
                 'rejection_reason' => ['bail', 'required', 'string', 'min:5', 'max:2000'],
             ],
             default => [],
-        };
+            },
+        ];
     }
 
     /** @return array<string, string> */
@@ -87,6 +90,8 @@ class WorksReviewActionRequest extends FormRequest
             'rejection_reason.string' => 'سبب الرفض يجب أن يكون نصًا.',
             'rejection_reason.min' => 'سبب الرفض يجب ألا يقل عن 5 أحرف.',
             'rejection_reason.max' => 'سبب الرفض يجب ألا يتجاوز 2000 حرف.',
+            'expected_updated_at.required' => 'نسخة العمل المتوقعة مطلوبة عند إرسالها.',
+            'expected_updated_at.date' => 'نسخة العمل المتوقعة غير صالحة.',
         ];
     }
 

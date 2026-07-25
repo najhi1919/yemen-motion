@@ -44,6 +44,8 @@
 </template>
 
 <script setup lang="ts">
+import '~/assets/css/admin-visual-system.css'
+
 const sidebarCollapsed = ref(false)
 const dashboardTheme = useState<'dark' | 'light'>('ym-dashboard-theme', () => 'dark')
 const currentLocale = useState<'ar' | 'en'>('ym-dashboard-locale', () => 'ar')

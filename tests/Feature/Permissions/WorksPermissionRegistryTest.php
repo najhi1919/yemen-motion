@@ -37,6 +37,7 @@ class WorksPermissionRegistryTest extends TestCase
         'admin.works.update.tags',
         'admin.works.update.designer',
         'admin.works.update.private_notes',
+        'admin.works.review.submit',
         'admin.works.review.start',
         'admin.works.review.approve',
         'admin.works.review.request_changes',
@@ -100,7 +101,7 @@ class WorksPermissionRegistryTest extends TestCase
         $worksPermissions = $registry
             ->filter(fn (array $permission): bool => str_starts_with($permission['name'] ?? '', 'admin.works.'));
 
-        $this->assertCount(78, $worksPermissions);
+        $this->assertCount(79, $worksPermissions);
         $this->assertSame(
             $registeredNames->count(),
             $registeredNames->unique()->count(),

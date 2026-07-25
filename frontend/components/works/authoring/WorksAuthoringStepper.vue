@@ -25,10 +25,10 @@ import { formatYmNumber } from '~/utils/ymFormatting'
 const props = defineProps<{ locale: 'ar' | 'en' }>()
 const text = computed(() => props.locale === 'ar' ? {
   label:'مراحل إنشاء العمل',current:'أكمل البيانات الأساسية لإنشاء المسودة.',locked:'تتاح هذه المرحلة بعد إنشاء المسودة.',
-  steps:[['بيانات المسودة',''],['التصنيف والوسوم','بعد إنشاء المسودة'],['الوسائط والغلاف','بعد إنشاء المسودة'],['المراجعة','مرحلة لاحقة']]
+  steps:[['بيانات المسودة',''],['التصنيف والوسوم','بعد إنشاء المسودة'],['الوسائط والغلاف','بعد إنشاء المسودة'],['المراجعة','بعد إنشاء المسودة']]
 } : {
   label:'Work creation steps',current:'Complete the basic data to create the draft.',locked:'This step becomes available after creating the draft.',
-  steps:[['Draft data',''],['Category and tags','After creating the draft'],['Media and cover','After creating the draft'],['Review','Later stage']]
+  steps:[['Draft data',''],['Category and tags','After creating the draft'],['Media and cover','After creating the draft'],['Review','After creating the draft']]
 })
 const steps = computed(() => text.value.steps.map(([title, note]) => ({ title, note })))
 </script>

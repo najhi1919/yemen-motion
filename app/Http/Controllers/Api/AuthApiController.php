@@ -50,8 +50,9 @@ class AuthApiController extends Controller
                 'data' => [
                     'user' => new UserResource($user),
                     'token' => $token,
-                    'role' => $user->roles->first()?->name,
+                    'role' => $this->primaryRoleName($user),
                     'permissions' => $user->getAllPermissions()->pluck('name'),
+                    'is_super_admin' => $user->isSuperAdmin(),
                 ],
                 'errors' => null,
             ], 201);
@@ -124,7 +125,7 @@ class AuthApiController extends Controller
         RateLimiter::clear($key);
 
         $token = $user->createToken('auth-token')->plainTextToken;
-        $roleName = $user->roles->first()?->name;
+        $roleName = $this->primaryRoleName($user);
 
         // نسجل النجاح بعد إصدار التوكن دون تمرير التوكن أو بيانات الاعتماد إلى السجل.
         $this->recordAuthAuditEvent($request, [
@@ -149,6 +150,7 @@ class AuthApiController extends Controller
                 'token' => $token,
                 'role' => $roleName,
                 'permissions' => $user->getAllPermissions()->pluck('name'),
+                'is_super_admin' => $user->isSuperAdmin(),
             ],
             'errors' => null,
         ]);
@@ -194,8 +196,9 @@ class AuthApiController extends Controller
             'message' => 'تم جلب بيانات المستخدم بنجاح.',
             'data' => [
                 'user' => new UserResource($user),
-                'role' => $user->roles->first()?->name,
+                'role' => $this->primaryRoleName($user),
                 'permissions' => $user->getAllPermissions()->pluck('name'),
+                'is_super_admin' => $user->isSuperAdmin(),
             ],
             'errors' => null,
         ]);
@@ -275,5 +278,14 @@ class AuthApiController extends Controller
                 throw $exception;
             }
         }
+    }
+
+    private function primaryRoleName(User $user): ?string
+    {
+        if ($user->isSuperAdmin()) {
+            return User::superAdminRoleName();
+        }
+
+        return $user->roles->first()?->name;
     }
 }

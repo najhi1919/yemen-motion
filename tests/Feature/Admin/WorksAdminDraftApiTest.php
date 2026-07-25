@@ -876,6 +876,7 @@ class WorksAdminDraftApiTest extends TestCase
             'can_update_private_notes' => false,
             'can_assign_category' => true,
             'can_assign_tags' => false,
+            'can_submit_review' => false,
         ], $access);
     }
 

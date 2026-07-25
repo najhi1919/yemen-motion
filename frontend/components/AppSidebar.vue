@@ -221,11 +221,13 @@ const t = {
 }
 
 const copy = computed(() => t[currentLocale.value])
-const isSuperAdmin = computed(() => auth.role === 'super-admin')
-const isAdmin = computed(() => ['super-admin', 'admin'].includes(auth.role || ''))
+const isSuperAdmin = computed(() => auth.isSuperAdmin)
+const isAdmin = computed(() => isSuperAdmin.value || auth.role === 'admin')
 const isStaff = computed(() => auth.role === 'staff')
-const isInternalDashboardUser = computed(() => ['super-admin', 'admin', 'staff'].includes(auth.role || ''))
-const hasPermission = (permission: string) => isSuperAdmin.value || auth.permissions.includes(permission)
+const isInternalDashboardUser = computed(() => (
+  isSuperAdmin.value || ['admin', 'staff'].includes(auth.role || '')
+))
+const hasPermission = (permission: string) => auth.can(permission)
 const isWorksRoute = computed(() => route.path === '/admin/works' || route.path.startsWith('/admin/works/'))
 const canLoadWorksAccess = computed(() => (
   auth.isInitialized
@@ -234,7 +236,7 @@ const canLoadWorksAccess = computed(() => (
   && isInternalDashboardUser.value
 ))
 const worksAccessSignature = computed(() => canLoadWorksAccess.value
-  ? [auth.role || '', ...[...auth.permissions].sort()].join('|')
+  ? [auth.role || '', isSuperAdmin.value ? 'super' : 'standard', ...[...auth.permissions].sort()].join('|')
   : '')
 const worksSections = ref<WorksAccessSection[]>([])
 
