@@ -1,0 +1,165 @@
+.ym-taxonomy-smart-table.is-overview,
+.ym-taxonomy-smart-table.is-catalog {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0 7px;
+}
+
+.ym-taxonomy-smart-table th,
+.ym-taxonomy-smart-table td {
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.ym-taxonomy-smart-table col.is-sequence,
+.ym-taxonomy-smart-table th.is-sequence,
+.ym-taxonomy-smart-table td.is-sequence {
+  width: 40px;
+  min-width: 40px;
+  max-width: 40px;
+  padding-inline: 0;
+  text-align: center;
+  vertical-align: middle;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ym-taxonomy-smart-table th:not(:last-child),
+.ym-taxonomy-smart-table td:not(:last-child) {
+  border-inline-end: 1px solid color-mix(in srgb, var(--ym-card-border) 30%, transparent);
+}
+
+.ym-taxonomy-smart-table tbody td.is-sequence,
+.ym-taxonomy-smart-table tbody tr.needs-attention td.is-sequence {
+  border-inline-start: 0 !important;
+  outline: 0;
+  box-shadow: none;
+}
+
+.ym-taxonomy-smart-table tbody tr.needs-attention td.is-category {
+  border-inline-start: 2px solid #f59e0b;
+}
+
+.ym-taxonomy-smart-table.is-overview col.is-category {
+  width: 20%;
+}
+
+.ym-taxonomy-smart-table.is-overview col.is-distribution {
+  width: 11%;
+}
+
+.ym-taxonomy-smart-table.is-overview col.is-risk {
+  width: 13%;
+}
+
+.ym-taxonomy-smart-table.is-overview col.is-promotion {
+  width: 14%;
+}
+
+.ym-taxonomy-smart-table.is-overview col.is-engagement {
+  width: 9%;
+}
+
+.ym-taxonomy-smart-table.is-overview col.is-tracking {
+  width: 14%;
+}
+
+.ym-taxonomy-smart-table.is-overview col.is-date {
+  width: 10%;
+}
+
+.ym-taxonomy-smart-table.is-overview col.is-actions,
+.ym-taxonomy-smart-table.is-overview th.is-actions,
+.ym-taxonomy-smart-table.is-overview td.is-actions {
+  width: 58px;
+  min-width: 58px;
+  max-width: 58px;
+}
+
+.ym-taxonomy-smart-table.is-catalog col.is-identity {
+  width: auto;
+}
+
+.ym-taxonomy-smart-table.is-catalog col.is-state {
+  width: 11%;
+}
+
+.ym-taxonomy-smart-table.is-catalog col.is-order {
+  width: 9%;
+}
+
+.ym-taxonomy-smart-table.is-catalog col.is-usage {
+  width: 18%;
+}
+
+.ym-taxonomy-smart-table.is-catalog col.is-date {
+  width: 18%;
+}
+
+.ym-taxonomy-smart-table.is-catalog col.is-actions,
+.ym-taxonomy-smart-table.is-catalog th.is-actions,
+.ym-taxonomy-smart-table.is-catalog td.is-actions {
+  width: 92px;
+  min-width: 92px;
+  max-width: 92px;
+  padding-inline: 4px;
+}
+
+.ym-taxonomy-smart-table.is-catalog .ym-catalog-actions {
+  gap: 6px;
+  justify-content: center;
+}
+
+.ym-taxonomy-smart-table.is-catalog .ym-catalog-action {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+}
+
+.ym-taxonomy-smart-table.is-catalog .ym-catalog-actions button {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  padding: 0;
+}
+
+.ym-taxonomy-smart-list__count {
+  align-content: center;
+  justify-content: center;
+  gap: 3px;
+}
+
+.ym-taxonomy-smart-list__count strong {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.ym-catalog-usage strong {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+}
+
+.ym-catalog-total-value {
+  font-weight: 850;
+}
+
+.ym-taxonomy-smart-list__mobile header > .ym-taxonomy-smart-list__row-number,
+.ym-catalog-mobile .ym-catalog-row-number {
+  display: grid;
+  width: 26px;
+  min-width: 26px;
+  max-width: 26px;
+  height: 26px;
+  place-items: center;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}

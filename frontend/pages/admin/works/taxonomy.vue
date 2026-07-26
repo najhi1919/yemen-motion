@@ -1,38 +1,24 @@
 <template>
   <div
-    class="ym-taxonomy-page space-y-7"
+    class="ym-taxonomy-page ym-admin-page"
+    data-admin-accent="taxonomy"
     :dir="currentLocale === 'ar' ? 'rtl' : 'ltr'"
   >
-    <section class="ym-taxonomy-hero">
-      <div class="ym-taxonomy-hero__glow is-one" />
-      <div class="ym-taxonomy-hero__glow is-two" />
-      <div class="ym-taxonomy-hero__grid" aria-hidden="true" />
-
-      <div class="ym-taxonomy-hero__content">
-        <div>
-          <div class="ym-taxonomy-chips">
-            <span class="ym-taxonomy-chip is-brand">Yemen Motion</span>
-            <span class="ym-taxonomy-chip is-readonly">{{ actionBadge }}</span>
-          </div>
-          <p class="ym-taxonomy-kicker">{{ copy.kicker }}</p>
-          <h1>{{ copy.title }}</h1>
-          <p class="ym-taxonomy-description">
-            {{ copy.descriptionBefore }}
-            <code dir="ltr">category_id</code>
-            {{ copy.descriptionAfter }}
-          </p>
-        </div>
-
-        <div class="ym-taxonomy-hero__summary">
-          <span>{{ copy.totalCategories }}</span>
-          <strong>{{ summary ? formatNumber(summary.total_categories) : '—' }}</strong>
-          <small v-if="summary">
-            {{ formatNumber(summary.total_works) }} {{ copy.worksInScope }}
-          </small>
-          <small v-else>{{ copy.categoryBuckets }}</small>
-        </div>
-      </div>
-    </section>
+    <AdminPageHero
+      :breadcrumbs="heroBreadcrumbs"
+      :breadcrumb-label="copy.title"
+      :eyebrow="copy.kicker"
+      :badge="actionBadge"
+      :title="copy.title"
+      :description="copy.heroDescription"
+    >
+      <template #icon>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 5h7v6H4zM13 5h7v6h-7zM4 13h7v6H4zM13 13h7v6h-7z" />
+          <path d="M7.5 8h.01M16.5 8h.01M7.5 16h.01M16.5 16h.01" />
+        </svg>
+      </template>
+    </AdminPageHero>
 
     <section
       v-if="authPending"
@@ -62,49 +48,28 @@
         <button v-if="canViewTags" type="button" :class="{ 'is-active': activeTab === 'tags' }" :aria-current="activeTab === 'tags' ? 'page' : undefined" @click="activeTab = 'tags'">{{ copy.tagsTab }}</button>
       </nav>
 
-      <aside class="ym-taxonomy-notice" role="note">
-        <span>{{ actionBadge }}</span>
-        <div>
-          <strong>{{ hasAnyAction ? copy.managementNoticeTitle : copy.readOnlyNoticeTitle }}</strong>
-          <p>{{ hasAnyAction ? copy.managementNotice : copy.readOnlyNotice }}</p>
-        </div>
-      </aside>
-
       <div v-show="activeTab === 'overview'" class="ym-taxonomy-tab-panel">
+      <AdminPolicyBar
+        v-if="categorySupport && tagSupport"
+        :items="policyItems"
+        :aria-label="copy.supportLabel"
+        :close-label="copy.close"
+      />
 
-      <section
+      <AdminMetricStrip
         v-if="summary"
-        class="ym-taxonomy-summary-grid"
+        :items="primarySummaryCards"
+        locale="en"
         :aria-label="copy.summaryLabel"
-      >
-        <article
-          v-for="card in summaryCards"
-          :key="card.key"
-          class="ym-taxonomy-summary-card"
-          :class="{
-            'is-alert': ['uncategorized_buckets', 'uncategorized_works', 'reported_categories', 'hidden_categories', 'total_reports'].includes(card.key) && card.value > 0,
-            'is-promoted': card.key === 'promoted_categories' && card.value > 0
-          }"
-          :style="{ '--taxonomy-accent': card.color }"
-        >
-          <span>{{ card.label }}</span>
-          <strong>{{ formatNumber(card.value) }}</strong>
-          <small>{{ card.hint }}</small>
-        </article>
-      </section>
+        :loading="loading && !hasLoaded"
+        :updating="loading && hasLoaded"
+      />
 
-      <aside v-if="categorySupport && tagSupport" class="ym-taxonomy-support-grid" :aria-label="copy.supportLabel">
-        <section>
-          <strong>{{ copy.categorySupportTitle }}</strong>
-          <span>{{ categorySupport.mapping_complete ? copy.mappingComplete : copy.mappingHasLegacy }}</span>
-          <code dir="ltr">{{ categorySupport.catalog_source }} · {{ categorySupport.work_reference }}</code>
-        </section>
-        <section>
-          <strong>{{ copy.tagSupportTitle }}</strong>
-          <span>{{ tagSupport.available ? copy.supportAvailable : copy.supportUnavailable }}</span>
-          <code dir="ltr">{{ tagSupport.catalog_source }} · {{ tagSupport.assignments_source }}</code>
-        </section>
-      </aside>
+      <section v-if="summary" class="ym-taxonomy-secondary-summary" :aria-label="copy.secondarySummaryLabel">
+        <span v-for="item in secondarySummaryItems" :key="item.key">
+          {{ item.label }} <strong>{{ formatNumber(item.value) }}</strong>
+        </span>
+      </section>
 
       <aside
         v-if="tagSupport && !tagSupport.available"
@@ -120,22 +85,6 @@
       </aside>
 
       <section class="ym-taxonomy-filter-card">
-        <header>
-          <div>
-            <h2>{{ copy.filtersTitle }}</h2>
-            <p>{{ copy.filtersCopy }}</p>
-          </div>
-          <button
-            type="button"
-            class="ym-taxonomy-button is-secondary"
-            :disabled="loading"
-            :title="copy.resetHint"
-            @click="resetFilters"
-          >
-            {{ copy.reset }}
-          </button>
-        </header>
-
         <form class="ym-taxonomy-filter-grid" @submit.prevent="applyFilters">
           <label class="is-search">
             <span>{{ copy.search }}</span>
@@ -146,18 +95,6 @@
               maxlength="80"
               :placeholder="copy.searchPlaceholder"
               autocomplete="off"
-            />
-            <small>{{ copy.searchHint }}</small>
-          </label>
-
-          <label>
-            <span>{{ copy.categoryId }}</span>
-            <input
-              v-model="filters.category_id"
-              type="number"
-              step="1"
-              inputmode="numeric"
-              dir="ltr"
             />
           </label>
 
@@ -186,17 +123,15 @@
 
           <label>
             <span>{{ copy.mediaType }}</span>
-            <input
-              v-model.trim="filters.media_type"
-              type="text"
-              maxlength="40"
-              placeholder="image"
-              dir="ltr"
-            />
+            <select v-model="filters.media_type">
+              <option value="">{{ copy.all }}</option>
+              <option value="image">{{ copy.image }}</option>
+              <option value="video">{{ copy.video }}</option>
+            </select>
           </label>
 
           <label>
-            <span>{{ copy.onlyUncategorized }}</span>
+            <span>{{ copy.linkFilter }}</span>
             <select v-model="filters.only_uncategorized">
               <option
                 v-for="option in booleanOptions"
@@ -208,54 +143,13 @@
             </select>
           </label>
 
-          <label>
-            <span>{{ copy.onlyReported }}</span>
-            <select v-model="filters.only_reported">
-              <option
-                v-for="option in booleanOptions"
-                :key="'reported-' + option.value"
-                :value="option.value"
-              >
-                {{ option.label }}
-              </option>
-            </select>
-          </label>
-
-          <label>
-            <span>{{ copy.onlyPromoted }}</span>
-            <select v-model="filters.only_promoted">
-              <option
-                v-for="option in booleanOptions"
-                :key="'promoted-' + option.value"
-                :value="option.value"
-              >
-                {{ option.label }}
-              </option>
-            </select>
-          </label>
-
-          <label>
-            <span>{{ copy.from }}</span>
-            <input v-model="filters.from" type="date" />
-            <small>{{ copy.updatedRangeHint }}</small>
-          </label>
-
-          <label>
-            <span>{{ copy.to }}</span>
-            <input v-model="filters.to" type="date" />
-            <small>{{ copy.updatedRangeHint }}</small>
-          </label>
-
-          <label>
-            <span>{{ copy.perPage }}</span>
-            <select v-model.number="filters.per_page">
-              <option :value="15">15</option>
-              <option :value="25">25</option>
-              <option :value="50">50</option>
-            </select>
-          </label>
-
-          <div class="ym-taxonomy-filter-actions">
+          <div class="ym-taxonomy-filter-toolbar">
+            <button type="button" class="ym-taxonomy-advanced-toggle" :class="{ 'is-open': showAdvancedFilters }" @click="showAdvancedFilters = !showAdvancedFilters">
+              <span aria-hidden="true">⌁</span>
+              {{ copy.advancedFilters }}
+              <b v-if="activeAdvancedFiltersCount">{{ activeAdvancedFiltersCount }}</b>
+            </button>
+            <div class="ym-taxonomy-filter-actions">
             <button
               type="submit"
               class="ym-taxonomy-button is-primary"
@@ -263,6 +157,27 @@
             >
               {{ copy.apply }}
             </button>
+            <button
+              type="button"
+              class="ym-taxonomy-button is-secondary"
+              :disabled="loading"
+              :title="copy.resetHint"
+              @click="resetFilters"
+            >
+              {{ copy.reset }}
+            </button>
+            </div>
+          </div>
+
+          <div v-show="showAdvancedFilters" class="ym-taxonomy-filter-grid is-advanced">
+            <label><span>{{ copy.categoryId }}</span><input v-model="filters.category_id" type="number" step="1" inputmode="numeric" dir="ltr" /></label>
+            <label><span>{{ copy.onlyReported }}</span><select v-model="filters.only_reported"><option v-for="option in booleanOptions" :key="'reported-' + option.value" :value="option.value">{{ option.label }}</option></select></label>
+            <label><span>{{ copy.onlyPromoted }}</span><select v-model="filters.only_promoted"><option v-for="option in booleanOptions" :key="'promoted-' + option.value" :value="option.value">{{ option.label }}</option></select></label>
+            <label><span>{{ copy.from }}</span><input v-model="filters.from" type="date" /></label>
+            <label><span>{{ copy.to }}</span><input v-model="filters.to" type="date" /></label>
+            <label><span>{{ copy.sortLabel }}</span><select v-model="filters.sort"><option v-for="option in sortOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
+            <label><span>{{ copy.directionLabel }}</span><select v-model="filters.direction"><option value="desc">{{ copy.descending }}</option><option value="asc">{{ copy.ascending }}</option></select></label>
+            <label><span>{{ copy.perPage }}</span><select v-model.number="filters.per_page"><option :value="15">15</option><option :value="25">25</option><option :value="50">50</option></select></label>
           </div>
         </form>
 
@@ -271,301 +186,22 @@
         </p>
       </section>
 
-      <section class="ym-taxonomy-table-card">
-        <header class="ym-taxonomy-table-card__head">
-          <div>
-            <h2>{{ copy.tableTitle }}</h2>
-            <p>{{ copy.tableCopy }}</p>
-          </div>
-          <div class="ym-taxonomy-table-state">
-            <span>{{ copy.currentPage }}</span>
-            <strong>
-              {{ formatNumber(pagination.current_page) }} /
-              {{ formatNumber(pagination.last_page) }}
-            </strong>
-          </div>
-        </header>
-
-        <div
-          v-if="loading"
-          class="ym-taxonomy-state"
-          role="status"
-          aria-live="polite"
-        >
-          <span class="ym-taxonomy-spinner" aria-hidden="true" />
-          <h3>{{ copy.loadingTitle }}</h3>
-          <p>{{ copy.loadingCopy }}</p>
-        </div>
-
-        <div v-else-if="error" class="ym-taxonomy-state is-error" role="alert">
-          <span class="ym-taxonomy-state__icon" aria-hidden="true">!</span>
-          <h3>{{ copy.errorTitle }}</h3>
-          <p>{{ error }}</p>
-          <button
-            type="button"
-            class="ym-taxonomy-button is-secondary"
-            @click="fetchTaxonomy"
-          >
-            {{ copy.retry }}
-          </button>
-        </div>
-
-        <div
-          v-else-if="hasLoaded && items.length === 0"
-          class="ym-taxonomy-state"
-          role="status"
-        >
-          <span class="ym-taxonomy-empty-icon" aria-hidden="true">0</span>
-          <h3>{{ copy.emptyTitle }}</h3>
-          <p>{{ copy.emptyCopy }}</p>
-        </div>
-
-        <div v-else-if="hasLoaded" class="ym-taxonomy-table-wrap">
-          <table class="ym-taxonomy-table">
-            <thead>
-              <tr>
-                <th class="is-label">{{ copy.category }}</th>
-                <th>
-                  <button
-                    type="button"
-                    class="ym-taxonomy-sort"
-                    @click="changeSort('category_id')"
-                  >
-                    {{ copy.categoryId }}
-                    <span aria-hidden="true">{{ sortIndicator('category_id') }}</span>
-                  </button>
-                </th>
-                <th>
-                  <button
-                    type="button"
-                    class="ym-taxonomy-sort"
-                    @click="changeSort('works_count')"
-                  >
-                    {{ copy.worksCount }}
-                    <span aria-hidden="true">{{ sortIndicator('works_count') }}</span>
-                  </button>
-                </th>
-                <th>
-                  <button
-                    type="button"
-                    class="ym-taxonomy-sort"
-                    @click="changeSort('published_count')"
-                  >
-                    {{ copy.publishedCount }}
-                    <span aria-hidden="true">{{ sortIndicator('published_count') }}</span>
-                  </button>
-                </th>
-                <th>
-                  <button
-                    type="button"
-                    class="ym-taxonomy-sort"
-                    @click="changeSort('hidden_count')"
-                  >
-                    {{ copy.hiddenCount }}
-                    <span aria-hidden="true">{{ sortIndicator('hidden_count') }}</span>
-                  </button>
-                </th>
-                <th>{{ copy.reviewQueueCount }}</th>
-                <th>
-                  <button
-                    type="button"
-                    class="ym-taxonomy-sort"
-                    @click="changeSort('reported_count')"
-                  >
-                    {{ copy.reportedCount }}
-                    <span aria-hidden="true">{{ sortIndicator('reported_count') }}</span>
-                  </button>
-                </th>
-                <th>{{ copy.featuredCount }}</th>
-                <th>{{ copy.pinnedCount }}</th>
-                <th>
-                  <button
-                    type="button"
-                    class="ym-taxonomy-sort"
-                    @click="changeSort('total_reports')"
-                  >
-                    {{ copy.totalReports }}
-                    <span aria-hidden="true">{{ sortIndicator('total_reports') }}</span>
-                  </button>
-                </th>
-                <th>
-                  <button
-                    type="button"
-                    class="ym-taxonomy-sort"
-                    @click="changeSort('total_views')"
-                  >
-                    {{ copy.totalViews }}
-                    <span aria-hidden="true">{{ sortIndicator('total_views') }}</span>
-                  </button>
-                </th>
-                <th>
-                  <button
-                    type="button"
-                    class="ym-taxonomy-sort"
-                    @click="changeSort('total_likes')"
-                  >
-                    {{ copy.totalLikes }}
-                    <span aria-hidden="true">{{ sortIndicator('total_likes') }}</span>
-                  </button>
-                </th>
-                <th>
-                  <button
-                    type="button"
-                    class="ym-taxonomy-sort"
-                    @click="changeSort('latest_work_at')"
-                  >
-                    {{ copy.latestWorkAt }}
-                    <span aria-hidden="true">{{ sortIndicator('latest_work_at') }}</span>
-                  </button>
-                </th>
-                <th>{{ copy.uncategorizedFlag }}</th>
-                <th>{{ copy.hasReportsFlag }}</th>
-                <th>{{ copy.hasPublishedFlag }}</th>
-                <th>{{ copy.hasHiddenFlag }}</th>
-                <th>{{ copy.promotedFlag }}</th>
-                <th>{{ copy.needsAttentionFlag }}</th>
-                <th class="is-action">{{ copy.readAction }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="bucket in items"
-                :key="bucket.category_id === null ? 'uncategorized' : bucket.category_id"
-                :class="{
-                  'is-uncategorized-row': bucket.taxonomy_flags.uncategorized,
-                  'needs-attention-row': bucket.taxonomy_flags.needs_attention
-                }"
-              >
-                <td class="is-label">
-                  <strong>{{ bucketDisplayName(bucket) }}</strong>
-                  <code v-if="bucket.category" dir="ltr">{{ bucket.category.slug }}</code>
-                  <span v-if="bucket.category_tracking.is_legacy_unmapped" class="ym-taxonomy-flag is-attention">{{ copy.legacyUnmapped }}</span>
-                  <span v-else-if="bucket.category_tracking.is_uncategorized" class="ym-taxonomy-flag is-uncategorized">{{ copy.uncategorized }}</span>
-                  <span v-else-if="bucket.category" class="ym-taxonomy-flag" :class="bucket.category.is_active ? 'is-published' : 'is-hidden'">{{ bucket.category.is_active ? copy.categoryActive : copy.categoryDisabled }}</span>
-                </td>
-                <td>
-                  <code v-if="bucket.category_id !== null" dir="ltr">
-                    #{{ bucket.category_id }}
-                  </code>
-                  <span v-else class="ym-taxonomy-flag is-uncategorized">
-                    {{ copy.uncategorized }}
-                  </span>
-                </td>
-                <td><span class="ym-taxonomy-count is-strong">{{ formatNumber(bucket.works_count) }}</span></td>
-                <td><span class="ym-taxonomy-count">{{ formatNumber(bucket.published_count) }}</span></td>
-                <td><span class="ym-taxonomy-count">{{ formatNumber(bucket.hidden_count) }}</span></td>
-                <td><span class="ym-taxonomy-count">{{ formatNumber(bucket.review_queue_count) }}</span></td>
-                <td><span class="ym-taxonomy-count is-alert">{{ formatNumber(bucket.reported_count) }}</span></td>
-                <td><span class="ym-taxonomy-count">{{ formatNumber(bucket.featured_count) }}</span></td>
-                <td><span class="ym-taxonomy-count">{{ formatNumber(bucket.pinned_count) }}</span></td>
-                <td><span class="ym-taxonomy-count is-alert">{{ formatNumber(bucket.total_reports) }}</span></td>
-                <td><span class="ym-taxonomy-count">{{ formatNumber(bucket.total_views) }}</span></td>
-                <td><span class="ym-taxonomy-count">{{ formatNumber(bucket.total_likes) }}</span></td>
-                <td>
-                  <time :datetime="bucket.latest_work_at || undefined">
-                    {{ formatDateTime(bucket.latest_work_at) }}
-                  </time>
-                </td>
-                <td>
-                  <span
-                    class="ym-taxonomy-flag"
-                    :class="flagClass('uncategorized', bucket.taxonomy_flags.uncategorized)"
-                  >
-                    {{ flagLabel('uncategorized', bucket.taxonomy_flags.uncategorized) }}
-                  </span>
-                </td>
-                <td>
-                  <span
-                    class="ym-taxonomy-flag"
-                    :class="flagClass('has_reports', bucket.taxonomy_flags.has_reports)"
-                  >
-                    {{ flagLabel('has_reports', bucket.taxonomy_flags.has_reports) }}
-                  </span>
-                </td>
-                <td>
-                  <span
-                    class="ym-taxonomy-flag"
-                    :class="flagClass('has_published', bucket.taxonomy_flags.has_published)"
-                  >
-                    {{ flagLabel('has_published', bucket.taxonomy_flags.has_published) }}
-                  </span>
-                </td>
-                <td>
-                  <span
-                    class="ym-taxonomy-flag"
-                    :class="flagClass('has_hidden', bucket.taxonomy_flags.has_hidden)"
-                  >
-                    {{ flagLabel('has_hidden', bucket.taxonomy_flags.has_hidden) }}
-                  </span>
-                </td>
-                <td>
-                  <span
-                    class="ym-taxonomy-flag"
-                    :class="flagClass('is_promoted', bucket.taxonomy_flags.is_promoted)"
-                  >
-                    {{ flagLabel('is_promoted', bucket.taxonomy_flags.is_promoted) }}
-                  </span>
-                </td>
-                <td>
-                  <span
-                    class="ym-taxonomy-flag"
-                    :class="flagClass('needs_attention', bucket.taxonomy_flags.needs_attention)"
-                  >
-                    {{ flagLabel('needs_attention', bucket.taxonomy_flags.needs_attention) }}
-                  </span>
-                </td>
-                <td class="is-action">
-                  <button
-                    type="button"
-                    class="ym-taxonomy-details-button"
-                    :aria-label="copy.openSummaryFor(bucket.label)"
-                    @click="openSummary(bucket)"
-                  >
-                    {{ copy.viewCategorySummary }}
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div
-          v-else
-          class="ym-taxonomy-state"
-          role="status"
-          aria-live="polite"
-        >
-          <span class="ym-taxonomy-spinner" aria-hidden="true" />
-          <p>{{ copy.preparingCopy }}</p>
-        </div>
-
-        <footer v-if="hasLoaded && !error" class="ym-taxonomy-pagination">
-          <div>
-            <span>{{ copy.paginationTotal }}</span>
-            <strong>{{ formatNumber(pagination.total) }}</strong>
-            <small>{{ formatNumber(items.length) }} {{ copy.visibleNow }}</small>
-          </div>
-          <nav :aria-label="copy.paginationLabel">
-            <button
-              type="button"
-              class="ym-taxonomy-button is-secondary"
-              :disabled="loading || pagination.current_page <= 1"
-              @click="changePage(pagination.current_page - 1)"
-            >
-              {{ copy.previous }}
-            </button>
-            <span>{{ copy.pageOf(pagination.current_page, pagination.last_page) }}</span>
-            <button
-              type="button"
-              class="ym-taxonomy-button is-secondary"
-              :disabled="loading || pagination.current_page >= pagination.last_page"
-              @click="changePage(pagination.current_page + 1)"
-            >
-              {{ copy.next }}
-            </button>
-          </nav>
-        </footer>
-      </section>
+      <WorksTaxonomyOverviewSmartList
+        :locale="currentLocale"
+        :items="items"
+        :pagination="pagination"
+        :loading="loading"
+        :has-loaded="hasLoaded"
+        :error="error"
+        :metric="engagementMetric"
+        :sort="appliedFilters.sort"
+        :direction="appliedFilters.direction"
+        @retry="fetchTaxonomy"
+        @reset="resetFilters"
+        @page="changePage"
+        @metric-change="changeEngagementMetric"
+        @details="openSummary"
+      />
       </div>
 
       <WorksTaxonomyCatalogPanel
@@ -597,147 +233,26 @@
       />
     </template>
 
-    <div
-      v-if="activeTab === 'overview' && drawerOpen && selectedBucket"
-      class="ym-taxonomy-detail-backdrop"
-      role="presentation"
-      @click.self="closeSummary"
-    >
-      <section
-        class="ym-taxonomy-detail-drawer"
-        role="dialog"
-        aria-modal="true"
-        :aria-labelledby="drawerTitleId"
-        tabindex="-1"
-        @keydown.esc="closeSummary"
-      >
-        <header class="ym-taxonomy-detail-drawer__head">
-          <div>
-            <span>{{ copy.drawerReadonly }}</span>
-            <h2 :id="drawerTitleId">{{ selectedBucket.label }}</h2>
-            <code v-if="selectedBucket.category_id !== null" dir="ltr">
-              #{{ selectedBucket.category_id }}
-            </code>
-            <small v-else>{{ copy.uncategorized }}</small>
-          </div>
-          <button
-            type="button"
-            class="ym-taxonomy-detail-drawer__close"
-            :aria-label="copy.close"
-            :title="copy.close"
-            @click="closeSummary"
-          >
-            ×
-          </button>
-        </header>
-
-        <div class="ym-taxonomy-detail-content">
-          <section
-            class="ym-taxonomy-detail-intro"
-            :class="{ 'is-attention': selectedBucket.taxonomy_flags.needs_attention }"
-          >
-            <div>
-              <span
-                v-for="flag in selectedFlagItems"
-                :key="flag.key"
-                class="ym-taxonomy-flag"
-                :class="flagClass(flag.key, flag.active)"
-              >
-                {{ flag.stateLabel }}
-              </span>
-            </div>
-            <h3>{{ selectedBucket.label }}</h3>
-            <p>{{ copy.drawerCopy }}</p>
-          </section>
-
-          <section class="ym-taxonomy-detail-section">
-            <header><h3>{{ copy.bucketIdentity }}</h3></header>
-            <dl class="ym-taxonomy-detail-grid">
-              <div>
-                <dt>{{ copy.category }}</dt>
-                <dd>{{ selectedBucket.label }}</dd>
-              </div>
-              <div>
-                <dt>{{ copy.categoryId }}</dt>
-                <dd v-if="selectedBucket.category_id !== null" dir="ltr">
-                  #{{ selectedBucket.category_id }}
-                </dd>
-                <dd v-else>{{ copy.uncategorized }}</dd>
-              </div>
-              <div>
-                <dt>{{ copy.linkState }}</dt>
-                <dd v-if="selectedBucket.category_tracking.is_legacy_unmapped">{{ copy.legacyUnmapped }}</dd>
-                <dd v-else-if="selectedBucket.category_tracking.is_uncategorized">{{ copy.uncategorized }}</dd>
-                <dd v-else>{{ copy.catalogLinked }}</dd>
-              </div>
-              <div v-if="selectedBucket.category">
-                <dt>{{ copy.arabicName }}</dt>
-                <dd>{{ selectedBucket.category.name_ar }}</dd>
-              </div>
-              <div v-if="selectedBucket.category">
-                <dt>{{ copy.englishName }}</dt>
-                <dd dir="ltr">{{ selectedBucket.category.name_en }}</dd>
-              </div>
-              <div v-if="selectedBucket.category">
-                <dt>{{ copy.slugLabel }}</dt>
-                <dd><code dir="ltr">{{ selectedBucket.category.slug }}</code></dd>
-              </div>
-              <div v-if="selectedBucket.category">
-                <dt>{{ copy.categoryState }}</dt>
-                <dd>{{ selectedBucket.category.is_active ? copy.categoryActive : copy.categoryDisabled }}</dd>
-              </div>
-              <div v-if="selectedBucket.category_tracking.is_legacy_unmapped && categorySupport">
-                <dt>{{ copy.supportReason }}</dt>
-                <dd>{{ currentLocale === 'ar' ? categorySupport.reason : copy.legacyReason }}</dd>
-              </div>
-              <div>
-                <dt>{{ copy.latestWorkAt }}</dt>
-                <dd>
-                  <time :datetime="selectedBucket.latest_work_at || undefined">
-                    {{ formatDateTime(selectedBucket.latest_work_at) }}
-                  </time>
-                </dd>
-              </div>
-            </dl>
-          </section>
-
-          <section class="ym-taxonomy-detail-section">
-            <header><h3>{{ copy.bucketCounts }}</h3></header>
-            <dl class="ym-taxonomy-detail-grid is-counts">
-              <div v-for="metric in selectedMetricItems" :key="metric.key">
-                <dt>{{ metric.label }}</dt>
-                <dd>{{ formatNumber(metric.value) }}</dd>
-              </div>
-            </dl>
-          </section>
-
-          <section class="ym-taxonomy-detail-section">
-            <header>
-              <h3>{{ copy.taxonomyFlags }}</h3>
-              <p>{{ copy.taxonomyFlagsCopy }}</p>
-            </header>
-            <div class="ym-taxonomy-detail-flags">
-              <span
-                v-for="flag in selectedFlagItems"
-                :key="'detail-' + flag.key"
-                :class="flag.active ? 'is-active' : 'is-inactive'"
-              >
-                {{ flag.label }}
-                <strong>{{ flag.stateLabel }}</strong>
-              </span>
-            </div>
-          </section>
-        </div>
-      </section>
-    </div>
+    <WorksTaxonomyOverviewDetailsDrawer
+      :open="activeTab === 'overview' && drawerOpen"
+      :locale="currentLocale"
+      :bucket="selectedBucket"
+      @close="closeSummary"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import AdminMetricStrip from '~/components/admin/visual/AdminMetricStrip.vue'
+import AdminPageHero from '~/components/admin/visual/AdminPageHero.vue'
+import AdminPolicyBar from '~/components/admin/visual/AdminPolicyBar.vue'
 import WorksTaxonomyCatalogPanel from '~/components/works/taxonomy/WorksTaxonomyCatalogPanel.vue'
+import WorksTaxonomyOverviewDetailsDrawer from '~/components/works/taxonomy/WorksTaxonomyOverviewDetailsDrawer.vue'
+import WorksTaxonomyOverviewSmartList from '~/components/works/taxonomy/WorksTaxonomyOverviewSmartList.vue'
 import { useApiClient } from '~/composables/useApiClient'
 import { useAuthStore } from '~/stores/authStore'
+import { formatYmNumber } from '~/utils/ymFormatting'
 
 definePageMeta({ layout: 'admin' })
 
@@ -748,8 +263,6 @@ type BooleanFilter = '' | '1' | '0'
 type SortDirection = 'asc' | 'desc'
 type PageSize = 15 | 25 | 50
 type TaxonomySortKey = 'works_count' | 'category_id' | 'latest_work_at' | 'reported_count' | 'published_count' | 'hidden_count' | 'total_reports' | 'total_views' | 'total_likes'
-type TaxonomyFlagKey = keyof TaxonomyFlags
-
 interface TaxonomyFlags {
   uncategorized: boolean
   has_reports: boolean
@@ -893,6 +406,7 @@ const copyMap = {
     tagsTab: 'كتالوج الوسوم',
     kicker: 'إدارة تصنيفات الأعمال',
     title: 'التصنيفات والوسوم',
+    heroDescription: 'إدارة التجميعات وكتالوجات التصنيفات والوسوم من محطة إدارية واحدة.',
     descriptionBefore: 'مركز إدارة كتالوجات التصنيف والوسوم مع نظرة التجميعات المبنية من قيمة',
     descriptionAfter: 'الحالية في الأعمال، دون عرض صفوف الأعمال المفردة.',
     totalCategories: 'إجمالي التجميعات',
@@ -907,6 +421,7 @@ const copyMap = {
     readOnlyNoticeTitle: 'وصول للقراءة حسب الصلاحيات',
     readOnlyNotice: 'يمكن لهذا الحساب قراءة الأقسام المصرح بها، ولا تظهر له أسماء أو أزرار الإجراءات غير المصرح بها.',
     summaryLabel: 'ملخص تصنيفات الأعمال المطابقة للفلاتر',
+    secondarySummaryLabel: 'مؤشرات التصنيفات الثانوية',
     summaryTotalCategories: 'إجمالي التجميعات',
     summaryTotalCategoriesHint: 'كل تجميعات التصنيف المطابقة',
     categorizedCategories: 'تصنيفات معرّفة',
@@ -937,6 +452,7 @@ const copyMap = {
     catalogCategoriesHint: 'إجمالي التصنيفات المعرفة في الكتالوج',
     legacyCategoryIds: 'قيم قديمة غير مربوطة',
     legacyCategoryIdsHint: 'معرفات لا يقابلها سجل كتالوج',
+    unusedLabel: 'تصنيفات غير مستخدمة',
     catalogTags: 'وسوم الكتالوج',
     catalogTagsHint: 'إجمالي الوسوم الفعالة والمعطلة',
     tagAssignments: 'إسنادات الوسوم',
@@ -948,17 +464,27 @@ const copyMap = {
     mappingHasLegacy: 'توجد قيم قديمة غير مربوطة ويجري تمييزها بوضوح.',
     supportAvailable: 'واجهة الكتالوج والإسنادات متاحة.',
     supportUnavailable: 'تعذر التحقق من دعم الوسوم.',
+    permissionsPolicyTitle: 'صلاحيات الإدارة',
+    legacyPolicyTitle: 'ارتباط التصنيفات',
+    tagsPolicyTitle: 'دعم الوسوم',
+    mappingCompleteShort: 'الارتباط مكتمل',
+    mappingHasLegacyShort: 'توجد قيم قديمة تحتاج معالجة',
+    tagsAvailableShort: 'الكتالوج والإسنادات متاحان',
     tagsUnavailableTitle: 'تعذر التحقق من دعم الوسوم',
     tagsUnavailableCopy: 'أعد تحميل النظرة العامة للتحقق من حالة كتالوج الوسوم.',
+    noActivity: 'لا يوجد نشاط',
     filtersTitle: 'بحث وفلاتر التصنيفات',
     filtersCopy: 'ضيّق التجميعات باستخدام معاملات التصنيفات المعتمدة فقط.',
     search: 'البحث',
     searchPlaceholder: 'اسم التجميع أو غير مصنف',
     searchHint: 'بحد أقصى 80 حرفًا، ويطابق تسمية التجميع فقط.',
-    categoryId: 'category_id',
+    categoryId: 'معرّف التصنيف',
     status: 'حالة العمل',
     visibility: 'حالة الظهور',
     mediaType: 'نوع الوسائط',
+    image: 'صورة',
+    video: 'فيديو',
+    linkFilter: 'حالة الارتباط',
     onlyUncategorized: 'غير مصنف فقط',
     onlyReported: 'عليه بلاغات فقط',
     onlyPromoted: 'مروّج فقط',
@@ -972,6 +498,11 @@ const copyMap = {
     publicVisibility: 'عام',
     hiddenVisibility: 'مخفي',
     apply: 'تطبيق',
+    advancedFilters: 'فلاتر متقدمة',
+    sortLabel: 'الفرز',
+    directionLabel: 'الاتجاه',
+    ascending: 'تصاعدي',
+    descending: 'تنازلي',
     reset: 'إعادة ضبط',
     resetHint: 'مسح الفلاتر واستعادة الفرز الافتراضي',
     invalidCategoryId: 'معرّف التصنيف يجب أن يكون عددًا صحيحًا.',
@@ -989,6 +520,19 @@ const copyMap = {
     emptyTitle: 'لا توجد تجميعات مطابقة',
     emptyCopy: 'لا توجد تجميعات ضمن نطاق الفلاتر الحالي. جرّب تعديل الفلاتر أو إعادة ضبطها.',
     category: 'التصنيف',
+    workDistribution: 'توزيع الأعمال',
+    reviewAndRisk: 'المراجعة والمخاطر',
+    visibilityAndPromotion: 'الظهور والترويج',
+    engagement: 'التفاعل',
+    linkAndIndicators: 'الارتباط والمؤشرات',
+    totalShort: 'الإجمالي',
+    reviewShort: 'المراجعة',
+    reportedShort: 'أعمال مبلّغ عنها',
+    totalReportsShort: 'البلاغات',
+    viewsShort: 'مشاهدات',
+    likesShort: 'إعجابات',
+    noPromotionSignals: 'دون مؤشرات ترويج',
+    updatingResults: 'جارٍ تحديث النتائج…',
     worksCount: 'عدد الأعمال',
     publishedCount: 'منشورة',
     hiddenCount: 'مخفية',
@@ -1003,19 +547,21 @@ const copyMap = {
     hasHiddenFlag: 'لديه مخفي',
     promotedFlag: 'مروّج',
     needsAttentionFlag: 'يحتاج انتباه',
-    readAction: 'إجراء القراءة',
+    readAction: 'التفاصيل',
+    additionalIndicators: (count: string) => `${count} مؤشرات إضافية`,
     uncategorized: 'غير مصنف',
     legacyUnmapped: 'قيمة قديمة غير مربوطة',
+    legacyShort: 'قيمة قديمة',
     categoryActive: 'تصنيف فعال',
     categoryDisabled: 'تصنيف معطل',
     catalogLinked: 'مرتبط بسجل كتالوج',
     linkState: 'حالة الربط',
     arabicName: 'الاسم العربي',
     englishName: 'الاسم الإنجليزي',
-    slugLabel: 'slug',
+    slugLabel: 'المعرّف النصي',
     categoryState: 'حالة التصنيف',
     supportReason: 'سبب دعم القيم القديمة',
-    legacyReason: 'قد توجد قيم category_id قديمة لا يقابلها سجل في work_categories.',
+    legacyReason: 'قد توجد قيم تصنيف قديمة لا يقابلها تصنيف حالي في الكتالوج.',
     uncategorizedHint: 'تجميع يحتاج إلى ترتيب تصنيفي',
     categorizedHint: 'تجميع مبني من معرّف التصنيف الحالي',
     classified: 'مصنف',
@@ -1036,7 +582,7 @@ const copyMap = {
     paginationLabel: 'التنقل بين صفحات تجميعات التصنيفات',
     previous: 'السابق',
     next: 'التالي',
-    pageOf: (page: number, last: number) => 'الصفحة ' + page + ' من ' + last,
+    pageOf: (page: string, last: string) => 'الصفحة ' + page + ' من ' + last,
     drawerReadonly: 'ملخص للقراءة فقط',
     close: 'إغلاق الملخص',
     drawerCopy: 'هذا الملخص مبني بالكامل من بيانات التجميع المحدد ولا يحمّل أي بيانات إضافية.',
@@ -1054,6 +600,7 @@ const copyMap = {
     tagsTab: 'Tag catalog',
     kicker: 'Works taxonomy management',
     title: 'Categories and Tags',
+    heroDescription: 'Manage buckets and category and tag catalogs from one administrative station.',
     descriptionBefore: 'Manage category and tag catalogs alongside buckets derived from the current',
     descriptionAfter: 'value on works, without displaying individual work rows.',
     totalCategories: 'Total buckets',
@@ -1068,6 +615,7 @@ const copyMap = {
     readOnlyNoticeTitle: 'Permission-based read access',
     readOnlyNotice: 'This account can read authorized sections; unauthorized action names and controls remain hidden.',
     summaryLabel: 'Summary of works taxonomy matching the filters',
+    secondarySummaryLabel: 'Secondary taxonomy indicators',
     summaryTotalCategories: 'Total buckets',
     summaryTotalCategoriesHint: 'All matching category buckets',
     categorizedCategories: 'Categorized buckets',
@@ -1098,6 +646,7 @@ const copyMap = {
     catalogCategoriesHint: 'All categories defined in the catalog',
     legacyCategoryIds: 'Unmapped legacy values',
     legacyCategoryIdsHint: 'Identifiers without a catalog record',
+    unusedLabel: 'Unused categories',
     catalogTags: 'Catalog tags',
     catalogTagsHint: 'All active and disabled tags',
     tagAssignments: 'Tag assignments',
@@ -1109,8 +658,15 @@ const copyMap = {
     mappingHasLegacy: 'Unmapped legacy values exist and are identified separately.',
     supportAvailable: 'Catalog and assignment APIs are available.',
     supportUnavailable: 'Tag support could not be verified.',
+    permissionsPolicyTitle: 'Management permissions',
+    legacyPolicyTitle: 'Category linkage',
+    tagsPolicyTitle: 'Tag support',
+    mappingCompleteShort: 'Linkage is complete',
+    mappingHasLegacyShort: 'Legacy values need attention',
+    tagsAvailableShort: 'Catalog and assignments are available',
     tagsUnavailableTitle: 'Could not verify tag support',
     tagsUnavailableCopy: 'Reload the overview to verify the tag catalog status.',
+    noActivity: 'No activity',
     filtersTitle: 'Taxonomy search and filters',
     filtersCopy: 'Narrow the buckets using only the approved taxonomy parameters.',
     search: 'Search',
@@ -1120,6 +676,9 @@ const copyMap = {
     status: 'Work status',
     visibility: 'Visibility',
     mediaType: 'Media type',
+    image: 'Image',
+    video: 'Video',
+    linkFilter: 'Link state',
     onlyUncategorized: 'Only uncategorized',
     onlyReported: 'Only reported',
     onlyPromoted: 'Only promoted',
@@ -1133,6 +692,11 @@ const copyMap = {
     publicVisibility: 'Public',
     hiddenVisibility: 'Hidden',
     apply: 'Apply',
+    advancedFilters: 'Advanced filters',
+    sortLabel: 'Sort',
+    directionLabel: 'Direction',
+    ascending: 'Ascending',
+    descending: 'Descending',
     reset: 'Reset',
     resetHint: 'Clear filters and restore default sorting',
     invalidCategoryId: 'The category identifier must be an integer.',
@@ -1150,6 +714,19 @@ const copyMap = {
     emptyTitle: 'No matching buckets',
     emptyCopy: 'No buckets match the current filters. Change or reset the filters.',
     category: 'Category',
+    workDistribution: 'Work distribution',
+    reviewAndRisk: 'Review and risk',
+    visibilityAndPromotion: 'Visibility and promotion',
+    engagement: 'Engagement',
+    linkAndIndicators: 'Link and indicators',
+    totalShort: 'Total',
+    reviewShort: 'Review',
+    reportedShort: 'Reported works',
+    totalReportsShort: 'Reports',
+    viewsShort: 'Views',
+    likesShort: 'Likes',
+    noPromotionSignals: 'No promotion signals',
+    updatingResults: 'Updating results…',
     worksCount: 'Works',
     publishedCount: 'Published',
     hiddenCount: 'Hidden',
@@ -1164,9 +741,11 @@ const copyMap = {
     hasHiddenFlag: 'Has hidden',
     promotedFlag: 'Promoted',
     needsAttentionFlag: 'Needs attention',
-    readAction: 'Read action',
+    readAction: 'Details',
+    additionalIndicators: (count: string) => `${count} additional indicators`,
     uncategorized: 'Uncategorized',
     legacyUnmapped: 'Unmapped legacy value',
+    legacyShort: 'Legacy value',
     categoryActive: 'Active category',
     categoryDisabled: 'Disabled category',
     catalogLinked: 'Linked to catalog record',
@@ -1176,7 +755,7 @@ const copyMap = {
     slugLabel: 'Slug',
     categoryState: 'Category state',
     supportReason: 'Legacy support reason',
-    legacyReason: 'Legacy category_id values may not have a matching work_categories record.',
+    legacyReason: 'Some legacy category values may not match a current catalog category.',
     uncategorizedHint: 'A bucket that needs taxonomy organization',
     categorizedHint: 'A bucket derived from the current category identifier',
     classified: 'Categorized',
@@ -1197,7 +776,7 @@ const copyMap = {
     paginationLabel: 'Category bucket pagination',
     previous: 'Previous',
     next: 'Next',
-    pageOf: (page: number, last: number) => 'Page ' + page + ' of ' + last,
+    pageOf: (page: string, last: string) => 'Page ' + page + ' of ' + last,
     drawerReadonly: 'Read-only summary',
     close: 'Close summary',
     drawerCopy: 'This summary uses only the selected bucket data and does not load anything else.',
@@ -1271,6 +850,7 @@ function defaultFilters(): TaxonomyFilters {
 
 const filters = reactive<TaxonomyFilters>(defaultFilters())
 const appliedFilters = reactive<TaxonomyFilters>(defaultFilters())
+const engagementMetric = ref<'total_views' | 'total_likes' | 'total_reports'>('total_views')
 const page = ref(1)
 const loading = ref(false)
 const hasLoaded = ref(false)
@@ -1279,12 +859,13 @@ const filterError = ref<string | null>(null)
 
 const drawerOpen = ref(false)
 const selectedBucket = ref<TaxonomyBucket | null>(null)
-const drawerTitleId = 'ym-taxonomy-bucket-summary-title'
 
 let pageMounted = false
 let loadedAuthorizationSignature: string | null = null
 let accessRevision = 0
 let requestRevision = 0
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+const showAdvancedFilters = ref(false)
 
 const authorizationSignature = computed(() => [
   authStore.isInitialized ? 'ready' : 'pending',
@@ -1312,90 +893,87 @@ const booleanOptions = computed(() => [
   { value: '0' as const, label: copy.value.no }
 ])
 
-const summaryCards = computed(() => {
+const heroBreadcrumbs = computed(() => currentLocale.value === 'ar'
+  ? ['الإدارة', 'الأعمال', 'التصنيفات والوسوم']
+  : ['Admin', 'Works', 'Categories and Tags'])
+
+const policyItems = computed(() => [
+  {
+    key: 'permissions',
+    title: copy.value.permissionsPolicyTitle,
+    state: actionBadge.value,
+    description: hasAnyAction.value ? copy.value.managementNotice : copy.value.readOnlyNotice,
+    icon: '⌁',
+    tone: hasAnyAction.value ? 'success' as const : 'neutral' as const
+  },
+  {
+    key: 'category-link',
+    title: copy.value.legacyPolicyTitle,
+    state: categorySupport.value?.mapping_complete ? copy.value.mappingCompleteShort : copy.value.mappingHasLegacyShort,
+    description: categorySupport.value?.mapping_complete ? copy.value.mappingComplete : copy.value.mappingHasLegacy,
+    icon: '◇',
+    tone: categorySupport.value?.mapping_complete ? 'success' as const : 'warning' as const
+  },
+  {
+    key: 'tag-support',
+    title: copy.value.tagsPolicyTitle,
+    state: tagSupport.value?.available ? copy.value.tagsAvailableShort : copy.value.supportUnavailable,
+    description: tagSupport.value?.available ? copy.value.supportAvailable : (tagSupport.value?.reason || copy.value.tagsUnavailableCopy),
+    icon: '#',
+    tone: tagSupport.value?.available ? 'info' as const : 'warning' as const
+  }
+])
+
+const primarySummaryCards = computed(() => {
   const current = summary.value
 
   return [
-    { key: 'total_categories', label: copy.value.summaryTotalCategories, value: current?.total_categories ?? 0, hint: copy.value.summaryTotalCategoriesHint, color: '#8b5cf6' },
-    { key: 'categorized_categories', label: copy.value.categorizedCategories, value: current?.categorized_categories ?? 0, hint: copy.value.categorizedCategoriesHint, color: '#38bdf8' },
-    { key: 'uncategorized_buckets', label: copy.value.uncategorizedBuckets, value: current?.uncategorized_buckets ?? 0, hint: copy.value.uncategorizedBucketsHint, color: '#f97316' },
-    { key: 'total_works', label: copy.value.totalWorks, value: current?.total_works ?? 0, hint: copy.value.totalWorksHint, color: '#6366f1' },
-    { key: 'categorized_works', label: copy.value.categorizedWorks, value: current?.categorized_works ?? 0, hint: copy.value.categorizedWorksHint, color: '#14b8a6' },
-    { key: 'uncategorized_works', label: copy.value.uncategorizedWorks, value: current?.uncategorized_works ?? 0, hint: copy.value.uncategorizedWorksHint, color: '#fb923c' },
-    { key: 'reported_categories', label: copy.value.reportedCategories, value: current?.reported_categories ?? 0, hint: copy.value.reportedCategoriesHint, color: '#f43f5e' },
-    { key: 'promoted_categories', label: copy.value.promotedCategories, value: current?.promoted_categories ?? 0, hint: copy.value.promotedCategoriesHint, color: '#d946ef' },
-    { key: 'published_categories', label: copy.value.publishedCategories, value: current?.published_categories ?? 0, hint: copy.value.publishedCategoriesHint, color: '#10b981' },
-    { key: 'hidden_categories', label: copy.value.hiddenCategories, value: current?.hidden_categories ?? 0, hint: copy.value.hiddenCategoriesHint, color: '#64748b' },
-    { key: 'total_reports', label: copy.value.totalReports, value: current?.total_reports ?? 0, hint: copy.value.totalReportsHint, color: '#e11d48' },
-    { key: 'total_views', label: copy.value.totalViews, value: current?.total_views ?? 0, hint: copy.value.totalViewsHint, color: '#0ea5e9' },
-    { key: 'total_likes', label: copy.value.totalLikes, value: current?.total_likes ?? 0, hint: copy.value.totalLikesHint, color: '#ec4899' },
-    { key: 'catalog_categories_total', label: copy.value.catalogCategories, value: current?.catalog_categories_total ?? 0, hint: copy.value.catalogCategoriesHint, color: '#7c3aed' },
-    { key: 'legacy_unmapped_category_ids', label: copy.value.legacyCategoryIds, value: current?.legacy_unmapped_category_ids ?? 0, hint: copy.value.legacyCategoryIdsHint, color: '#f59e0b' },
-    { key: 'tags_total', label: copy.value.catalogTags, value: current?.tags_total ?? 0, hint: copy.value.catalogTagsHint, color: '#0d9488' },
-    { key: 'tag_assignments_total', label: copy.value.tagAssignments, value: current?.tag_assignments_total ?? 0, hint: copy.value.tagAssignmentsHint, color: '#2563eb' }
+    { key: 'catalog_categories_total', label: copy.value.catalogCategories, description: copy.value.catalogCategoriesHint, value: current?.catalog_categories_total ?? 0, tone: 'violet' as const, icon: '◇' },
+    { key: 'active_catalog_categories', label: copy.value.categoryActive, description: copy.value.mappingComplete, value: current?.active_catalog_categories ?? 0, tone: 'emerald' as const, icon: '✓' },
+    { key: 'categorized_works', label: copy.value.categorizedWorks, description: copy.value.categorizedWorksHint, value: current?.categorized_works ?? 0, tone: 'cyan' as const, icon: '▦' },
+    { key: 'uncategorized_works', label: copy.value.uncategorizedWorks, description: copy.value.uncategorizedWorksHint, value: current?.uncategorized_works ?? 0, tone: 'amber' as const, icon: '!' },
+    { key: 'reported_categories', label: copy.value.reportedCategories, description: copy.value.reportedCategoriesHint, value: current?.reported_categories ?? 0, tone: 'rose' as const, icon: '⚑' },
+    { key: 'tags_total', label: copy.value.catalogTags, description: copy.value.catalogTagsHint, value: current?.tags_total ?? 0, tone: 'indigo' as const, icon: '#' }
   ]
 })
 
-const selectedMetricItems = computed(() => {
-  const bucket = selectedBucket.value
-  if (!bucket) return []
-
+const secondarySummaryItems = computed(() => {
+  const current = summary.value
   return [
-    { key: 'works_count', label: copy.value.worksCount, value: bucket.works_count },
-    { key: 'published_count', label: copy.value.publishedCount, value: bucket.published_count },
-    { key: 'hidden_count', label: copy.value.hiddenCount, value: bucket.hidden_count },
-    { key: 'review_queue_count', label: copy.value.reviewQueueCount, value: bucket.review_queue_count },
-    { key: 'reported_count', label: copy.value.reportedCount, value: bucket.reported_count },
-    { key: 'featured_count', label: copy.value.featuredCount, value: bucket.featured_count },
-    { key: 'pinned_count', label: copy.value.pinnedCount, value: bucket.pinned_count },
-    { key: 'total_reports', label: copy.value.totalReports, value: bucket.total_reports },
-    { key: 'total_views', label: copy.value.totalViews, value: bucket.total_views },
-    { key: 'total_likes', label: copy.value.totalLikes, value: bucket.total_likes }
+    { key: 'disabled', label: copy.value.categoryDisabled, value: current?.disabled_catalog_categories ?? 0 },
+    { key: 'unused', label: copy.value.unusedLabel, value: current?.unused_catalog_categories ?? 0 },
+    { key: 'legacy', label: copy.value.legacyCategoryIds, value: current?.legacy_unmapped_category_ids ?? 0 },
+    { key: 'assignments', label: copy.value.tagAssignments, value: current?.tag_assignments_total ?? 0 },
+    { key: 'views', label: copy.value.totalViews, value: current?.total_views ?? 0 },
+    { key: 'likes', label: copy.value.totalLikes, value: current?.total_likes ?? 0 }
   ]
 })
 
-const selectedFlagItems = computed(() => {
-  const bucket = selectedBucket.value
-  if (!bucket) return []
+const activeAdvancedFiltersCount = computed(() => [
+  filters.category_id,
+  filters.only_reported,
+  filters.only_promoted,
+  filters.from,
+  filters.to,
+  filters.sort !== 'works_count' ? filters.sort : '',
+  filters.direction !== 'desc' ? filters.direction : '',
+  filters.per_page !== 15 ? String(filters.per_page) : ''
+].filter(Boolean).length)
 
-  const definitions: Array<{ key: TaxonomyFlagKey; label: string }> = [
-    { key: 'uncategorized', label: copy.value.uncategorizedFlag },
-    { key: 'has_reports', label: copy.value.hasReportsFlag },
-    { key: 'has_published', label: copy.value.hasPublishedFlag },
-    { key: 'has_hidden', label: copy.value.hasHiddenFlag },
-    { key: 'is_promoted', label: copy.value.promotedFlag },
-    { key: 'needs_attention', label: copy.value.needsAttentionFlag }
-  ]
-
-  return definitions.map(definition => ({
-    ...definition,
-    active: bucket.taxonomy_flags[definition.key],
-    stateLabel: flagLabel(definition.key, bucket.taxonomy_flags[definition.key])
-  }))
-})
+const sortOptions = computed(() => [
+  { value: 'works_count' as const, label: copy.value.worksCount },
+  { value: 'category_id' as const, label: copy.value.categoryId },
+  { value: 'latest_work_at' as const, label: copy.value.latestWorkAt },
+  { value: 'reported_count' as const, label: copy.value.reportedCount },
+  { value: 'published_count' as const, label: copy.value.publishedCount },
+  { value: 'hidden_count' as const, label: copy.value.hiddenCount },
+  { value: 'total_reports' as const, label: copy.value.totalReports },
+  { value: 'total_views' as const, label: copy.value.totalViews },
+  { value: 'total_likes' as const, label: copy.value.totalLikes }
+])
 
 function formatNumber(value: number): string {
-  return new Intl.NumberFormat(currentLocale.value === 'ar' ? 'ar-YE' : 'en-US').format(value)
-}
-
-function formatDateTime(value: string | null): string {
-  if (!value) return '—'
-
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-
-  return new Intl.DateTimeFormat(currentLocale.value === 'ar' ? 'ar-YE' : 'en-US', {
-    dateStyle: 'medium',
-    timeStyle: 'short'
-  }).format(date)
-}
-
-function bucketDisplayName(bucket: TaxonomyBucket): string {
-  if (bucket.category) {
-    return currentLocale.value === 'ar' ? bucket.category.name_ar : bucket.category.name_en
-  }
-
-  return bucket.label
+  return formatYmNumber(Number.isFinite(value) ? value : 0, currentLocale.value)
 }
 
 function statusLabel(status: WorkStatus): string {
@@ -1412,39 +990,6 @@ function statusLabel(status: WorkStatus): string {
   }
 
   return labels[status][currentLocale.value]
-}
-
-function flagLabel(key: TaxonomyFlagKey, active: boolean): string {
-  const labels: Record<TaxonomyFlagKey, [string, string]> = {
-    uncategorized: [copy.value.classified, copy.value.uncategorized],
-    has_reports: [copy.value.reportsAbsent, copy.value.reportsPresent],
-    has_published: [copy.value.publishedAbsent, copy.value.publishedPresent],
-    has_hidden: [copy.value.hiddenAbsent, copy.value.hiddenPresent],
-    is_promoted: [copy.value.notPromoted, copy.value.promoted],
-    needs_attention: [copy.value.stable, copy.value.attentionNeeded]
-  }
-
-  return labels[key][active ? 1 : 0]
-}
-
-function flagClass(key: TaxonomyFlagKey, active: boolean): string {
-  if (!active) return 'is-neutral'
-
-  const classes: Record<TaxonomyFlagKey, string> = {
-    uncategorized: 'is-uncategorized',
-    has_reports: 'is-reported',
-    has_published: 'is-published',
-    has_hidden: 'is-hidden',
-    is_promoted: 'is-promoted',
-    needs_attention: 'is-attention'
-  }
-
-  return classes[key]
-}
-
-function sortIndicator(key: TaxonomySortKey): string {
-  if (appliedFilters.sort !== key) return '↕'
-  return appliedFilters.direction === 'asc' ? '↑' : '↓'
 }
 
 function errorStatus(requestError: unknown): number | null {
@@ -1602,6 +1147,9 @@ function applyFilters(): void {
   if (!validateFilters()) return
 
   Object.assign(appliedFilters, filters)
+  if (['total_views', 'total_likes', 'total_reports'].includes(appliedFilters.sort)) {
+    engagementMetric.value = appliedFilters.sort as 'total_views' | 'total_likes' | 'total_reports'
+  }
   page.value = 1
   closeSummary()
   void fetchTaxonomy()
@@ -1611,6 +1159,7 @@ function resetFilters(): void {
   const defaults = defaultFilters()
   Object.assign(filters, defaults)
   Object.assign(appliedFilters, defaults)
+  engagementMetric.value = 'total_views'
   page.value = 1
   filterError.value = null
   closeSummary()
@@ -1632,6 +1181,15 @@ function changeSort(key: TaxonomySortKey): void {
   void fetchTaxonomy()
 }
 
+function changeEngagementMetric(metric: 'total_views' | 'total_likes' | 'total_reports'): void {
+  engagementMetric.value = metric
+  filters.sort = metric
+  appliedFilters.sort = metric
+  page.value = 1
+  closeSummary()
+  void fetchTaxonomy()
+}
+
 function changePage(nextPage: number): void {
   if (
     nextPage < 1
@@ -1648,6 +1206,7 @@ function changePage(nextPage: number): void {
 }
 
 function openSummary(bucket: TaxonomyBucket): void {
+  document.dispatchEvent(new CustomEvent('ym:works-index-overlays-close'))
   selectedBucket.value = bucket
   drawerOpen.value = true
 }
@@ -1664,7 +1223,6 @@ function handleCatalogAuthorizationError(): void {
 
 function closeSummary(): void {
   drawerOpen.value = false
-  selectedBucket.value = null
 }
 
 function clearTaxonomyData(): void {
@@ -1728,16 +1286,48 @@ watch(
 )
 
 watch(activeTab, () => closeSummary())
+watch(
+  () => filters.q,
+  (query) => {
+    if (searchTimer) clearTimeout(searchTimer)
+    const normalized = query.trim()
+    if (normalized === appliedFilters.q) return
+    searchTimer = setTimeout(() => {
+      appliedFilters.q = normalized
+      page.value = 1
+      closeSummary()
+      void fetchTaxonomy()
+    }, 325)
+  }
+)
 
 onMounted(() => {
   pageMounted = true
   syncTaxonomyAccessState()
 })
+
+onBeforeUnmount(() => {
+  if (searchTimer) clearTimeout(searchTimer)
+  requestRevision += 1
+})
 </script>
 
 <style scoped>
 .ym-taxonomy-page {
+  position: relative;
+  isolation: isolate;
   color: var(--ym-text);
+}
+
+.ym-taxonomy-page::before {
+  position: fixed;
+  z-index: 10;
+  inset-block-start: 0;
+  inset-inline: 0;
+  height: var(--ym-admin-topbar-height, 72px);
+  pointer-events: none;
+  background: var(--ym-page-bg, var(--ym-dropdown-bg));
+  content: '';
 }
 
 .ym-taxonomy-tabs {
@@ -2830,6 +2420,467 @@ onMounted(() => {
   .ym-taxonomy-details-button,
   .ym-taxonomy-table tbody tr {
     transition: none;
+  }
+}
+.ym-taxonomy-page {
+  --ym-admin-section-accent: #0f766e;
+  --ym-admin-section-accent-strong: #115e59;
+  --ym-admin-section-accent-secondary: #0891b2;
+  --ym-admin-section-accent-soft: color-mix(in srgb, #0f766e 10%, transparent);
+  display: grid;
+  gap: 10px;
+}
+
+.ym-taxonomy-tabs {
+  min-height: 44px;
+  gap: 5px;
+  padding: 5px;
+  border-radius: 15px;
+}
+
+.ym-taxonomy-tabs button {
+  min-height: 34px;
+  padding: 6px 15px;
+  font-size: 13px;
+}
+
+.ym-taxonomy-tab-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.ym-taxonomy-secondary-summary {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.ym-taxonomy-secondary-summary > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  border: 1px solid var(--ym-soft-border);
+  border-radius: 999px;
+  padding: 5px 11px;
+  color: var(--ym-muted);
+  background: color-mix(in srgb, var(--ym-card-bg) 92%, transparent);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.ym-taxonomy-secondary-summary strong {
+  color: var(--ym-text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ym-taxonomy-filter-card {
+  padding: 7px 9px;
+  border-radius: 18px;
+}
+
+.ym-taxonomy-filter-card > .ym-taxonomy-filter-grid {
+  grid-template-columns: minmax(280px, 2.2fr) repeat(4, minmax(118px, 1fr));
+  align-items: end;
+  gap: 7px;
+}
+
+.ym-taxonomy-filter-card > .ym-taxonomy-filter-grid > .is-search {
+  grid-column: auto;
+}
+
+.ym-taxonomy-filter-grid label {
+  gap: 4px;
+}
+
+.ym-taxonomy-filter-grid input,
+.ym-taxonomy-filter-grid select {
+  min-height: 38px;
+  border-radius: 10px;
+  padding-block: 7px;
+}
+
+.ym-taxonomy-filter-toolbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+  min-height: 38px;
+}
+
+.ym-taxonomy-advanced-toggle {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--ym-control-border);
+  border-radius: 11px;
+  padding: 7px 11px;
+  color: var(--ym-text);
+  background: var(--ym-control-bg);
+  font-weight: 900;
+}
+
+.ym-taxonomy-advanced-toggle.is-open {
+  border-color: color-mix(in srgb, #0891b2 55%, var(--ym-control-border));
+}
+
+.ym-taxonomy-advanced-toggle b {
+  display: grid;
+  min-width: 20px;
+  height: 20px;
+  place-items: center;
+  border-radius: 999px;
+  color: #fff;
+  background: #0f766e;
+  font-size: 11px;
+}
+
+.ym-taxonomy-filter-actions {
+  display: flex;
+  gap: 7px;
+}
+
+.ym-taxonomy-button {
+  min-height: 38px;
+  border-radius: 10px;
+}
+
+.ym-taxonomy-button.is-primary {
+  border-color: #0f766e;
+  color: #fff;
+  background: #0f766e;
+  box-shadow: none;
+}
+
+.ym-taxonomy-button.is-primary:hover {
+  border-color: #115e59;
+  background: #115e59;
+}
+
+.ym-taxonomy-button.is-primary:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, #0f766e 24%, transparent);
+}
+
+.ym-taxonomy-filter-grid.is-advanced {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(8, minmax(105px, 1fr));
+  gap: 8px;
+  border-top: 1px solid var(--ym-soft-border);
+  padding-top: 9px;
+}
+
+.ym-taxonomy-table-card {
+  border-radius: 18px;
+  padding: 0;
+}
+
+.ym-taxonomy-table-card__head {
+  min-height: 40px;
+  align-items: center;
+  margin: 0;
+  padding: 5px 11px;
+}
+
+.ym-taxonomy-table-card__head h2 {
+  font-size: 1rem;
+}
+
+.ym-taxonomy-table-card__head p {
+  display: none;
+}
+
+.ym-taxonomy-table-wrap {
+  position: relative;
+  isolation: isolate;
+  overflow-x: auto;
+}
+
+.ym-taxonomy-updating {
+  position: absolute;
+  z-index: 2;
+  inset-block-start: 7px;
+  inset-inline-end: 9px;
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: #fff;
+  background: #0f766e;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.ym-taxonomy-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.ym-taxonomy-table th:nth-child(1) { width: 18%; }
+.ym-taxonomy-table th:nth-child(2) { width: 14%; }
+.ym-taxonomy-table th:nth-child(3) { width: 13%; }
+.ym-taxonomy-table th:nth-child(4) { width: 14%; }
+.ym-taxonomy-table th:nth-child(5) { width: 10%; }
+.ym-taxonomy-table th:nth-child(6) { width: 12%; }
+.ym-taxonomy-table th:nth-child(7) { width: 13%; }
+.ym-taxonomy-table th:nth-child(8) { width: 6%; }
+
+.ym-taxonomy-table th,
+.ym-taxonomy-table td {
+  padding: 10px 9px;
+  white-space: normal;
+  vertical-align: middle;
+}
+
+.ym-taxonomy-table thead {
+  position: static;
+}
+
+.ym-taxonomy-table th {
+  position: static;
+  top: auto;
+  z-index: auto;
+  color: color-mix(in srgb, var(--ym-muted) 70%, var(--ym-text) 30%);
+  background: color-mix(in srgb, var(--ym-control-bg) 92%, var(--ym-card-bg));
+  font-size: 12.5px;
+  text-align: center;
+}
+
+.ym-taxonomy-table th.is-action,
+.ym-taxonomy-table td.is-action {
+  position: static;
+  inset-inline-end: auto;
+  z-index: auto;
+  min-width: 0;
+  background: inherit;
+}
+
+.ym-taxonomy-table time {
+  min-width: 0;
+  color: color-mix(in srgb, var(--ym-muted) 66%, var(--ym-text) 34%);
+  font-size: 12.5px;
+  font-weight: 900;
+  line-height: 1.45;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.ym-taxonomy-table tbody tr {
+  height: 98px;
+}
+
+.ym-taxonomy-table td.is-label small {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ym-taxonomy-stat-stack,
+.ym-taxonomy-compact-flags {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.ym-taxonomy-stat-stack > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 27px;
+  border: 1px solid var(--ym-soft-border);
+  border-radius: 9px;
+  padding: 4px 6px;
+  color: color-mix(in srgb, var(--ym-muted) 78%, var(--ym-text) 22%);
+  background: color-mix(in srgb, var(--ym-control-bg) 88%, transparent);
+  font-size: 11.5px;
+  font-weight: 800;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.ym-taxonomy-stat-stack > span.is-total {
+  border-color: color-mix(in srgb, #0891b2 32%, var(--ym-soft-border));
+}
+
+.ym-taxonomy-stat-stack > span.is-alert {
+  border-color: color-mix(in srgb, #e11d48 38%, var(--ym-soft-border));
+  color: color-mix(in srgb, #e11d48 74%, var(--ym-text));
+}
+
+.ym-taxonomy-stat-stack strong {
+  color: var(--ym-text);
+  font-size: 12.5px;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+}
+
+.ym-taxonomy-compact-flags {
+  align-items: center;
+  align-content: center;
+}
+
+.ym-taxonomy-compact-flags small {
+  color: var(--ym-muted);
+  font-size: 11.5px;
+  font-weight: 800;
+}
+
+.ym-taxonomy-flag {
+  min-height: 25px;
+  align-items: center;
+  padding: 3px 7px;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.ym-taxonomy-compact-flags .ym-taxonomy-flag:not(.is-attention):not(.is-uncategorized) {
+  border-color: color-mix(in srgb, var(--ym-soft-border) 82%, #64748b);
+  box-shadow: none;
+}
+
+.ym-taxonomy-flag.is-attention,
+.ym-taxonomy-stat-stack > span.is-alert {
+  font-weight: 950;
+}
+
+.ym-taxonomy-details-button {
+  display: grid;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  place-items: center;
+  padding: 0;
+  border-color: color-mix(in srgb, #0891b2 48%, var(--ym-control-border));
+  color: #ecfeff;
+  background: #0e7490;
+  font-size: 17px;
+}
+
+.ym-taxonomy-details-button:hover,
+.ym-taxonomy-details-button:focus-visible {
+  border-color: #67e8f9;
+  background: #155e75;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #22d3ee 22%, transparent);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.ym-taxonomy-detail-drawer {
+  width: min(720px, 100%);
+}
+
+@media (max-width: 1180px) {
+  .ym-taxonomy-filter-card > .ym-taxonomy-filter-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .ym-taxonomy-filter-card > .ym-taxonomy-filter-grid > .is-search {
+    grid-column: span 2;
+  }
+
+  .ym-taxonomy-filter-grid.is-advanced {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .ym-taxonomy-page {
+    gap: 8px;
+  }
+
+  .ym-taxonomy-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+
+  .ym-taxonomy-tabs button {
+    flex: 1 0 auto;
+  }
+
+  .ym-taxonomy-filter-card > .ym-taxonomy-filter-grid,
+  .ym-taxonomy-filter-grid.is-advanced {
+    grid-template-columns: 1fr;
+  }
+
+  .ym-taxonomy-filter-card > .ym-taxonomy-filter-grid > .is-search {
+    grid-column: auto;
+  }
+
+  .ym-taxonomy-filter-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ym-taxonomy-filter-actions > button,
+  .ym-taxonomy-advanced-toggle {
+    flex: 1;
+  }
+
+  .ym-taxonomy-table {
+    min-width: 0;
+  }
+
+  .ym-taxonomy-table thead {
+    display: none;
+  }
+
+  .ym-taxonomy-table,
+  .ym-taxonomy-table tbody,
+  .ym-taxonomy-table tr,
+  .ym-taxonomy-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .ym-taxonomy-table tbody {
+    display: grid;
+    gap: 9px;
+    padding: 9px;
+  }
+
+  .ym-taxonomy-table tbody tr {
+    height: auto;
+    overflow: hidden;
+    border: 1px solid var(--ym-soft-border);
+    border-radius: 15px;
+    background: color-mix(in srgb, var(--ym-card-bg) 96%, transparent);
+  }
+
+  .ym-taxonomy-table td {
+    display: grid;
+    grid-template-columns: minmax(105px, .7fr) minmax(0, 1.3fr);
+    gap: 10px;
+    border-bottom: 1px solid var(--ym-soft-border);
+    padding: 8px 10px;
+  }
+
+  .ym-taxonomy-table td::before {
+    content: attr(data-label);
+    color: var(--ym-muted);
+    font-size: 11px;
+    font-weight: 900;
+  }
+
+  .ym-taxonomy-table td.is-label::before {
+    content: attr(data-label);
+  }
+
+  .ym-taxonomy-table td.is-action {
+    display: flex;
+    justify-content: flex-end;
   }
 }
 </style>

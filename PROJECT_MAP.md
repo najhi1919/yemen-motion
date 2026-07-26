@@ -2417,6 +2417,50 @@ Admin Works Settings and Permissions Station
 
 تبدأ بعد تأكيد المستخدم، ولا تدخل ضمن إغلاق محطة البلاغات والمخالفات.
 
+### 0.38 Completed Admin Works Taxonomy Station — 2026-07-26
+
+**Task ID:** `YM-WORKS-TAXONOMY-STATION-CLOSURE-030`
+
+**Closure baseline:** `feat(works): complete taxonomy management`
+
+أُغلقت محطة `/admin/works/taxonomy` بعد توحيد تبويبات النظرة العامة وكتالوج التصنيفات وكتالوج الوسوم، وتطبيق Smart Tables وPopovers وDrawer التفاصيل، وإضافة الترقيم المتسلسل وLatin digits، وتحسين البحث والفلاتر والفرز وPagination، مع الحفاظ على إجراءات التصنيفات والوسوم والصلاحيات والعقود الحالية.
+
+#### Verification Evidence
+
+```text
+Taxonomy tests: 203 passed / 2059 assertions
+Super Admin authorization: 8 passed / 238 assertions
+Frontend production build: Build complete (Client, Server, Nitro)
+git diff --check: passed
+Manual visual and functional inspection: passed
+```
+
+التحذيرات غير المانعة: sourcemap، و`authStore` mixed static/dynamic import، وchunk size.
+
+#### General Visual Standards
+
+تم تثبيت القواعد البصرية العامة في:
+
+```text
+docs/ym-sdd/standards/YM-ADMIN-VISUAL-RULES.md
+```
+
+#### Contract Boundaries
+
+- لا تغيير في Backend أوAPI أوQuery parameters.
+- لا تغيير في Validation أوAudit أوصلاحيات Taxonomy.
+- لا حذف دائم أوBulk actions أوExport.
+- لا تغيير في Legacy taxonomy semantics أوالمعرفات القديمة.
+
+#### Recommended Next Station
+
+```text
+Admin Works Settings and Permissions Station
+/admin/works/settings
+```
+
+تبدأ بعد تأكيد المستخدم، ولا تدخل ضمن إغلاق محطة Taxonomy.
+
 ---
 
 ## 1. TECH_STACK — المعمارية النهائية المعتمدة
