@@ -2363,12 +2363,59 @@ Manual visual and functional inspection: passed
 
 #### Recommended Next Station
 
+اكتملت هذه المحطة لاحقًا، ويوثق القسم `0.37` إغلاقها.
+
 ```text
 Admin Works Reports Station
 /admin/works/reports
 ```
 
-تبدأ بعد تأكيد المستخدم، ولا تدخل ضمن إغلاق محطة الظهور والتمييز.
+كانت هذه التوصية هي الحد التالي لإغلاق `0.36`.
+
+### 0.37 Completed Admin Works Reports Station — 2026-07-26
+
+**Task ID:** `YM-WORKS-REPORTS-STATION-CLOSURE-018`
+
+**Closure baseline:** `feat(works): complete reports management`
+
+أُغلقت محطة `/admin/works/reports` بعد تثبيت الفصل بين العداد التاريخي `works.reports_count` وسجلات `work_reports` المتتبعة، وتنظيم البحث والفلاتر والفرز وPagination، وتحسين القائمة والتفاصيل والإجراءات، وإكمال الفحص البصري والوظيفي.
+
+#### Reports Contract
+
+- يبقى `works.reports_count` مؤشرًا تاريخيًا مستقلًا وغير متتبع.
+- تبقى `work_reports` سجلات فردية قابلة للإدارة.
+- لا يُجمع المصدران في رقم موحد.
+- تدعم المحطة البحث والفلاتر والفرز والترقيم الخادمي.
+- تدعم سجلات البلاغات المتتبعة إجراءات `review` و`dismiss` و`archive` وفق الحالة والصلاحية.
+- يبقى Backend المرجع النهائي للحالة والصلاحية وAudit.
+
+#### Verification Evidence
+
+```text
+Reports tests: 96 passed / 866 assertions
+Super Admin authorization: 8 passed / 238 assertions
+Frontend production build: Build complete (Client, Server, Nitro)
+git diff --check: passed
+Manual visual and functional inspection: passed
+```
+
+بقيت تحذيرات البناء العامة غير المانعة فقط: sourcemap، و`authStore` mixed static/dynamic import، وchunk size.
+
+#### Contract Boundaries
+
+- لا توجد واجهة إنشاء بلاغات عامة ضمن هذا الإغلاق.
+- لا تُعدّل إجراءات البلاغات العداد التاريخي.
+- لا تُدمج بيانات المصدرين داخل عقد واحد.
+- لا توجد Bulk actions أوExport أوحذف دائم ضمن المحطة.
+
+#### Recommended Next Station
+
+```text
+Admin Works Settings and Permissions Station
+/admin/works/settings
+```
+
+تبدأ بعد تأكيد المستخدم، ولا تدخل ضمن إغلاق محطة البلاغات والمخالفات.
 
 ---
 

@@ -1,26 +1,20 @@
 <template>
-  <div class="ym-works-reports-page space-y-7" :dir="pageDirection">
-    <section class="ym-works-reports-hero">
-      <div class="ym-works-reports-hero__glow is-one" />
-      <div class="ym-works-reports-hero__glow is-two" />
-      <div class="ym-works-reports-hero__grid" aria-hidden="true" />
-      <div class="ym-works-reports-hero__content">
-        <div>
-          <div class="ym-works-reports-chips">
-            <span class="ym-works-reports-chip is-brand">Yemen Motion</span>
-            <span class="ym-works-reports-chip is-readonly">{{ copy.trackingTag }}</span>
-          </div>
-          <p class="ym-works-reports-kicker">{{ copy.kicker }}</p>
-          <h1>{{ copy.title }}</h1>
-          <p class="ym-works-reports-description">{{ copy.description }}</p>
-        </div>
-        <div class="ym-works-reports-hero__summary">
-          <span>{{ copy.totalWorks }}</span>
-          <strong>{{ formatNumber(summary.total) }}</strong>
-          <small>{{ copy.filteredScope }}</small>
-        </div>
-      </div>
-    </section>
+  <div class="ym-works-reports-page ym-admin-page" data-admin-accent="reports" :dir="pageDirection">
+    <AdminPageHero
+      :breadcrumbs="reportsBreadcrumbs"
+      :breadcrumb-label="copy.title"
+      :eyebrow="copy.kicker"
+      :badge="copy.trackingTag"
+      :title="copy.title"
+      :description="copy.description"
+    >
+      <template #icon>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 3 3 7v5c0 5 3.8 8 9 9 5.2-1 9-4 9-9V7l-9-4Z" />
+          <path d="M12 8v5M12 17h.01" />
+        </svg>
+      </template>
+    </AdminPageHero>
 
     <section v-if="authPending" class="ym-works-reports-access-state" role="status" aria-live="polite">
       <span class="ym-works-reports-spinner" aria-hidden="true" />
@@ -35,30 +29,24 @@
     </section>
 
     <template v-else>
-      <aside class="ym-works-reports-notice" role="note">
-        <span>{{ copy.important }}</span>
-        <div>
-          <strong>{{ copy.sourcesNoticeTitle }}</strong>
-          <p>{{ copy.sourcesNotice }}</p>
-        </div>
-      </aside>
+      <AdminPolicyBar
+        :items="policyItems"
+        :aria-label="copy.sourcesNoticeTitle"
+        :close-label="copy.close"
+      />
 
-      <section class="ym-works-reports-summary-grid" :aria-label="copy.summaryLabel">
-        <article v-for="card in primarySummaryCards" :key="card.key" class="ym-works-reports-summary-card" :style="{ '--reports-accent': card.color }">
-          <span>{{ card.label }}</span>
-          <strong>{{ formatNumber(card.value) }}</strong>
-          <small>{{ card.hint }}</small>
-        </article>
-      </section>
+      <AdminMetricStrip
+        :items="primarySummaryCards"
+        :locale="currentLocale"
+        :aria-label="copy.summaryLabel"
+        :loading="loading && items.length === 0"
+        :updating="updating"
+      />
 
       <section class="ym-reports-secondary-summary" :aria-label="copy.secondarySummaryLabel">
         <span v-for="item in secondarySummaryItems" :key="item.key">
           {{ item.label }} <strong>{{ formatNumber(item.value) }}</strong>
         </span>
-      </section>
-
-      <section class="ym-reports-secondary-summary is-legacy-summary" :aria-label="copy.reportedSummary">
-        <span v-for="item in legacySummaryItems" :key="item.key">{{ item.label }} <strong>{{ formatNumber(item.value) }}</strong></span>
       </section>
 
       <section v-if="actionStatus" class="ym-reports-action-status" :class="'is-' + actionStatus.kind" role="status" aria-live="polite">
@@ -72,68 +60,102 @@
         <button type="button" :aria-label="copy.hideActionStatus" :title="copy.hideActionStatus" @click="actionStatus = null">×</button>
       </section>
 
-      <section class="ym-works-reports-filter-card">
-        <header>
-          <div><h2>{{ copy.filtersTitle }}</h2><p>{{ copy.filtersCopy }}</p></div>
-          <button type="button" class="ym-works-reports-button is-secondary" :disabled="loading" @click="resetFilters">{{ copy.reset }}</button>
-        </header>
-        <form class="ym-works-reports-filter-grid" @submit.prevent="applyFilters">
-          <label class="is-search"><span>{{ copy.search }}</span><input v-model.trim="filters.q" type="search" minlength="2" maxlength="80" :placeholder="copy.searchPlaceholder" autocomplete="off" /></label>
-          <label><span>{{ copy.workStatus }}</span><select v-model="filters.status"><option value="">{{ copy.all }}</option><option v-for="status in workStatuses" :key="status" :value="status">{{ workStatusLabel(status) }}</option></select></label>
-          <label><span>{{ copy.visibility }}</span><select v-model="filters.visibility_status"><option value="">{{ copy.all }}</option><option value="public">{{ copy.public }}</option><option value="hidden">{{ copy.hidden }}</option></select></label>
-          <label><span>{{ copy.mediaType }}</span><input v-model.trim="filters.media_type" type="text" maxlength="40" dir="ltr" /></label>
-          <label><span>{{ copy.designerId }}</span><input v-model="filters.designer_id" type="number" min="1" inputmode="numeric" /></label>
-          <label><span>{{ copy.reviewerId }}</span><input v-model="filters.reviewer_id" type="number" min="1" inputmode="numeric" /></label>
-          <label><span>{{ copy.categoryId }}</span><input v-model="filters.category_id" type="number" min="1" inputmode="numeric" /></label>
-          <label><span>{{ copy.source }}</span><select v-model="filters.report_source"><option value="all">{{ copy.allSources }}</option><option value="legacy">{{ copy.legacy }}</option><option value="tracked">{{ copy.tracked }}</option><option value="both">{{ copy.bothSources }}</option></select></label>
-          <label><span>{{ copy.trackedStatus }}</span><select v-model="filters.tracked_status"><option value="">{{ copy.allStatuses }}</option><option v-for="status in reportStatuses" :key="status" :value="status">{{ reportStatusLabel(status) }}</option></select></label>
-          <label><span>{{ copy.featured }}</span><select v-model="filters.is_featured"><option value="">{{ copy.all }}</option><option value="1">{{ copy.yes }}</option><option value="0">{{ copy.no }}</option></select></label>
-          <label><span>{{ copy.pinned }}</span><select v-model="filters.is_pinned"><option value="">{{ copy.all }}</option><option value="1">{{ copy.yes }}</option><option value="0">{{ copy.no }}</option></select></label>
-          <label><span>{{ copy.minimumSignal }}</span><input v-model="filters.min_reports" type="number" min="1" max="100000" inputmode="numeric" /></label>
-          <label><span>{{ copy.updatedFrom }}</span><input v-model="filters.from" type="date" /></label>
-          <label><span>{{ copy.updatedTo }}</span><input v-model="filters.to" type="date" /></label>
-          <label><span>{{ copy.sort }}</span><select v-model="filters.sort"><option v-for="option in workSortOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
-          <label><span>{{ copy.direction }}</span><select v-model="filters.direction"><option value="desc">{{ copy.descending }}</option><option value="asc">{{ copy.ascending }}</option></select></label>
-          <label><span>{{ copy.perPage }}</span><select v-model.number="filters.per_page"><option :value="15">15</option><option :value="25">25</option><option :value="50">50</option></select></label>
-          <div class="ym-works-reports-filter-actions"><button type="submit" class="ym-works-reports-button is-primary" :disabled="loading">{{ copy.applyFilters }}</button></div>
+      <section class="ym-works-reports-filter-card ym-admin-surface">
+        <form class="ym-works-reports-filter-form" @submit.prevent="applyFilters">
+          <div class="ym-works-reports-filter-grid is-primary">
+            <label class="is-search"><span>{{ copy.search }}</span><input v-model.trim="filters.q" type="search" minlength="2" maxlength="80" :placeholder="copy.searchPlaceholder" autocomplete="off" /></label>
+            <label><span>{{ copy.workStatus }}</span><select v-model="filters.status"><option value="">{{ copy.all }}</option><option v-for="status in workStatuses" :key="status" :value="status">{{ workStatusLabel(status) }}</option></select></label>
+            <label><span>{{ copy.visibility }}</span><select v-model="filters.visibility_status"><option value="">{{ copy.all }}</option><option value="public">{{ copy.public }}</option><option value="hidden">{{ copy.hidden }}</option></select></label>
+            <label><span>{{ copy.mediaType }}</span><input v-model.trim="filters.media_type" type="text" maxlength="40" dir="ltr" /></label>
+            <label><span>{{ copy.source }}</span><select v-model="filters.report_source"><option value="all">{{ copy.allSources }}</option><option value="legacy">{{ copy.legacy }}</option><option value="tracked">{{ copy.tracked }}</option><option value="both">{{ copy.bothSources }}</option></select></label>
+            <label><span>{{ copy.trackedStatus }}</span><select v-model="filters.tracked_status"><option value="">{{ copy.allStatuses }}</option><option v-for="status in reportStatuses" :key="status" :value="status">{{ reportStatusLabel(status) }}</option></select></label>
+          </div>
+
+          <div class="ym-works-reports-filter-toolbar">
+            <button type="button" class="ym-works-reports-advanced-toggle" :class="{ 'is-open': showAdvancedFilters }" @click="showAdvancedFilters = !showAdvancedFilters">
+              <span aria-hidden="true">⌁</span>
+              {{ copy.advancedFilters }}
+              <b v-if="activeAdvancedFiltersCount > 0">{{ activeAdvancedFiltersCount }}</b>
+            </button>
+            <div class="ym-works-reports-filter-actions">
+              <button type="submit" class="ym-works-reports-button is-primary" :disabled="loading || updating">{{ copy.applyFilters }}</button>
+              <button type="button" class="ym-works-reports-button is-secondary" :disabled="loading || updating" @click="resetFilters">{{ copy.reset }}</button>
+            </div>
+          </div>
+
+          <div v-show="showAdvancedFilters" class="ym-works-reports-filter-grid is-advanced">
+            <label><span>{{ copy.designerId }}</span><input v-model="filters.designer_id" type="number" min="1" inputmode="numeric" /></label>
+            <label><span>{{ copy.reviewerId }}</span><input v-model="filters.reviewer_id" type="number" min="1" inputmode="numeric" /></label>
+            <label><span>{{ copy.categoryId }}</span><input v-model="filters.category_id" type="number" min="1" inputmode="numeric" /></label>
+            <label><span>{{ copy.minimumSignal }}</span><input v-model="filters.min_reports" type="number" min="1" max="100000" inputmode="numeric" /></label>
+            <label><span>{{ copy.featured }}</span><select v-model="filters.is_featured"><option value="">{{ copy.all }}</option><option value="1">{{ copy.yes }}</option><option value="0">{{ copy.no }}</option></select></label>
+            <label><span>{{ copy.pinned }}</span><select v-model="filters.is_pinned"><option value="">{{ copy.all }}</option><option value="1">{{ copy.yes }}</option><option value="0">{{ copy.no }}</option></select></label>
+            <label><span>{{ copy.updatedFrom }}</span><input v-model="filters.from" type="date" /></label>
+            <label><span>{{ copy.updatedTo }}</span><input v-model="filters.to" type="date" /></label>
+            <label><span>{{ copy.sort }}</span><select v-model="filters.sort"><option v-for="option in workSortOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
+            <label><span>{{ copy.direction }}</span><select v-model="filters.direction"><option value="desc">{{ copy.descending }}</option><option value="asc">{{ copy.ascending }}</option></select></label>
+            <label><span>{{ copy.perPage }}</span><select v-model.number="filters.per_page"><option :value="15">15</option><option :value="25">25</option><option :value="50">50</option></select></label>
+          </div>
         </form>
         <p v-if="filterError" class="ym-works-reports-filter-error" role="alert">{{ filterError }}</p>
       </section>
 
-      <section class="ym-works-reports-table-card">
-        <header class="ym-works-reports-table-card__head">
-          <div><h2>{{ copy.tableTitle }}</h2><p>{{ copy.tableCopy }}</p></div>
-          <div class="ym-works-reports-table-state"><span>{{ copy.currentPage }}</span><strong>{{ formatNumber(pagination.current_page) }} / {{ formatNumber(pagination.last_page) }}</strong></div>
-        </header>
-
+      <section class="ym-works-reports-table-card ym-admin-surface" :aria-busy="loading || updating">
+        <span v-if="updating" class="ym-works-reports-updating" role="status">{{ copy.updatingResults }}</span>
         <div v-if="loading" class="ym-works-reports-state" role="status"><span class="ym-works-reports-spinner" /><h3>{{ copy.loadingWorks }}</h3></div>
         <div v-else-if="error" class="ym-works-reports-state is-error" role="alert"><h3>{{ copy.loadWorksError }}</h3><p>{{ error }}</p><button type="button" class="ym-works-reports-button is-secondary" @click="fetchWorks(false)">{{ copy.retry }}</button></div>
         <div v-else-if="items.length === 0" class="ym-works-reports-state"><h3>{{ copy.emptyWorks }}</h3><p>{{ copy.emptyWorksCopy }}</p></div>
         <div v-else class="ym-works-reports-table-wrap">
           <table class="ym-works-reports-table">
             <thead><tr>
-              <th><button type="button" class="ym-works-reports-sort" @click="changeWorkSort('title')">{{ copy.work }} <span>{{ sortIndicator('title') }}</span></button></th>
-              <th><button type="button" class="ym-works-reports-sort" @click="changeWorkSort('status')">{{ copy.status }} <span>{{ sortIndicator('status') }}</span></button></th>
-              <th>{{ copy.administrativeData }}</th>
+              <th class="is-sequence">#</th>
+              <th class="is-work"><button type="button" class="ym-works-reports-sort" @click="changeWorkSort('title')">{{ copy.work }} <span>{{ sortIndicator('title') }}</span></button></th>
+              <th class="is-status"><button type="button" class="ym-works-reports-sort" @click="changeWorkSort('status')">{{ copy.statusAndVisibility }} <span>{{ sortIndicator('status') }}</span></button></th>
               <th>{{ copy.sources }}</th>
               <th>{{ copy.trackedStates }}</th>
               <th>{{ copy.indicators }}</th>
-              <th><span>{{ copy.datesAndCounts }}</span><div class="ym-table-sort-group"><button type="button" @click="changeWorkSort('views_count')">{{ copy.views }} {{ sortIndicator('views_count') }}</button><button type="button" @click="changeWorkSort('likes_count')">{{ copy.likes }} {{ sortIndicator('likes_count') }}</button><button type="button" @click="changeWorkSort('submitted_at')">{{ copy.submittedAt }} {{ sortIndicator('submitted_at') }}</button><button type="button" @click="changeWorkSort('published_at')">{{ copy.publishedAt }} {{ sortIndicator('published_at') }}</button><button type="button" @click="changeWorkSort('created_at')">{{ copy.createdAt }} {{ sortIndicator('created_at') }}</button><button type="button" @click="changeWorkSort('updated_at')">{{ copy.updatedAt }} {{ sortIndicator('updated_at') }}</button></div></th>
-              <th>{{ copy.actions }}</th>
+              <th><button type="button" class="ym-works-reports-sort" @click="changeWorkSort('updated_at')">{{ copy.datesAndCounts }} <span>{{ sortIndicator('updated_at') }}</span></button></th>
+              <th class="is-actions">{{ copy.actions }}</th>
             </tr></thead>
             <tbody>
-              <tr v-for="work in items" :key="work.id" :class="{ 'needs-attention-row': work.report_flags.needs_attention }">
-                <td class="is-title"><strong :dir="textDirection(work.title)">{{ work.title }}</strong><code dir="ltr">{{ work.slug }} · #{{ work.id }}</code><small v-if="work.summary" :title="work.summary" :dir="textDirection(work.summary)">{{ truncateText(work.summary, 74) }}</small><small>{{ copy.legacyCompatibility }}: {{ formatNumber(work.reports_count) }}</small></td>
-                <td><span class="ym-works-reports-badge is-status" :class="'is-' + work.status.replaceAll('_', '-')">{{ workStatusLabel(work.status) }}</span><small>{{ work.visibility_status === 'public' ? copy.public : copy.hidden }}</small></td>
-                <td><div class="ym-work-admin-data"><span>{{ copy.mediaType }} <code dir="ltr">{{ displayValue(work.media_type) }}</code></span><span>{{ copy.designer }} <strong>{{ personLabel(work.designer) }}</strong></span><span>{{ copy.reviewer }} <strong>{{ personLabel(work.reviewer) }}</strong></span><span>{{ copy.category }} <code dir="ltr">{{ work.category_id ?? '—' }}</code></span><span>{{ copy.featured }} <strong>{{ yesNo(work.is_featured) }}</strong></span><span>{{ copy.pinned }} <strong>{{ yesNo(work.is_pinned) }}</strong></span></div></td>
-                <td><div class="ym-report-counts"><button type="button" class="is-legacy" @click="changeWorkSort('reports_count')">{{ copy.historical }} <strong>{{ formatNumber(work.report_tracking.legacy_count) }}</strong> {{ sortIndicator('reports_count') }}</button><button type="button" class="is-tracked" @click="changeWorkSort('tracked_reports_count')">{{ copy.tracked }} <strong>{{ formatNumber(work.report_tracking.tracked_count) }}</strong> {{ sortIndicator('tracked_reports_count') }}</button><button type="button" class="is-open" @click="changeWorkSort('open_tracked_reports_count')">{{ copy.open }} <strong>{{ formatNumber(work.report_tracking.open_count) }}</strong> {{ sortIndicator('open_tracked_reports_count') }}</button><button type="button" class="is-combined" @click="changeWorkSort('combined_reports_count')">{{ copy.combinedSignal }} <strong>{{ formatNumber(work.report_tracking.combined_signal_count) }}</strong> {{ sortIndicator('combined_reports_count') }}</button></div></td>
-                <td><div class="ym-report-status-counts"><span>{{ copy.waiting }} {{ formatNumber(work.report_tracking.pending_count) }}</span><span>{{ copy.review }} {{ formatNumber(work.report_tracking.under_review_count) }}</span><span>{{ copy.closed }} {{ formatNumber(work.report_tracking.dismissed_count) }}</span><span>{{ copy.archived }} {{ formatNumber(work.report_tracking.archived_count) }}</span></div></td>
-                <td><div class="ym-report-flags"><span v-if="work.report_flags.has_reports">{{ copy.reportedSummary }}</span><span v-if="work.report_tracking.has_legacy_untracked">{{ copy.legacyCounter }}</span><span v-if="work.report_tracking.has_tracked">{{ copy.trackedRecords }}</span><span v-if="work.report_tracking.has_open_tracked" class="is-alert">{{ copy.needsFollowup }}</span><span v-if="work.report_flags.visibility_risk" class="is-alert">{{ copy.visiblePublicly }}</span><span v-if="work.report_flags.high_reports" class="is-alert">{{ copy.highSignal }}</span><span v-if="work.report_flags.needs_attention" class="is-alert">{{ copy.needsAttention }}</span></div></td>
-                <td><div class="ym-work-dates-counts"><span>{{ copy.views }} <strong>{{ formatNumber(work.views_count) }}</strong></span><span>{{ copy.likes }} <strong>{{ formatNumber(work.likes_count) }}</strong></span><time :datetime="work.submitted_at || undefined">{{ copy.submittedAt }}: {{ formatDateTime(work.submitted_at) }}</time><time :datetime="work.published_at || undefined">{{ copy.publishedAt }}: {{ formatDateTime(work.published_at) }}</time><time :datetime="work.hidden_at || undefined">{{ copy.hiddenAt }}: {{ formatDateTime(work.hidden_at) }}</time><time :datetime="work.created_at || undefined">{{ copy.createdAt }}: {{ formatDateTime(work.created_at) }}</time><time :datetime="work.updated_at || undefined">{{ copy.updatedAt }}: {{ formatDateTime(work.updated_at) }}</time></div></td>
-                <td class="is-action">
-                  <button type="button" class="ym-works-reports-button is-secondary" :disabled="!canViewWorkDetails" :title="canViewWorkDetails ? copy.viewWorkDetails : copy.workDetailsPermission" @click="openWorkDetails(work)">{{ copy.viewWorkDetails }}</button>
-                  <button type="button" class="ym-works-reports-details-button" :disabled="work.report_tracking.tracked_count <= 0" :title="trackedButtonTitle(work)" @click="openReports(work)">{{ copy.viewTrackedReports }}</button>
-                  <small v-if="work.report_tracking.tracked_count <= 0">{{ copy.noTrackedRecords }}</small>
+              <tr v-for="(work, index) in items" :key="work.id" :class="{ 'needs-attention-row': work.report_flags.needs_attention }">
+                <td class="is-sequence" data-label="#">{{ formatNumber((pagination.current_page - 1) * pagination.per_page + index + 1) }}</td>
+                <td class="is-work" :data-label="copy.work">
+                  <strong :dir="textDirection(work.title)">{{ work.title }}</strong>
+                  <small v-if="work.summary" :title="work.summary" :dir="textDirection(work.summary)">{{ truncateText(work.summary, 52) }}</small>
+                  <span class="ym-work-media">{{ displayMediaType(work.media_type) }}</span>
+                </td>
+                <td class="is-status" :data-label="copy.statusAndVisibility">
+                  <span class="ym-works-reports-badge" :class="'is-' + work.status.replaceAll('_', '-')">{{ workStatusLabel(work.status) }}</span>
+                  <span class="ym-works-reports-badge" :class="work.visibility_status === 'public' ? 'is-public' : 'is-hidden'">{{ work.visibility_status === 'public' ? copy.public : copy.hidden }}</span>
+                </td>
+                <td :data-label="copy.sources">
+                  <div class="ym-report-sources">
+                    <button type="button" class="is-legacy" @click="changeWorkSort('reports_count')"><span>{{ copy.historical }}</span><strong>{{ formatNumber(work.report_tracking.legacy_count) }}</strong></button>
+                    <button type="button" class="is-tracked" @click="changeWorkSort('tracked_reports_count')"><span>{{ copy.tracked }}</span><strong>{{ formatNumber(work.report_tracking.tracked_count) }}</strong></button>
+                  </div>
+                </td>
+                <td :data-label="copy.trackedStates">
+                  <div v-if="work.report_tracking.tracked_count > 0" class="ym-report-status-counts">
+                    <span v-if="work.report_tracking.pending_count > 0" class="is-open">{{ copy.waiting }} <strong>{{ formatNumber(work.report_tracking.pending_count) }}</strong></span>
+                    <span v-if="work.report_tracking.under_review_count > 0" class="is-review">{{ copy.review }} <strong>{{ formatNumber(work.report_tracking.under_review_count) }}</strong></span>
+                    <span v-if="work.report_tracking.dismissed_count > 0">{{ copy.closed }} <strong>{{ formatNumber(work.report_tracking.dismissed_count) }}</strong></span>
+                    <span v-if="work.report_tracking.archived_count > 0">{{ copy.archived }} <strong>{{ formatNumber(work.report_tracking.archived_count) }}</strong></span>
+                  </div>
+                  <small v-else>{{ copy.noTrackedShort }}</small>
+                </td>
+                <td :data-label="copy.indicators"><div class="ym-report-flags"><span v-for="indicator in visibleIndicators(work)" :key="indicator.key" :class="{ 'is-alert': indicator.alert }">{{ indicator.label }}</span></div></td>
+                <td :data-label="copy.datesAndCounts"><div class="ym-work-dates-counts"><time :datetime="work.updated_at || undefined"><b>{{ copy.updatedAt }}:</b> {{ formatDateTime(work.updated_at) }}</time><span>{{ copy.views }} <strong>{{ formatNumber(work.views_count) }}</strong></span><span>{{ copy.likes }} <strong>{{ formatNumber(work.likes_count) }}</strong></span></div></td>
+                <td class="is-actions" :data-label="copy.actions">
+                  <div class="ym-work-actions">
+                    <button type="button" class="ym-works-reports-icon-button is-detail" :disabled="!canViewWorkDetails" :title="canViewWorkDetails ? copy.viewWorkDetails : copy.workDetailsPermission" :aria-label="canViewWorkDetails ? copy.viewWorkDetails : copy.workDetailsPermission" @click="openWorkDetails(work)">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></svg>
+                    </button>
+                    <button type="button" class="ym-works-reports-icon-button is-reports" :disabled="work.report_tracking.tracked_count <= 0" :title="trackedButtonTitle(work)" :aria-label="trackedButtonTitle(work)" @click="openReports(work)">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l3 3v15H6z" /><path d="M15 3v4h4M9 11h6M9 15h6" /></svg>
+                    </button>
+                  </div>
+                  <small v-if="work.report_tracking.tracked_count <= 0">{{ copy.noTrackedShort }}</small>
                 </td>
               </tr>
             </tbody>
@@ -146,25 +168,18 @@
       </section>
     </template>
 
-    <div v-if="workDetailsOpen" class="ym-reports-detail-backdrop is-work-details" role="presentation" @click.self="closeWorkDetails">
-      <section class="ym-reports-detail-drawer is-work" role="dialog" aria-modal="true" aria-labelledby="work-details-title">
-        <header class="ym-reports-detail-drawer__head">
-          <div><span>{{ copy.workDetailsReadonly }}</span><h2 id="work-details-title" :dir="textDirection(selectedWorkDetailsTitle)">{{ selectedWorkDetailsTitle }}</h2><code v-if="selectedWorkDetailsId !== null" dir="ltr">#{{ selectedWorkDetailsId }}</code></div>
-          <button type="button" class="ym-reports-detail-drawer__close" :title="copy.closeWorkDetails" :aria-label="copy.closeWorkDetails" :disabled="actionLoading" @click="closeWorkDetails">×</button>
-        </header>
-        <div v-if="workDetailLoading" class="ym-reports-detail-state" role="status"><span class="ym-works-reports-spinner" /><h3>{{ copy.loadingWorkDetails }}</h3><p>{{ copy.loadingAllowedFields }}</p></div>
-        <div v-else-if="workDetailError" class="ym-reports-detail-state is-error" role="alert"><h3>{{ copy.workDetailsError }}</h3><p>{{ workDetailError }}</p><button type="button" class="ym-works-reports-button is-secondary" @click="reloadWorkDetails">{{ copy.retry }}</button></div>
-        <div v-else-if="workDetail" class="ym-reports-detail-content">
-          <section class="ym-reports-detail-intro"><div><span class="ym-works-reports-badge is-status">{{ workStatusLabel(workDetail.work.status) }}</span><span class="ym-works-reports-badge">{{ workDetail.work.visibility_status === 'public' ? copy.public : copy.hidden }}</span></div><h3 :dir="textDirection(workDetail.work.title)">{{ workDetail.work.title }}</h3><code dir="ltr">{{ workDetail.work.slug }}</code><p v-if="workDetail.work.summary" :dir="textDirection(workDetail.work.summary)">{{ workDetail.work.summary }}</p><p v-else>{{ copy.noSummary }}</p></section>
-          <section class="ym-reports-detail-section"><header><h3>{{ copy.accessScope }}</h3><p>{{ copy.accessScopeCopy }}</p></header><div class="ym-reports-detail-access-grid"><span :class="workDetail.field_access.can_view_designer ? 'is-allowed' : 'is-denied'">{{ copy.canViewDesigner }} <strong>{{ accessLabel(workDetail.field_access.can_view_designer) }}</strong></span><span :class="workDetail.field_access.can_view_media ? 'is-allowed' : 'is-denied'">{{ copy.canViewMedia }} <strong>{{ accessLabel(workDetail.field_access.can_view_media) }}</strong></span><span :class="workDetail.field_access.can_view_metadata ? 'is-allowed' : 'is-denied'">{{ copy.canViewMetadata }} <strong>{{ accessLabel(workDetail.field_access.can_view_metadata) }}</strong></span><span :class="workDetail.field_access.can_view_private_notes ? 'is-allowed' : 'is-denied'">{{ copy.canViewPrivateNotes }} <strong>{{ accessLabel(workDetail.field_access.can_view_private_notes) }}</strong></span></div></section>
-          <section class="ym-reports-detail-section"><header><h3>{{ copy.basicDetails }}</h3></header><dl class="ym-reports-detail-grid"><div><dt>{{ copy.priceAmount }}</dt><dd dir="ltr">{{ displayValue(workDetail.work.price_amount) }}</dd></div><div><dt>{{ copy.deliveryDays }}</dt><dd>{{ workDetail.work.delivery_days === null ? '—' : formatNumber(workDetail.work.delivery_days) }}</dd></div><div><dt>{{ copy.categoryId }}</dt><dd dir="ltr">{{ workDetail.work.category_id ?? '—' }}</dd></div><div><dt>{{ copy.mediaType }}</dt><dd dir="ltr">{{ displayValue(workDetail.work.media_type) }}</dd></div><div><dt>{{ copy.featured }}</dt><dd>{{ yesNo(workDetail.work.is_featured) }}</dd></div><div><dt>{{ copy.pinned }}</dt><dd>{{ yesNo(workDetail.work.is_pinned) }}</dd></div><div><dt>{{ copy.reportsCount }}</dt><dd>{{ formatNumber(workDetail.work.reports_count) }}</dd></div><div><dt>{{ copy.views }}</dt><dd>{{ formatNumber(workDetail.work.views_count) }}</dd></div><div><dt>{{ copy.likes }}</dt><dd>{{ formatNumber(workDetail.work.likes_count) }}</dd></div></dl></section>
-          <section class="ym-reports-detail-section"><header><h3>{{ copy.people }}</h3></header><div v-if="workDetail.field_access.can_view_designer" class="ym-reports-detail-people"><article><span>{{ copy.designer }}</span><strong v-if="workDetail.relations.designer" :dir="textDirection(workDetail.relations.designer.name)">{{ workDetail.relations.designer.name }}</strong><small v-if="workDetail.relations.designer" dir="ltr">#{{ workDetail.relations.designer.id }}</small><strong v-else>{{ copy.notLinked }}</strong></article><article><span>{{ copy.reviewer }}</span><strong v-if="workDetail.relations.reviewer" :dir="textDirection(workDetail.relations.reviewer.name)">{{ workDetail.relations.reviewer.name }}</strong><small v-if="workDetail.relations.reviewer" dir="ltr">#{{ workDetail.relations.reviewer.id }}</small><strong v-else>{{ copy.notLinked }}</strong></article></div><p v-else class="ym-reports-detail-unavailable">{{ copy.relationsUnavailable }}</p></section>
-          <section class="ym-reports-detail-section"><header><h3>{{ copy.media }}</h3></header><div v-if="workDetail.media && workDetail.field_access.can_view_media" class="ym-reports-detail-media"><span>{{ copy.mediaType }}: <code dir="ltr">{{ displayValue(workDetail.media.media_type) }}</code></span><strong :class="workDetail.media.has_media ? 'is-present' : 'is-absent'">{{ workDetail.media.has_media ? copy.mediaPresent : copy.mediaAbsent }}</strong></div><p v-else class="ym-reports-detail-unavailable">{{ copy.mediaUnavailable }}</p></section>
-          <section class="ym-reports-detail-section"><header><h3>{{ copy.lifecycle }}</h3></header><dl class="ym-reports-detail-grid is-lifecycle"><div v-for="item in workLifecycleItems" :key="item.key"><dt>{{ item.label }}</dt><dd><time :datetime="item.value || undefined">{{ formatDateTime(item.value) }}</time></dd></div></dl></section>
-          <section class="ym-reports-detail-section is-private"><header><h3>{{ copy.privateNotes }}</h3><p>{{ copy.privateNotesCopy }}</p></header><dl v-if="workDetail.private_notes && workDetail.field_access.can_view_private_notes" class="ym-reports-detail-notes"><div><dt>{{ copy.internalNotes }}</dt><dd :dir="textDirection(workDetail.private_notes.internal_notes)">{{ displayValue(workDetail.private_notes.internal_notes) }}</dd></div><div><dt>{{ copy.rejectionReason }}</dt><dd :dir="textDirection(workDetail.private_notes.rejection_reason)">{{ displayValue(workDetail.private_notes.rejection_reason) }}</dd></div><div><dt>{{ copy.changeRequestNotes }}</dt><dd :dir="textDirection(workDetail.private_notes.change_request_notes)">{{ displayValue(workDetail.private_notes.change_request_notes) }}</dd></div></dl><p v-else class="ym-reports-detail-unavailable">{{ copy.privateNotesUnavailable }}</p></section>
-        </div>
-      </section>
-    </div>
+    <WorksReviewDetailWorkspace
+      v-if="workDetailsOpen && selectedWorkDetailsId !== null"
+      :work-id="selectedWorkDetailsId"
+      :title="selectedWorkDetailsTitle"
+      :detail="workDetail"
+      :loading="workDetailLoading"
+      :error="workDetailError"
+      :locale="currentLocale"
+      section="review"
+      @close="closeWorkDetails"
+      @retry="reloadWorkDetails"
+    />
 
     <div v-if="reportsDrawerOpen" class="ym-reports-detail-backdrop" role="presentation" @click.self="closeReportsDrawer">
       <section class="ym-reports-detail-drawer is-tracked" role="dialog" aria-modal="true" aria-labelledby="tracked-reports-title">
@@ -198,7 +213,7 @@
         <div v-else-if="trackedReports.length === 0" class="ym-reports-detail-state"><h3>{{ copy.emptyTracked }}</h3><p>{{ copy.emptyTrackedCopy }}</p></div>
         <div v-else class="ym-tracked-list">
           <article v-for="report in trackedReports" :key="report.id" class="ym-tracked-report" :class="'is-' + report.status">
-            <header><div><code dir="ltr">#{{ report.id }} · {{ report.reason_code }}</code><span class="ym-report-status" :class="'is-' + report.status">{{ reportStatusLabel(report.status) }}</span></div><div class="ym-report-flags"><span v-if="report.report_flags.is_open">{{ copy.open }}</span><span v-if="report.report_flags.needs_attention" class="is-alert">{{ copy.needsAttention }}</span><span v-if="report.report_flags.has_reviewer">{{ copy.hasReviewer }}</span><span v-if="report.report_flags.is_dismissed">{{ copy.closed }}</span><span v-if="report.report_flags.is_archived">{{ copy.archived }}</span></div></header>
+            <header><div><small dir="ltr">#{{ report.id }}</small><strong>{{ reasonLabel(report.reason_code) }}</strong><span class="ym-report-status" :class="'is-' + report.status">{{ reportStatusLabel(report.status) }}</span></div><div class="ym-report-flags"><span v-if="report.report_flags.is_open">{{ copy.open }}</span><span v-if="report.report_flags.needs_attention" class="is-alert">{{ copy.needsAttention }}</span><span v-if="report.report_flags.has_reviewer">{{ copy.hasReviewer }}</span><span v-if="report.report_flags.is_dismissed">{{ copy.closed }}</span><span v-if="report.report_flags.is_archived">{{ copy.archived }}</span></div></header>
             <dl class="ym-report-list-data">
               <div><dt>{{ copy.reporter }}</dt><dd>{{ personLabel(report.reporter) }}</dd></div><div><dt>{{ copy.reviewer }}</dt><dd>{{ personLabel(report.reviewer) }}</dd></div>
               <div><dt>{{ copy.reviewed }}</dt><dd>{{ formatDateTime(report.reviewed_at) }}</dd></div><div><dt>{{ copy.dismissedAt }}</dt><dd>{{ formatDateTime(report.dismissed_at) }}</dd></div><div><dt>{{ copy.archivedAtShort }}</dt><dd>{{ formatDateTime(report.archived_at) }}</dd></div>
@@ -233,7 +248,7 @@
     <div v-if="pendingAction" class="ym-action-modal-backdrop" role="presentation" @click.self="cancelAction">
       <section ref="actionModalRef" class="ym-action-modal" role="dialog" aria-modal="true" aria-labelledby="report-action-title" tabindex="-1">
         <header><div><span>{{ copy.confirmReportAction }}</span><h2 id="report-action-title">{{ actionLabel(pendingAction.action) }}</h2></div><button type="button" :disabled="actionLoading" :title="copy.cancel" :aria-label="copy.cancel" @click="cancelAction">×</button></header>
-        <dl><div><dt>{{ copy.work }}</dt><dd :dir="textDirection(selectedWork?.title)">{{ selectedWork?.title }}</dd></div><div><dt>{{ copy.reportId }}</dt><dd>#{{ pendingAction.report.id }}</dd></div><div><dt>{{ copy.reasonCode }}</dt><dd dir="ltr">{{ pendingAction.report.reason_code }}</dd></div><div><dt>{{ copy.currentStatus }}</dt><dd>{{ reportStatusLabel(pendingAction.report.status) }}</dd></div></dl>
+        <dl><div><dt>{{ copy.work }}</dt><dd :dir="textDirection(selectedWork?.title)">{{ selectedWork?.title }}</dd></div><div><dt>{{ copy.reportId }}</dt><dd>#{{ pendingAction.report.id }}</dd></div><div><dt>{{ copy.reasonCode }}</dt><dd>{{ reasonLabel(pendingAction.report.reason_code) }}</dd></div><div><dt>{{ copy.currentStatus }}</dt><dd>{{ reportStatusLabel(pendingAction.report.status) }}</dd></div></dl>
         <p class="ym-action-transition">{{ actionDescription(pendingAction.action, pendingAction.report) }}</p>
         <p v-if="pendingAction.action === 'archive'" class="ym-action-warning">{{ copy.noRestoreWarning }}</p>
         <label v-if="pendingAction.action === 'dismiss'" class="ym-action-notes"><span>{{ copy.resolutionNotesLabel }}</span><textarea v-model="resolutionNotes" rows="6" minlength="5" maxlength="2000" required autofocus :placeholder="copy.resolutionPlaceholder" /><small>{{ resolutionNotes.length }} / 2000</small><em v-if="resolutionNotesError" role="alert">{{ resolutionNotesError }}</em></label>
@@ -248,6 +263,10 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useApiClient } from '~/composables/useApiClient'
 import { useAuthStore } from '~/stores/authStore'
+import AdminPageHero from '~/components/admin/visual/AdminPageHero.vue'
+import AdminMetricStrip from '~/components/admin/visual/AdminMetricStrip.vue'
+import AdminPolicyBar from '~/components/admin/visual/AdminPolicyBar.vue'
+import WorksReviewDetailWorkspace from '~/components/works/review/WorksReviewDetailWorkspace.vue'
 
 definePageMeta({ layout: 'admin' })
 
@@ -287,14 +306,14 @@ const workStatuses: WorkStatus[] = ['draft', 'submitted', 'in_review', 'changes_
 const reportStatuses: ReportStatus[] = ['pending', 'under_review', 'dismissed', 'archived']
 const copyMap = {
   ar: {
-    trackingTag: 'بلاغات متتبعة وإجراءات فردية', kicker: 'إدارة بلاغات الأعمال ومؤشرات المخاطر', title: 'البلاغات والمخالفات', description: 'افصل بين العداد التاريخي وسجلات البلاغات القابلة للتتبع، واقرأ تفاصيل العمل والبلاغ ونفّذ الإجراء المسموح على سجل واحد.', totalWorks: 'الأعمال المطابقة', filteredScope: 'وفق الفلاتر الحالية',
+    trackingTag: 'إدارة آمنة', kicker: 'محطة بلاغات الأعمال', title: 'البلاغات والمخالفات', description: 'راجع إشارات الأعمال وسجلات البلاغات المتتبعة ونفّذ الإجراء المسموح.', totalWorks: 'الأعمال المطابقة', filteredScope: 'وفق الفلاتر الحالية',
     authLoadingTitle: 'جارٍ التحقق من صلاحية البلاغات', authLoadingCopy: 'ننتظر اكتمال تهيئة جلسة المستخدم قبل إرسال أي طلب بيانات.', forbiddenTitle: 'الوصول إلى بلاغات الأعمال غير متاح', forbiddenCopy: 'لا يملك هذا الحساب صلاحيات القسم المطلوبة. لم يتم إرسال طلب بيانات.',
     important: 'مهم', sourcesNoticeTitle: 'مصدران مختلفان لا يمثلان عدادًا موحدًا', sourcesNotice: 'العداد التاريخي محفوظ في works.reports_count، أما البلاغات المتتبعة فهي سجلات فعلية من work_reports. المصدران غير متزامنين، والإشارة المركبة أداة إدارية فقط وليست عددًا موحدًا موثوقًا.', summaryLabel: 'ملخص مصادر البلاغات', secondarySummaryLabel: 'المؤشرات الثانوية',
     total: 'إجمالي الأعمال', totalHint: 'كل الأعمال المطابقة', reportedSummary: 'الأعمال المبلّغ عنها', reportedHint: 'لها إشارة بلاغ واحدة على الأقل', highReports: 'إشارات مرتفعة', highReportsHint: 'خمس إشارات أو أكثر', publicReported: 'عامة ومبلّغ عنها', publicReportedHint: 'لا تزال ظاهرة للعامة', hiddenReported: 'مخفية ومبلّغ عنها', hiddenReportedHint: 'ظهورها أو حالتها مخفية', publishedReported: 'منشورة ومبلّغ عنها', publishedReportedHint: 'حالتها الحالية منشورة', reviewQueueReported: 'ضمن طابور المراجعة', reviewQueueReportedHint: 'مرسلة أو تحت المراجعة أو تطلب تعديلًا', featuredReported: 'مميزة ومبلّغ عنها', featuredReportedHint: 'تحمل علامة التمييز', pinnedReported: 'مثبتة ومبلّغ عنها', pinnedReportedHint: 'تحمل علامة التثبيت',
-    legacyReports: 'البلاغات التاريخية', legacyHint: 'عداد غير متتبع', trackedReports: 'البلاغات المتتبعة', trackedHint: 'سجلات فردية حقيقية', combinedSignal: 'الإشارة المركبة', combinedHint: 'مؤشر إداري فقط', openReports: 'البلاغات المفتوحة', openHint: 'انتظار وتحت المراجعة', pending: 'قيد الانتظار', pendingHint: 'تحتاج بدء المراجعة', underReview: 'تحت المراجعة', underReviewHint: 'قيد المعالجة', dismissedReports: 'بلاغات مغلقة', archivedReports: 'بلاغات مؤرشفة', worksLegacy: 'أعمال لها عداد تاريخي', worksTracked: 'أعمال لها سجلات متتبعة', worksOpen: 'أعمال لها بلاغات مفتوحة', worksBoth: 'أعمال بالمصدرين',
+    legacyReports: 'البلاغات التاريخية', legacyHint: 'مؤشر إداري غير متتبع', trackedReports: 'البلاغات المتتبعة', trackedHint: 'سجلات فردية قابلة للإدارة', combinedSignal: 'الإشارة المركبة', combinedHint: 'مؤشر إداري فقط', openReports: 'البلاغات المفتوحة', openHint: 'انتظار وتحت المراجعة', pending: 'قيد الانتظار', pendingHint: 'تحتاج بدء المراجعة', underReview: 'تحت المراجعة', underReviewHint: 'قيد المعالجة', dismissedReports: 'بلاغات مغلقة', archivedReports: 'بلاغات مؤرشفة', worksLegacy: 'أعمال لها بلاغات تاريخية', worksTracked: 'أعمال لها بلاغات متتبعة', worksOpen: 'أعمال لها بلاغات مفتوحة', worksBoth: 'أعمال بالمصدرين',
     actionChanged: 'تم تغيير الحالة', actionUnchanged: 'لم تتغير الحالة', hideActionStatus: 'إخفاء حالة الإجراء', reportWord: 'البلاغ',
-    filtersTitle: 'بحث وفلاتر الأعمال', filtersCopy: 'تؤثر هذه الفلاتر على قائمة الأعمال فقط.', reset: 'إعادة الضبط', search: 'البحث', searchPlaceholder: 'العنوان أو المعرّف النصي أو الملخص', workStatus: 'حالة العمل', all: 'الكل', visibility: 'الظهور', public: 'عام', hidden: 'مخفي', mediaType: 'نوع الوسائط', designerId: 'معرّف المصمم', reviewerId: 'معرّف المراجع', categoryId: 'معرّف التصنيف', source: 'المصدر', allSources: 'كل المصادر', legacy: 'تاريخي', tracked: 'متتبع', bothSources: 'المصدران معًا', trackedStatus: 'حالة البلاغ المتتبع', allStatuses: 'كل الحالات', featured: 'مميز', pinned: 'مثبت', yes: 'نعم', no: 'لا', minimumSignal: 'الحد الأدنى للإشارة', updatedFrom: 'حُدّث من', updatedTo: 'حُدّث إلى', sort: 'الفرز', direction: 'الاتجاه', descending: 'تنازلي', ascending: 'تصاعدي', perPage: 'لكل صفحة', applyFilters: 'تطبيق الفلاتر', clear: 'مسح',
-    tableTitle: 'قائمة الأعمال ذات إشارات البلاغ', tableCopy: 'تعرض المعلومات الإدارية السابقة مع مؤشرات التتبع، وتفصل تفاصيل العمل عن سجلات البلاغات.', currentPage: 'الصفحة الحالية', loadingWorks: 'جارٍ تحميل الأعمال', loadWorksError: 'تعذر تحميل الأعمال', retry: 'إعادة المحاولة', emptyWorks: 'لا توجد نتائج مطابقة', emptyWorksCopy: 'غيّر الفلاتر أو أعد ضبطها.', work: 'العمل', status: 'الحالة', sources: 'المصادر', trackedStates: 'حالات السجلات المتتبعة', indicators: 'المؤشرات', administrativeData: 'البيانات الإدارية', datesAndCounts: 'التواريخ والأعداد', actions: 'الإجراءات', designer: 'المصمم', reviewer: 'المراجع', category: 'التصنيف', views: 'المشاهدات', likes: 'الإعجابات', submittedAt: 'تاريخ الإرسال', publishedAt: 'تاريخ النشر', hiddenAt: 'تاريخ الإخفاء', createdAt: 'تاريخ الإنشاء', updatedAt: 'آخر تحديث', legacyCompatibility: 'reports_count للتوافق', historical: 'تاريخية', open: 'مفتوحة', waiting: 'انتظار', review: 'مراجعة', closed: 'مغلقة', archived: 'مؤرشفة', legacyCounter: 'عداد تاريخي', trackedRecords: 'سجلات متتبعة', needsFollowup: 'يحتاج متابعة', visiblePublicly: 'ظاهر للعامة', highSignal: 'إشارة مرتفعة', viewWorkDetails: 'تفاصيل العمل', viewTrackedReports: 'عرض البلاغات المتتبعة', noTrackedRecords: 'لا توجد سجلات بلاغات فردية متتبعة لهذا العمل.', totalResults: 'إجمالي النتائج', visibleNow: 'ظاهر الآن', previous: 'السابق', next: 'التالي', workPages: 'صفحات الأعمال', page: 'صفحة',
+    filtersTitle: 'بحث وفلاتر الأعمال', filtersCopy: 'تؤثر هذه الفلاتر على قائمة الأعمال فقط.', advancedFilters: 'فلاتر متقدمة', reset: 'إعادة الضبط', search: 'البحث', searchPlaceholder: 'العنوان أو المعرّف النصي أو الملخص', workStatus: 'حالة العمل', all: 'الكل', visibility: 'الظهور', public: 'عام', hidden: 'مخفي', mediaType: 'نوع الوسائط', designerId: 'معرّف المصمم', reviewerId: 'معرّف المراجع', categoryId: 'معرّف التصنيف', source: 'المصدر', allSources: 'كل المصادر', legacy: 'تاريخي', tracked: 'متتبع', bothSources: 'المصدران معًا', trackedStatus: 'حالة البلاغ المتتبع', allStatuses: 'كل الحالات', featured: 'مميز', pinned: 'مثبت', yes: 'نعم', no: 'لا', minimumSignal: 'الحد الأدنى للإشارة', updatedFrom: 'حُدّث من', updatedTo: 'حُدّث إلى', sort: 'الفرز', direction: 'الاتجاه', descending: 'تنازلي', ascending: 'تصاعدي', perPage: 'لكل صفحة', applyFilters: 'تطبيق الفلاتر', clear: 'مسح',
+    tableTitle: 'قائمة الأعمال ذات إشارات البلاغ', tableCopy: 'تعرض المعلومات الإدارية السابقة مع مؤشرات التتبع، وتفصل تفاصيل العمل عن سجلات البلاغات.', currentPage: 'الصفحة الحالية', loadingWorks: 'جارٍ تحميل الأعمال', updatingResults: 'جارٍ تحديث النتائج…', loadWorksError: 'تعذر تحميل الأعمال', retry: 'إعادة المحاولة', emptyWorks: 'لا توجد نتائج مطابقة', emptyWorksCopy: 'غيّر الفلاتر أو أعد ضبطها.', work: 'العمل', status: 'الحالة', statusAndVisibility: 'الحالة والظهور', sources: 'مصادر البلاغ', trackedStates: 'البلاغات المتتبعة', indicators: 'المؤشرات', administrativeData: 'البيانات الإدارية', datesAndCounts: 'التواريخ والأعداد', actions: 'الإجراءات', designer: 'المصمم', reviewer: 'المراجع', category: 'التصنيف', views: 'المشاهدات', likes: 'الإعجابات', submittedAt: 'تاريخ الإرسال', publishedAt: 'تاريخ النشر', hiddenAt: 'تاريخ الإخفاء', createdAt: 'تاريخ الإنشاء', updatedAt: 'آخر تحديث', legacyCompatibility: 'reports_count للتوافق', historical: 'تاريخية', open: 'مفتوحة', waiting: 'انتظار', review: 'مراجعة', closed: 'مغلقة', archived: 'مؤرشفة', legacyCounter: 'بلاغات تاريخية', trackedRecords: 'بلاغات متتبعة', needsFollowup: 'يحتاج متابعة', visiblePublicly: 'ظاهر للعامة', highSignal: 'إشارة مرتفعة', viewWorkDetails: 'تفاصيل العمل', viewTrackedReports: 'عرض البلاغات المتتبعة', noTrackedRecords: 'لا توجد سجلات بلاغات فردية متتبعة لهذا العمل.', noTrackedShort: 'لا توجد بلاغات متتبعة', totalResults: 'إجمالي النتائج', visibleNow: 'ظاهر الآن', previous: 'السابق', next: 'التالي', workPages: 'صفحات الأعمال', page: 'صفحة', imageMedia: 'صورة', videoMedia: 'فيديو', close: 'إغلاق',
     workDetailsReadonly: 'تفاصيل العمل للقراءة فقط', closeWorkDetails: 'إغلاق تفاصيل العمل', loadingWorkDetails: 'جارٍ تحميل تفاصيل العمل', loadingAllowedFields: 'يتم جلب الحقول المسموحة لهذا الحساب...', workDetailsError: 'تعذر تحميل تفاصيل العمل', noSummary: 'لا يوجد ملخص مسجل لهذا العمل.', accessScope: 'نطاق الحقول المتاح', accessScopeCopy: 'تعكس هذه المؤشرات صلاحيات الحقول التي طبقها الخادم.', canViewDesigner: 'المصمم والمراجع', canViewMedia: 'بيانات الوسائط', canViewMetadata: 'صلاحية metadata', canViewPrivateNotes: 'الملاحظات الخاصة', allowed: 'متاح', unavailable: 'غير متاح', basicDetails: 'البيانات الأساسية', priceAmount: 'القيمة السعرية', deliveryDays: 'مدة التسليم بالأيام', reportsCount: 'عداد البلاغات التاريخي', people: 'المصمم والمراجع', notLinked: 'غير مرتبط', relationsUnavailable: 'المصمم والمراجع غير متاحين حسب الصلاحية.', media: 'الوسائط', mediaPresent: 'توجد وسائط مسجلة', mediaAbsent: 'لا توجد وسائط مسجلة', mediaUnavailable: 'بيانات الوسائط غير متاحة حسب الصلاحية.', lifecycle: 'التسلسل الزمني', reviewedAt: 'تاريخ المراجعة', approvedAt: 'تاريخ الاعتماد', rejectedAt: 'تاريخ الرفض', archivedAt: 'تاريخ الأرشفة', privateNotes: 'الملاحظات الخاصة', privateNotesCopy: 'لا تظهر محتويات هذا القسم إلا عندما يسمح الخادم بذلك.', internalNotes: 'الملاحظات الداخلية', rejectionReason: 'سبب الرفض', changeRequestNotes: 'ملاحظات طلب التعديل', privateNotesUnavailable: 'الملاحظات الخاصة غير متاحة حسب الصلاحية.', workDetailsPermission: 'يتطلب عرض تفاصيل العمل صلاحيات قائمة وتفاصيل الأعمال.',
     trackedDrawerTitle: 'سجلات البلاغات المتتبعة', closePanel: 'إغلاق اللوحة', reasonCode: 'رمز السبب', reporterId: 'معرّف المبلّغ', reporter: 'المبلّغ', from: 'من', to: 'إلى', loadingTracked: 'جارٍ تحميل البلاغات المتتبعة', loadTrackedError: 'تعذر تحميل البلاغات', emptyTracked: 'لا توجد سجلات مطابقة', emptyTrackedCopy: 'لا توجد سجلات بلاغات فردية متتبعة لهذا العمل وفق الفلاتر الحالية.', needsAttention: 'يحتاج انتباه', hasReviewer: 'له مراجع', reviewed: 'تمت المراجعة', dismissedAt: 'أُغلق', archivedAtShort: 'أُرشف', createdAtShort: 'أُنشئ', viewReportDetails: 'عرض التفاصيل', reportDetailHint: 'عرض الحقول التفصيلية المسموحة', reportDetailPermission: 'تتطلب صلاحية admin.works.reports.detail.view', startReview: 'بدء المراجعة', updateDismissal: 'تحديث معالجة البلاغ', dismissReport: 'إغلاق البلاغ', archiveReport: 'أرشفة البلاغ', totalRecords: 'إجمالي السجلات', reportPages: 'صفحات البلاغات',
     reportDetailsAllowed: 'تفاصيل البلاغ المسموحة', closeReportDetails: 'إغلاق التفاصيل', reportContext: 'سياق العمل الآمن', reportId: 'معرّف البلاغ', reportDetails: 'تفاصيل البلاغ', noReportDetails: 'لا توجد تفاصيل.', resolutionNotes: 'ملاحظات المعالجة', noResolutionNotes: 'لا توجد ملاحظات معالجة.', fieldUnavailable: 'هذا الحقل غير متاح.', viewReportDetailsAccess: 'عرض تفاصيل البلاغ', viewResolutionAccess: 'عرض ملاحظات المعالجة',
@@ -303,14 +322,14 @@ const copyMap = {
     invalidSearch: 'البحث يجب أن يكون فارغًا أو حرفين على الأقل.', invalidIds: 'المعرّفات يجب أن تكون أعدادًا صحيحة موجبة.', invalidMinimum: 'الحد الأدنى للإشارة يجب أن يكون بين 1 و100000.', invalidDateRange: 'مدى التاريخ غير صحيح.', invalidReasonCode: 'رمز سبب البلاغ يحتوي على محارف غير مسموحة.', invalidReportIds: 'معرّفات المبلّغ والمراجع يجب أن تكون أعدادًا صحيحة موجبة.', invalidReportDateRange: 'مدى التاريخ غير صحيح أو يتجاوز عشر سنوات.', workFiltersError: 'تعذر تطبيق فلاتر الأعمال.', genericWorksError: 'حدث خطأ أثناء تحميل قائمة الأعمال. حاول مرة أخرى.', reportsForbidden: 'غير مصرح بقراءة بلاغات هذا العمل.', workNotFound: 'لم يعد العمل موجودًا.', reportFiltersError: 'تعذر تطبيق فلاتر البلاغات.', genericReportsError: 'حدث خطأ أثناء تحميل البلاغات المتتبعة.', reportDetailForbidden: 'تفاصيل البلاغ تتطلب صلاحية مخصصة.', reportNotFound: 'لم يعد البلاغ موجودًا.', selectedWork: 'العمل المحدد', showDetailsAction: 'عرض التفاصيل', genericDetailError: 'حدث خطأ أثناء تحميل تفاصيل البلاغ.', resolutionValidation: 'ملاحظات المعالجة مطلوبة ويجب أن تكون بين 5 و2000 حرف.', actionSuccess: 'تم تنفيذ إجراء البلاغ بنجاح', actionNoChange: 'لا يوجد تغيير؛ حالة البلاغ مطابقة بالفعل', genericActionError: 'حدث خطأ غير متوقع أثناء تنفيذ الإجراء.', actionValidationError: 'تعذر تنفيذ الإجراء بالقيم الحالية.', actionForbidden: 'غير مصرح بتنفيذ هذا الإجراء.', workDetailsGenericError: 'حدث خطأ أثناء تحميل تفاصيل العمل. حاول مرة أخرى.', workDetailsForbidden: 'تفاصيل هذا العمل غير متاحة حسب صلاحيات الحساب.', workDetailsNotFound: 'لم يعد هذا العمل موجودًا أو لم يعد متاحًا.'
   },
   en: {
-    trackingTag: 'Tracked reports and individual actions', kicker: 'Works reports and risk signals', title: 'Reports & Violations', description: 'Separate the legacy counter from traceable report records, read work and report details, and perform the permitted action on one record.', totalWorks: 'Matching works', filteredScope: 'Using current filters',
+    trackingTag: 'Controlled management', kicker: 'Works reports station', title: 'Reports & Violations', description: 'Review work signals and tracked reports, then run the permitted record action.', totalWorks: 'Matching works', filteredScope: 'Using current filters',
     authLoadingTitle: 'Checking reports access', authLoadingCopy: 'Waiting for the user session to initialize before requesting data.', forbiddenTitle: 'Works reports access is unavailable', forbiddenCopy: 'This account lacks the required section permissions. No data request was made.',
     important: 'Important', sourcesNoticeTitle: 'Two different sources do not form one unified count', sourcesNotice: 'The legacy counter is stored in works.reports_count, while tracked reports are actual records from work_reports. The sources are not synchronized, and the combined signal is an administrative indicator only.', summaryLabel: 'Report sources summary', secondarySummaryLabel: 'Secondary indicators',
     total: 'Total works', totalHint: 'All matching works', reportedSummary: 'Reported works', reportedHint: 'At least one report signal', highReports: 'High signals', highReportsHint: 'Five signals or more', publicReported: 'Public reported', publicReportedHint: 'Still publicly visible', hiddenReported: 'Hidden reported', hiddenReportedHint: 'Visibility or status is hidden', publishedReported: 'Published reported', publishedReportedHint: 'Currently published', reviewQueueReported: 'In review queue', reviewQueueReportedHint: 'Submitted, in review, or changes requested', featuredReported: 'Featured reported', featuredReportedHint: 'Marked as featured', pinnedReported: 'Pinned reported', pinnedReportedHint: 'Marked as pinned',
     legacyReports: 'Legacy reports', legacyHint: 'Untracked counter', trackedReports: 'Tracked reports', trackedHint: 'Real individual records', combinedSignal: 'Combined signal', combinedHint: 'Administrative indicator only', openReports: 'Open reports', openHint: 'Pending and under review', pending: 'Pending', pendingHint: 'Needs review to start', underReview: 'Under review', underReviewHint: 'Being processed', dismissedReports: 'Dismissed reports', archivedReports: 'Archived reports', worksLegacy: 'Works with legacy reports', worksTracked: 'Works with tracked reports', worksOpen: 'Works with open reports', worksBoth: 'Works with both sources',
     actionChanged: 'State changed', actionUnchanged: 'State did not change', hideActionStatus: 'Hide action status', reportWord: 'Report',
-    filtersTitle: 'Works search and filters', filtersCopy: 'These filters affect the works list only.', reset: 'Reset', search: 'Search', searchPlaceholder: 'Title, slug, or summary', workStatus: 'Work status', all: 'All', visibility: 'Visibility', public: 'Public', hidden: 'Hidden', mediaType: 'Media type', designerId: 'Designer ID', reviewerId: 'Reviewer ID', categoryId: 'Category ID', source: 'Source', allSources: 'All sources', legacy: 'Legacy', tracked: 'Tracked', bothSources: 'Both sources', trackedStatus: 'Tracked report status', allStatuses: 'All statuses', featured: 'Featured', pinned: 'Pinned', yes: 'Yes', no: 'No', minimumSignal: 'Minimum signal', updatedFrom: 'Updated from', updatedTo: 'Updated to', sort: 'Sort', direction: 'Direction', descending: 'Descending', ascending: 'Ascending', perPage: 'Per page', applyFilters: 'Apply filters', clear: 'Clear',
-    tableTitle: 'Works with report signals', tableCopy: 'Shows the previous administrative information with tracking indicators and separates work details from report records.', currentPage: 'Current page', loadingWorks: 'Loading works', loadWorksError: 'Could not load works', retry: 'Retry', emptyWorks: 'No matching results', emptyWorksCopy: 'Change or reset the filters.', work: 'Work', status: 'Status', sources: 'Sources', trackedStates: 'Tracked record states', indicators: 'Indicators', administrativeData: 'Administrative data', datesAndCounts: 'Dates and counts', actions: 'Actions', designer: 'Designer', reviewer: 'Reviewer', category: 'Category', views: 'Views', likes: 'Likes', submittedAt: 'Submitted at', publishedAt: 'Published at', hiddenAt: 'Hidden at', createdAt: 'Created at', updatedAt: 'Updated at', legacyCompatibility: 'reports_count compatibility', historical: 'Legacy', open: 'Open', waiting: 'Pending', review: 'Review', closed: 'Dismissed', archived: 'Archived', legacyCounter: 'Legacy counter', trackedRecords: 'Tracked records', needsFollowup: 'Needs follow-up', visiblePublicly: 'Publicly visible', highSignal: 'High signal', viewWorkDetails: 'Work details', viewTrackedReports: 'View tracked reports', noTrackedRecords: 'No individually tracked report records exist for this work.', totalResults: 'Total results', visibleNow: 'visible now', previous: 'Previous', next: 'Next', workPages: 'Works pages', page: 'Page',
+    filtersTitle: 'Works search and filters', filtersCopy: 'These filters affect the works list only.', advancedFilters: 'Advanced filters', reset: 'Reset', search: 'Search', searchPlaceholder: 'Title, slug, or summary', workStatus: 'Work status', all: 'All', visibility: 'Visibility', public: 'Public', hidden: 'Hidden', mediaType: 'Media type', designerId: 'Designer ID', reviewerId: 'Reviewer ID', categoryId: 'Category ID', source: 'Source', allSources: 'All sources', legacy: 'Legacy', tracked: 'Tracked', bothSources: 'Both sources', trackedStatus: 'Tracked report status', allStatuses: 'All statuses', featured: 'Featured', pinned: 'Pinned', yes: 'Yes', no: 'No', minimumSignal: 'Minimum signal', updatedFrom: 'Updated from', updatedTo: 'Updated to', sort: 'Sort', direction: 'Direction', descending: 'Descending', ascending: 'Ascending', perPage: 'Per page', applyFilters: 'Apply filters', clear: 'Clear',
+    tableTitle: 'Works with report signals', tableCopy: 'Shows the previous administrative information with tracking indicators and separates work details from report records.', currentPage: 'Current page', loadingWorks: 'Loading works', updatingResults: 'Updating results…', loadWorksError: 'Could not load works', retry: 'Retry', emptyWorks: 'No matching results', emptyWorksCopy: 'Change or reset the filters.', work: 'Work', status: 'Status', statusAndVisibility: 'Status & visibility', sources: 'Report sources', trackedStates: 'Tracked reports', indicators: 'Indicators', administrativeData: 'Administrative data', datesAndCounts: 'Dates and counts', actions: 'Actions', designer: 'Designer', reviewer: 'Reviewer', category: 'Category', views: 'Views', likes: 'Likes', submittedAt: 'Submitted at', publishedAt: 'Published at', hiddenAt: 'Hidden at', createdAt: 'Created at', updatedAt: 'Updated at', legacyCompatibility: 'reports_count compatibility', historical: 'Legacy', open: 'Open', waiting: 'Pending', review: 'Review', closed: 'Dismissed', archived: 'Archived', legacyCounter: 'Legacy counter', trackedRecords: 'Tracked records', needsFollowup: 'Needs follow-up', visiblePublicly: 'Publicly visible', highSignal: 'High signal', viewWorkDetails: 'Work details', viewTrackedReports: 'View tracked reports', noTrackedRecords: 'No individually tracked report records exist for this work.', noTrackedShort: 'No tracked records', totalResults: 'Total results', visibleNow: 'visible now', previous: 'Previous', next: 'Next', workPages: 'Works pages', page: 'Page', imageMedia: 'Image', videoMedia: 'Video', close: 'Close',
     workDetailsReadonly: 'Read-only work details', closeWorkDetails: 'Close work details', loadingWorkDetails: 'Loading work details', loadingAllowedFields: 'Fetching fields allowed for this account...', workDetailsError: 'Could not load work details', noSummary: 'No summary has been recorded for this work.', accessScope: 'Available field scope', accessScopeCopy: 'These indicators reflect field permissions enforced by the server.', canViewDesigner: 'Designer and reviewer', canViewMedia: 'Media data', canViewMetadata: 'Metadata permission', canViewPrivateNotes: 'Private notes', allowed: 'Available', unavailable: 'Unavailable', basicDetails: 'Basic details', priceAmount: 'Price amount', deliveryDays: 'Delivery days', reportsCount: 'Legacy report counter', people: 'Designer and reviewer', notLinked: 'Not linked', relationsUnavailable: 'Designer and reviewer are unavailable for this permission scope.', media: 'Media', mediaPresent: 'Media is recorded', mediaAbsent: 'No media is recorded', mediaUnavailable: 'Media data is unavailable for this permission scope.', lifecycle: 'Lifecycle', reviewedAt: 'Reviewed at', approvedAt: 'Approved at', rejectedAt: 'Rejected at', archivedAt: 'Archived at', privateNotes: 'Private notes', privateNotesCopy: 'This section only reveals content when the server allows it.', internalNotes: 'Internal notes', rejectionReason: 'Rejection reason', changeRequestNotes: 'Change request notes', privateNotesUnavailable: 'Private notes are unavailable for this permission scope.', workDetailsPermission: 'Work list and detail permissions are required.',
     trackedDrawerTitle: 'Tracked report records', closePanel: 'Close panel', reasonCode: 'Reason code', reporterId: 'Reporter ID', reporter: 'Reporter', from: 'From', to: 'To', loadingTracked: 'Loading tracked reports', loadTrackedError: 'Could not load reports', emptyTracked: 'No matching records', emptyTrackedCopy: 'No individually tracked report records match the current filters for this work.', needsAttention: 'Needs attention', hasReviewer: 'Has reviewer', reviewed: 'Reviewed', dismissedAt: 'Dismissed', archivedAtShort: 'Archived', createdAtShort: 'Created', viewReportDetails: 'View details', reportDetailHint: 'View allowed detail fields', reportDetailPermission: 'Requires admin.works.reports.detail.view', startReview: 'Start review', updateDismissal: 'Update report resolution', dismissReport: 'Dismiss report', archiveReport: 'Archive report', totalRecords: 'Total records', reportPages: 'Report pages',
     reportDetailsAllowed: 'Allowed report details', closeReportDetails: 'Close report details', reportContext: 'Safe work context', reportId: 'Report ID', reportDetails: 'Report details', noReportDetails: 'No details.', resolutionNotes: 'Resolution notes', noResolutionNotes: 'No resolution notes.', fieldUnavailable: 'This field is unavailable.', viewReportDetailsAccess: 'View report details', viewResolutionAccess: 'View resolution notes',
@@ -322,6 +341,7 @@ const copyMap = {
 
 const copy = computed(() => copyMap[currentLocale.value])
 const pageDirection = computed<'rtl' | 'ltr'>(() => currentLocale.value === 'ar' ? 'rtl' : 'ltr')
+const reportsBreadcrumbs = computed(() => ['Admin', 'Works', copy.value.title])
 const workSortOptions = computed<Array<{ value: WorkSort; label: string }>>(() => [
   { value: 'reports_count', label: copy.value.legacyCounter }, { value: 'combined_reports_count', label: copy.value.combinedSignal }, { value: 'tracked_reports_count', label: copy.value.trackedReports }, { value: 'open_tracked_reports_count', label: copy.value.openReports }, { value: 'updated_at', label: copy.value.updatedAt }, { value: 'created_at', label: copy.value.createdAt }, { value: 'submitted_at', label: copy.value.submittedAt }, { value: 'published_at', label: copy.value.publishedAt }, { value: 'title', label: copy.value.work }, { value: 'status', label: copy.value.status }, { value: 'views_count', label: copy.value.views }, { value: 'likes_count', label: copy.value.likes }
 ])
@@ -350,8 +370,10 @@ const filters = reactive<WorkFilters>(defaultWorkFilters())
 const appliedFilters = reactive<WorkFilters>(defaultWorkFilters())
 const workPage = ref(1)
 const loading = ref(false)
+const updating = ref(false)
 const error = ref<string | null>(null)
 const filterError = ref<string | null>(null)
+const showAdvancedFilters = ref(false)
 
 const workDetailsOpen = ref(false)
 const selectedWorkDetailsId = ref<number | null>(null)
@@ -393,28 +415,37 @@ let reportsRevision = 0
 let detailRevision = 0
 let workDetailRevision = 0
 let loadedSignature: string | null = null
+let searchTimer: ReturnType<typeof setTimeout> | null = null
 const authSignature = computed(() => [authStore.isInitialized, authStore.isAuthenticated, authStore.role, [...authStore.permissions].sort().join(',')].join('|'))
 
 const primarySummaryCards = computed(() => [
-  { key: 'legacy', label: copy.value.legacyReports, value: summary.legacy_reports_total, hint: copy.value.legacyHint, color: '#f59e0b' },
-  { key: 'tracked', label: copy.value.trackedReports, value: summary.tracked_reports_total, hint: copy.value.trackedHint, color: '#38bdf8' },
-  { key: 'combined', label: copy.value.combinedSignal, value: summary.combined_report_signal_total, hint: copy.value.combinedHint, color: '#a855f7' },
-  { key: 'open', label: copy.value.openReports, value: summary.open_tracked_reports, hint: copy.value.openHint, color: '#f43f5e' },
-  { key: 'pending', label: copy.value.pending, value: summary.pending_tracked_reports, hint: copy.value.pendingHint, color: '#fb7185' },
-  { key: 'review', label: copy.value.underReview, value: summary.under_review_tracked_reports, hint: copy.value.underReviewHint, color: '#6366f1' }
+  { key: 'total', label: copy.value.total, description: copy.value.totalHint, value: summaryValue(summary.total), tone: 'neutral' as const, icon: '⊞' },
+  { key: 'legacy', label: copy.value.legacyReports, description: copy.value.legacyHint, value: summaryValue(summary.legacy_reports_total), tone: 'amber' as const, icon: '⌁' },
+  { key: 'tracked', label: copy.value.trackedReports, description: copy.value.trackedHint, value: summaryValue(summary.tracked_reports_total), tone: 'cyan' as const, icon: '◎' },
+  { key: 'open', label: copy.value.openReports, description: copy.value.openHint, value: summaryValue(summary.open_tracked_reports), tone: 'rose' as const, icon: '!' },
+  { key: 'pending', label: copy.value.pending, description: copy.value.pendingHint, value: summaryValue(summary.pending_tracked_reports), tone: 'amber' as const, icon: '◷' },
+  { key: 'review', label: copy.value.underReview, description: copy.value.underReviewHint, value: summaryValue(summary.under_review_tracked_reports), tone: 'indigo' as const, icon: '◉' }
+])
+const policyItems = computed(() => [
+  { key: 'legacy', title: copy.value.legacyCounter, state: copy.value.legacyHint, description: copy.value.legacyHint, meta: copy.value.sourcesNoticeTitle, icon: '⌁', tone: 'warning' as const },
+  { key: 'tracked', title: copy.value.trackedRecords, state: copy.value.trackedHint, description: copy.value.trackedHint, meta: copy.value.sourcesNoticeTitle, icon: '◎', tone: 'info' as const }
 ])
 const secondarySummaryItems = computed(() => [
-  { key: 'dismissed', label: copy.value.dismissedReports, value: summary.dismissed_tracked_reports }, { key: 'archived', label: copy.value.archivedReports, value: summary.archived_tracked_reports }, { key: 'legacyWorks', label: copy.value.worksLegacy, value: summary.works_with_legacy_reports }, { key: 'trackedWorks', label: copy.value.worksTracked, value: summary.works_with_tracked_reports }, { key: 'openWorks', label: copy.value.worksOpen, value: summary.works_with_open_tracked_reports }, { key: 'bothWorks', label: copy.value.worksBoth, value: summary.works_with_both_sources }
+  { key: 'dismissed', label: copy.value.dismissedReports, value: summaryValue(summary.dismissed_tracked_reports) }, { key: 'archived', label: copy.value.archivedReports, value: summaryValue(summary.archived_tracked_reports) }, { key: 'legacyWorks', label: copy.value.worksLegacy, value: summaryValue(summary.works_with_legacy_reports) }, { key: 'trackedWorks', label: copy.value.worksTracked, value: summaryValue(summary.works_with_tracked_reports) }, { key: 'openWorks', label: copy.value.worksOpen, value: summaryValue(summary.works_with_open_tracked_reports) }, { key: 'bothWorks', label: copy.value.worksBoth, value: summaryValue(summary.works_with_both_sources) }
 ])
-const legacySummaryItems = computed(() => [
-  { key: 'total', label: copy.value.total, value: summary.total }, { key: 'reported', label: copy.value.reportedSummary, value: summary.reported }, { key: 'high', label: copy.value.highReports, value: summary.high_reports }, { key: 'public', label: copy.value.publicReported, value: summary.public_reported }, { key: 'hidden', label: copy.value.hiddenReported, value: summary.hidden_reported }, { key: 'published', label: copy.value.publishedReported, value: summary.published_reported }, { key: 'queue', label: copy.value.reviewQueueReported, value: summary.review_queue_reported }, { key: 'featured', label: copy.value.featuredReported, value: summary.featured_reported }, { key: 'pinned', label: copy.value.pinnedReported, value: summary.pinned_reported }, { key: 'legacyTotal', label: copy.value.reportsCount, value: summary.total_reports }
-])
-const workLifecycleItems = computed(() => {
-  const work = workDetail.value?.work
-  return [
-    { key: 'submitted_at', label: copy.value.submittedAt, value: work?.submitted_at ?? null }, { key: 'reviewed_at', label: copy.value.reviewedAt, value: work?.reviewed_at ?? null }, { key: 'approved_at', label: copy.value.approvedAt, value: work?.approved_at ?? null }, { key: 'published_at', label: copy.value.publishedAt, value: work?.published_at ?? null }, { key: 'rejected_at', label: copy.value.rejectedAt, value: work?.rejected_at ?? null }, { key: 'hidden_at', label: copy.value.hiddenAt, value: work?.hidden_at ?? null }, { key: 'archived_at', label: copy.value.archivedAt, value: work?.archived_at ?? null }, { key: 'created_at', label: copy.value.createdAt, value: work?.created_at ?? null }, { key: 'updated_at', label: copy.value.updatedAt, value: work?.updated_at ?? null }
-  ]
-})
+const activeAdvancedFiltersCount = computed(() => [
+  filters.designer_id,
+  filters.reviewer_id,
+  filters.category_id,
+  filters.min_reports !== '1' ? filters.min_reports : '',
+  filters.is_featured,
+  filters.is_pinned,
+  filters.from,
+  filters.to,
+  filters.sort !== defaultWorkFilters().sort ? filters.sort : '',
+  filters.direction !== defaultWorkFilters().direction ? filters.direction : '',
+  filters.per_page !== defaultWorkFilters().per_page ? String(filters.per_page) : ''
+].filter(Boolean).length)
 const actionCanSubmit = computed(() => {
   if (!pendingAction.value || actionLoading.value) return false
   if (pendingAction.value.action !== 'dismiss') return true
@@ -428,13 +459,33 @@ function emptySummary(): Summary { return { total: 0, reported: 0, high_reports:
 function defaultWorkFilters(): WorkFilters { return { q: '', status: '', visibility_status: '', media_type: '', designer_id: '', reviewer_id: '', category_id: '', min_reports: '1', report_source: 'all', tracked_status: '', is_featured: '', is_pinned: '', from: '', to: '', sort: 'combined_reports_count', direction: 'desc', per_page: 15 } }
 function defaultReportFilters(): TrackedFilters { return { status: '', reason_code: '', reporter_id: '', reviewed_by: '', from: '', to: '', sort: 'created_at', direction: 'desc', per_page: 15 } }
 function formatNumber(value: number): string { return new Intl.NumberFormat(currentLocale.value === 'ar' ? 'ar-YE' : 'en-US').format(Number.isFinite(value) ? value : 0) }
+function summaryValue(value: number | null | undefined): number { return Number.isFinite(value) ? Number(value) : 0 }
 function formatDateTime(value: string | null): string { if (!value) return '—'; const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat(currentLocale.value === 'ar' ? 'ar-YE' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(date) }
 function textDirection(value: string | null | undefined): 'rtl' | 'ltr' { return /[\u0600-\u06FF]/.test(String(value ?? '')) ? 'rtl' : 'ltr' }
 function yesNo(value: boolean): string { return value ? copy.value.yes : copy.value.no }
 function accessLabel(value: boolean): string { return value ? copy.value.allowed : copy.value.unavailable }
 function displayValue(value: string | null | undefined): string { return value === null || value === undefined || value.trim() === '' ? '—' : value }
+function displayMediaType(value: string | null | undefined): string {
+  const normalized = value?.trim().toLowerCase()
+  if (normalized === 'image') return copy.value.imageMedia
+  if (normalized === 'video') return copy.value.videoMedia
+  return displayValue(value)
+}
+function reasonLabel(value: string): string {
+  return value.replaceAll(/[_.-]+/g, ' ').trim() || '—'
+}
 function truncateText(value: string, limit: number): string { const characters = Array.from(value.trim()); return characters.length <= limit ? characters.join('') : characters.slice(0, limit).join('') + '…' }
 function personLabel(person: Person | null): string { return person ? `${person.name} · #${person.id}` : copy.value.unassigned }
+function visibleIndicators(work: WorkItem): Array<{ key: string; label: string; alert: boolean }> {
+  const indicators = [
+    work.report_flags.needs_attention ? { key: 'attention', label: copy.value.needsAttention, alert: true } : null,
+    work.report_flags.high_reports ? { key: 'high', label: copy.value.highSignal, alert: true } : null,
+    work.is_featured ? { key: 'featured', label: copy.value.featured, alert: false } : null,
+    work.is_pinned ? { key: 'pinned', label: copy.value.pinned, alert: false } : null,
+    work.report_flags.visibility_risk ? { key: 'public', label: copy.value.visiblePublicly, alert: true } : null
+  ]
+  return indicators.filter((item): item is { key: string; label: string; alert: boolean } => item !== null).slice(0, 3)
+}
 function workStatusLabel(status: WorkStatus): string { const labels = { draft: { ar: 'مسودة', en: 'Draft' }, submitted: { ar: 'مرسل', en: 'Submitted' }, in_review: { ar: 'تحت المراجعة', en: 'In review' }, changes_requested: { ar: 'تعديلات مطلوبة', en: 'Changes requested' }, approved: { ar: 'معتمد', en: 'Approved' }, published: { ar: 'منشور', en: 'Published' }, rejected: { ar: 'مرفوض', en: 'Rejected' }, hidden: { ar: 'مخفي', en: 'Hidden' }, archived: { ar: 'مؤرشف', en: 'Archived' } }; return labels[status]?.[currentLocale.value] || status }
 function reportStatusLabel(status: ReportStatus): string { const labels = { pending: { ar: 'قيد الانتظار', en: 'Pending' }, under_review: { ar: 'تحت المراجعة', en: 'Under review' }, dismissed: { ar: 'مغلق', en: 'Dismissed' }, archived: { ar: 'مؤرشف', en: 'Archived' } }; return labels[status]?.[currentLocale.value] || status }
 function actionLabel(action: ActionName): string { return ({ review: copy.value.startReview, dismiss: copy.value.dismissReport, archive: copy.value.archiveReport } as Record<ActionName, string>)[action] }
@@ -456,7 +507,9 @@ function queryFromReportFilters(): Record<string, string | number> { const query
 async function fetchWorks(quiet: boolean): Promise<void> {
   if (!authStore.isInitialized || !hasPageAccess.value) return
   const revision = ++listRevision; const currentAccess = accessRevision
-  if (!quiet) loading.value = true
+  const initialLoad = !quiet && items.value.length === 0
+  if (initialLoad) loading.value = true
+  else updating.value = true
   error.value = null
   try {
     const response = await apiFetch<ApiResponse<{ items: WorkItem[]; pagination: Pagination; summary: Summary }>>('/admin/works/reports', { query: queryFromWorkFilters() })
@@ -474,13 +527,29 @@ async function fetchWorks(quiet: boolean): Promise<void> {
     if (status === 401 || status === 403) { serverForbidden.value = true; clearPageData(); return }
     if (status === 422) filterError.value = localizedServerMessage(requestError, copy.value.workFiltersError)
     else if (!quiet) error.value = copy.value.genericWorksError
-  } finally { if (revision === listRevision && !quiet) loading.value = false }
+  } finally {
+    if (revision === listRevision) {
+      loading.value = false
+      updating.value = false
+    }
+  }
 }
 function applyFilters(): void { if (!validateWorkFilters()) return; Object.assign(appliedFilters, filters); workPage.value = 1; void fetchWorks(false) }
 function resetFilters(): void { Object.assign(filters, defaultWorkFilters()); Object.assign(appliedFilters, defaultWorkFilters()); workPage.value = 1; filterError.value = null; void fetchWorks(false) }
 function changeWorkPage(next: number): void { if (loading.value || next < 1 || next > pagination.last_page || next === pagination.current_page) return; workPage.value = next; void fetchWorks(false) }
 function changeWorkSort(key: WorkSort): void { if (appliedFilters.sort === key) appliedFilters.direction = appliedFilters.direction === 'asc' ? 'desc' : 'asc'; else { appliedFilters.sort = key; appliedFilters.direction = ['title', 'status'].includes(key) ? 'asc' : 'desc' }; filters.sort = appliedFilters.sort; filters.direction = appliedFilters.direction; workPage.value = 1; void fetchWorks(false) }
 function sortIndicator(key: WorkSort): string { return appliedFilters.sort !== key ? '↕' : appliedFilters.direction === 'asc' ? '↑' : '↓' }
+
+function applyLiveSearch(): void {
+  const query = filters.q.trim()
+  if (query.length === 1) {
+    filterError.value = copy.value.invalidSearch
+    return
+  }
+  appliedFilters.q = query
+  workPage.value = 1
+  void fetchWorks(false)
+}
 
 function openWorkDetails(work: WorkItem): void {
   if (!canViewWorkDetails.value || actionLoading.value) return
@@ -608,11 +677,17 @@ function serverMessage(error: unknown): string | null { const message = errorDat
 function localizedServerMessage(error: unknown, fallback: string): string { return currentLocale.value === 'ar' ? serverMessage(error) || fallback : fallback }
 function fieldError(error: unknown, field: string): string | null { const errors = errorData(error)?.errors; if (!errors || typeof errors !== 'object') return null; const value = (errors as Record<string, unknown>)[field]; return Array.isArray(value) && typeof value[0] === 'string' ? value[0] : null }
 
-function clearPageData(): void { listRevision++; items.value = []; Object.assign(summary, emptySummary()); Object.assign(pagination, emptyPagination()); loading.value = false; error.value = null; filterError.value = null; closeReportsDrawer(); closeWorkDetails() }
+function clearPageData(): void { listRevision++; items.value = []; Object.assign(summary, emptySummary()); Object.assign(pagination, emptyPagination()); loading.value = false; updating.value = false; error.value = null; filterError.value = null; closeReportsDrawer(); closeWorkDetails() }
 function syncAccess(): void { if (!mounted) return; accessRevision++; serverForbidden.value = false; if (!authStore.isInitialized || !hasPageAccess.value) { loadedSignature = null; clearPageData(); return }; if (loadedSignature === authSignature.value) return; loadedSignature = authSignature.value; void fetchWorks(false) }
 function handleEscape(event: KeyboardEvent): void { if (event.key !== 'Escape') return; if (pendingAction.value) { if (!actionLoading.value) cancelAction(); return }; if (reportDetailOpen.value) { if (!actionLoading.value) closeReportDetail(); return }; if (reportsDrawerOpen.value) { if (!actionLoading.value) closeReportsDrawer(); return }; if (workDetailsOpen.value && !actionLoading.value) closeWorkDetails() }
 
 watch(authSignature, syncAccess, { flush: 'post' })
+watch(() => filters.q, () => {
+  if (searchTimer) clearTimeout(searchTimer)
+  filterError.value = null
+  if (filters.q.trim() === appliedFilters.q) return
+  searchTimer = setTimeout(applyLiveSearch, 325)
+})
 watch(resolutionNotes, () => { if (resolutionNotesError.value && resolutionNotes.value.trim().length >= 5 && resolutionNotes.value.trim().length <= 2000) resolutionNotesError.value = null })
 watch(currentLocale, () => {
   error.value = null
@@ -629,7 +704,7 @@ watch(currentLocale, () => {
   if (reportDetailOpen.value && selectedReportId.value !== null) void fetchReportDetail(selectedReportId.value)
 })
 onMounted(() => { mounted = true; window.addEventListener('keydown', handleEscape); syncAccess() })
-onBeforeUnmount(() => { window.removeEventListener('keydown', handleEscape); accessRevision++; listRevision++; reportsRevision++; detailRevision++; workDetailRevision++ })
+onBeforeUnmount(() => { window.removeEventListener('keydown', handleEscape); if (searchTimer) clearTimeout(searchTimer); accessRevision++; listRevision++; reportsRevision++; detailRevision++; workDetailRevision++ })
 </script>
 
 <style scoped>
@@ -656,4 +731,185 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', handleEscape); acc
 @media (max-width: 1200px) { .ym-works-reports-summary-grid { grid-template-columns: repeat(3,1fr); }.ym-works-reports-filter-grid,.ym-tracked-filters { grid-template-columns: repeat(3,1fr); } }
 @media (max-width: 760px) { .ym-works-reports-hero__content,.ym-works-reports-filter-card>header,.ym-works-reports-table-card__head,.ym-works-reports-pagination,.ym-tracked-report>header { align-items: stretch; flex-direction: column; }.ym-works-reports-summary-grid { grid-template-columns: repeat(2,1fr); }.ym-works-reports-filter-grid,.ym-tracked-filters { grid-template-columns: 1fr; }.ym-report-list-data,.ym-report-detail-grid,.ym-reports-detail-access-grid,.ym-reports-detail-people { grid-template-columns: repeat(2,1fr); }.ym-works-reports-table { min-width: 0; }.ym-works-reports-table thead { display: none; }.ym-works-reports-table tbody,.ym-works-reports-table tr,.ym-works-reports-table td { display: block; width: 100%; }.ym-works-reports-table tr { border-bottom: 10px solid rgba(148,163,184,.08); }.ym-works-reports-table td { border-bottom: 1px dashed var(--ym-card-border); }.ym-action-modal dl { grid-template-columns: 1fr; } }
 @media (max-width: 480px) { .ym-works-reports-summary-grid,.ym-report-list-data,.ym-report-detail-grid,.ym-reports-detail-access-grid,.ym-reports-detail-people { grid-template-columns: 1fr; } }
+
+/* Reports station closure */
+.ym-works-reports-page{
+  --ym-admin-section-accent:#e11d48;
+  --ym-admin-section-accent-strong:#be123c;
+  --ym-admin-section-accent-secondary:#f59e0b;
+  --ym-admin-section-highlight:#38bdf8;
+  --ym-admin-section-accent-soft:rgba(225,29,72,.09);
+  gap:8px
+}
+.ym-works-reports-page :deep(.ym-admin-hero){gap:4px;padding:8px 14px}
+.ym-works-reports-page :deep(.ym-admin-hero__body){grid-template-columns:44px minmax(0,1fr) auto;gap:12px}
+.ym-works-reports-page :deep(.ym-admin-hero__icon){width:44px;height:44px;border-radius:13px}
+.ym-works-reports-page :deep(.ym-admin-hero h1){font-size:clamp(26px,2.2vw,34px)}
+.ym-works-reports-page :deep(.ym-admin-hero p){max-width:720px;font-size:13px;line-height:1.45}
+.ym-works-reports-page :deep(.ym-admin-policy-bar){grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:5px}
+.ym-works-reports-page :deep(.ym-admin-policy){min-height:46px;grid-template-columns:34px minmax(0,1fr);gap:8px;padding:5px 9px;cursor:default}
+.ym-works-reports-page :deep(.ym-admin-policy>span){width:32px;height:32px}
+.ym-works-reports-page :deep(.ym-admin-policy>b){display:none}
+.ym-works-reports-page :deep(.ym-admin-policy:hover){transform:none;box-shadow:inset 0 1px rgba(255,255,255,.07)}
+.ym-works-reports-page :deep(.ym-admin-policy-bar .ym-admin-overlay__trigger){cursor:default}
+.ym-works-reports-page :deep(.ym-admin-metrics){grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+.ym-works-reports-page :deep(.ym-admin-metric){min-height:60px;padding:7px 9px}
+.ym-reports-secondary-summary{flex-wrap:nowrap;gap:6px;overflow:hidden}
+.ym-reports-secondary-summary span{
+  flex:1 1 0;min-width:0;overflow:hidden;border-color:var(--ym-admin-border);
+  background:var(--ym-admin-surface-soft);padding:.3rem .55rem;
+  color:var(--ym-admin-muted);font-size:11.5px;font-weight:800;text-overflow:ellipsis;white-space:nowrap
+}
+.ym-reports-secondary-summary strong{color:var(--ym-admin-text);font-size:12.5px;font-weight:950;font-variant-numeric:tabular-nums}
+.ym-reports-action-status{padding:.55rem .75rem}
+.ym-works-reports-filter-card,.ym-works-reports-table-card{border-radius:18px}
+.ym-works-reports-filter-form{display:grid;gap:6px;padding:7px 9px}
+.ym-works-reports-filter-grid{padding:0}
+.ym-works-reports-filter-grid.is-primary{grid-template-columns:minmax(240px,2fr) repeat(5,minmax(118px,1fr));gap:7px}
+.ym-works-reports-filter-grid.is-advanced{
+  grid-template-columns:repeat(6,minmax(0,1fr));gap:7px;
+  border-top:1px solid var(--ym-admin-border);padding-top:8px
+}
+.ym-works-reports-filter-grid label{gap:3px;font-size:11.5px}
+.ym-works-reports-filter-grid input,.ym-works-reports-filter-grid select{
+  min-height:38px;border-color:var(--ym-control-border);border-radius:10px;
+  background:var(--ym-admin-surface-soft);padding:.45rem .6rem;font-size:12.5px
+}
+.ym-works-reports-filter-toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ym-works-reports-advanced-toggle{
+  display:inline-flex;min-height:36px;align-items:center;gap:6px;border:1px solid var(--ym-admin-border);
+  border-radius:10px;padding:0 10px;color:var(--ym-admin-muted);background:var(--ym-admin-surface-soft);
+  font-size:11.5px;font-weight:900;cursor:pointer
+}
+.ym-works-reports-advanced-toggle.is-open{border-color:#38bdf8;color:#0e7490}
+.ym-works-reports-advanced-toggle b{display:grid;min-width:19px;height:19px;place-items:center;border-radius:999px;background:#155e75;color:#fff;font-size:10px}
+.ym-works-reports-filter-actions{align-items:center}
+.ym-works-reports-button{min-height:38px;border-radius:10px;padding:.48rem .72rem;font-size:12px}
+.ym-works-reports-button.is-primary{background:#9f1239}
+.ym-works-reports-filter-error{margin:0 10px 9px}
+.ym-works-reports-table-card{position:relative;padding:6px;background:color-mix(in srgb,var(--ym-admin-surface) 97%,#e11d48 3%)}
+.ym-works-reports-updating{
+  position:absolute;z-index:2;inset-block-start:8px;inset-inline-end:10px;border-radius:999px;
+  padding:4px 8px;color:#fff;background:#334155;font-size:10.5px;font-weight:900
+}
+.ym-works-reports-table-wrap{overflow:hidden;border:1px solid var(--ym-admin-border);border-radius:14px;background:var(--ym-admin-surface)}
+.ym-works-reports-table{width:100%;min-width:0;table-layout:fixed}
+.ym-works-reports-table th,.ym-works-reports-table td{
+  padding:.55rem .42rem;text-align:center;vertical-align:middle
+}
+.ym-works-reports-table th{
+  position:static;border-bottom:2px solid color-mix(in srgb,var(--ym-admin-border-strong) 72%,#64748b);
+  background:color-mix(in srgb,var(--ym-admin-surface-raised) 92%,#e2e8f0);
+  color:var(--ym-admin-text);font-size:12px;font-weight:950
+}
+.ym-works-reports-table tbody tr{height:100px}
+.ym-works-reports-table tbody tr:hover{background:color-mix(in srgb,var(--ym-admin-section-accent) 4%,transparent)}
+.ym-works-reports-table th.is-sequence,.ym-works-reports-table td.is-sequence{width:4%}
+.ym-works-reports-table th.is-work,.ym-works-reports-table td.is-work{width:20%;text-align:start}
+.ym-works-reports-table th.is-status,.ym-works-reports-table td.is-status{width:12%}
+.ym-works-reports-table th:nth-child(4),.ym-works-reports-table td:nth-child(4){width:12%}
+.ym-works-reports-table th:nth-child(5),.ym-works-reports-table td:nth-child(5){width:14%}
+.ym-works-reports-table th:nth-child(6),.ym-works-reports-table td:nth-child(6){width:11%}
+.ym-works-reports-table th:nth-child(7),.ym-works-reports-table td:nth-child(7){width:17%}
+.ym-works-reports-table th.is-actions,.ym-works-reports-table td.is-actions{width:10%}
+.ym-works-reports-table td.is-sequence{color:var(--ym-admin-text);font-size:14px;font-weight:950;font-variant-numeric:tabular-nums}
+.ym-works-reports-table td.is-work strong,.ym-works-reports-table td.is-work small{display:block}
+.ym-works-reports-table td.is-work strong{overflow:hidden;color:var(--ym-admin-text);font-size:13.5px;font-weight:950;text-overflow:ellipsis;white-space:nowrap}
+.ym-works-reports-table td.is-work small{overflow:hidden;margin:.2rem 0;color:var(--ym-admin-muted);font-size:11px;text-overflow:ellipsis;white-space:nowrap}
+.ym-work-media{display:inline-flex;border-radius:7px;padding:2px 6px;color:#0e7490;background:rgba(34,211,238,.12);font-size:10.5px;font-weight:900}
+.ym-works-reports-table td.is-status{display:grid;align-content:center;justify-items:center;gap:5px}
+.ym-works-reports-badge,.ym-report-status{
+  display:inline-flex;min-height:25px;align-items:center;justify-content:center;border:1px solid #64748b;
+  border-radius:999px;padding:.25rem .55rem;color:#f8fafc;background:#334155;font-size:11.5px;font-weight:950
+}
+.ym-works-reports-badge.is-submitted,.ym-works-reports-badge.is-in-review{border-color:#38bdf8;background:#155e75;color:#ecfeff}
+.ym-works-reports-badge.is-changes-requested{border-color:#f59e0b;background:#78350f;color:#fffbeb}
+.ym-works-reports-badge.is-approved,.ym-works-reports-badge.is-published,.ym-works-reports-badge.is-public{border-color:#34d399;background:#065f46;color:#ecfdf5}
+.ym-works-reports-badge.is-rejected{border-color:#fb7185;background:#881337;color:#fff1f2}
+.ym-works-reports-badge.is-hidden,.ym-works-reports-badge.is-draft,.ym-works-reports-badge.is-archived{border-color:#94a3b8;background:#334155;color:#f8fafc}
+.ym-report-sources{display:grid;gap:5px}
+.ym-report-sources button{
+  display:flex;min-height:29px;align-items:center;justify-content:space-between;gap:6px;
+  border:1px solid;border-radius:9px;padding:3px 7px;color:#fff;font-size:11px;font-weight:850;cursor:pointer
+}
+.ym-report-sources button strong{font-size:13px;font-variant-numeric:tabular-nums}
+.ym-report-sources .is-legacy{border-color:#f59e0b;background:#78350f}
+.ym-report-sources .is-tracked{border-color:#38bdf8;background:#155e75}
+.ym-report-status-counts,.ym-report-flags{display:flex;justify-content:center;gap:4px}
+.ym-report-status-counts span,.ym-report-flags span{
+  border:1px solid #64748b;border-radius:999px;padding:.28rem .48rem;
+  color:#f8fafc;background:#334155;font-size:10.5px;font-weight:900;white-space:nowrap
+}
+.ym-report-status-counts span.is-open,.ym-report-flags span.is-alert{border-color:#fb7185;background:#881337;color:#fff1f2}
+.ym-report-status-counts span.is-review{border-color:#818cf8;background:#3730a3;color:#eef2ff}
+.ym-works-reports-table td>small{color:var(--ym-admin-muted);font-size:11px;font-weight:800}
+.ym-work-dates-counts{min-width:0;gap:4px;color:var(--ym-admin-muted);font-size:12.5px}
+.ym-work-dates-counts time{color:var(--ym-admin-text);font-size:12.5px;font-weight:900;white-space:normal}
+.ym-work-dates-counts time b{color:var(--ym-admin-muted);font-weight:950}
+.ym-work-dates-counts span{display:inline-flex;justify-content:center;gap:4px}
+.ym-work-dates-counts strong{font-size:13.5px;font-weight:950;font-variant-numeric:tabular-nums}
+.ym-work-actions{display:flex;align-items:center;justify-content:center;gap:6px}
+.ym-works-reports-icon-button{
+  display:grid;width:38px;height:38px;place-items:center;border:1px solid;border-radius:10px;
+  color:#fff;font-size:18px;font-weight:950;cursor:pointer
+}
+.ym-works-reports-icon-button svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ym-works-reports-icon-button.is-detail{border-color:#38bdf8;background:#155e75}
+.ym-works-reports-icon-button.is-reports{border-color:#fb7185;background:#881337}
+.ym-works-reports-icon-button:hover:not(:disabled){filter:brightness(1.16);transform:translateY(-1px)}
+.ym-works-reports-icon-button:focus-visible,.ym-works-reports-sort:focus-visible,.ym-report-sources button:focus-visible,.ym-works-reports-advanced-toggle:focus-visible{outline:3px solid rgba(56,189,248,.3);outline-offset:2px}
+.ym-works-reports-icon-button:disabled{border-color:#64748b;background:#334155;color:#e2e8f0;box-shadow:none;cursor:not-allowed;opacity:.78}
+.ym-works-reports-table td.is-actions>small{display:block;margin-top:4px;font-size:9.5px;line-height:1.3}
+.ym-works-reports-sort{justify-content:center;font-size:12px}
+.ym-works-reports-sort span{display:grid;width:18px;height:18px;place-items:center;border-radius:6px;background:#334155;color:#fff}
+.ym-works-reports-pagination{padding:.65rem .8rem}
+.ym-reports-detail-backdrop{z-index:var(--ym-admin-layer-drawer,1200)}
+.ym-action-modal-backdrop{z-index:var(--ym-admin-layer-dialog,1400)}
+:global(.ym-dashboard-light) .ym-works-reports-filter-card,
+:global(.ym-dashboard-light) .ym-works-reports-table-card{background:rgba(255,255,255,.88);backdrop-filter:blur(18px)}
+:global(.ym-dashboard-light) .ym-works-reports-table-wrap,
+:global(.ym-dashboard-light) .ym-works-reports-table{background:rgba(255,255,255,.94)}
+:global(.ym-dashboard-light:has(.ym-works-reports-page) .ym-background-watermark .ym-watermark-logo){opacity:.035}
+:global(.ym-dashboard-light:has(.ym-works-reports-page) .ym-background-watermark .ym-watermark-name){opacity:.025}
+@media(max-width:1400px){
+  .ym-works-reports-page :deep(.ym-admin-metrics){grid-template-columns:repeat(3,minmax(0,1fr))}
+  .ym-works-reports-filter-grid.is-primary{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .ym-works-reports-filter-grid.is-primary .is-search{grid-column:span 2}
+  .ym-works-reports-filter-grid.is-advanced{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+@media(max-width:1100px){
+  .ym-works-reports-page :deep(.ym-admin-policy-bar){grid-template-columns:1fr 1fr}
+  .ym-works-reports-table thead{display:none}
+  .ym-works-reports-table,.ym-works-reports-table tbody{display:grid;width:100%}
+  .ym-works-reports-table tbody{gap:8px}
+  .ym-works-reports-table tbody tr{
+    display:grid;width:100%;height:auto;grid-template-columns:repeat(2,minmax(0,1fr));
+    border:1px solid var(--ym-admin-border);border-radius:14px;overflow:hidden
+  }
+  .ym-works-reports-table tbody td{
+    display:grid;width:100%;min-width:0;grid-template-columns:minmax(105px,35%) minmax(0,1fr);
+    align-items:center;gap:8px;border-bottom:1px solid var(--ym-admin-border);text-align:start
+  }
+  .ym-works-reports-table tbody td::before{content:attr(data-label);color:var(--ym-admin-muted);font-size:11px;font-weight:900}
+  .ym-works-reports-table tbody td.is-sequence,.ym-works-reports-table tbody td.is-work,.ym-works-reports-table tbody td.is-status,.ym-works-reports-table tbody td.is-actions{width:100%}
+  .ym-works-reports-table tbody td.is-work{display:grid;text-align:start}
+  .ym-works-reports-table tbody td.is-status{align-content:stretch;justify-items:stretch}
+  .ym-works-reports-table tbody td.is-status .ym-works-reports-badge{width:max-content}
+}
+@media(max-width:760px){
+  .ym-works-reports-page :deep(.ym-admin-hero__body){grid-template-columns:42px minmax(0,1fr)}
+  .ym-works-reports-page :deep(.ym-admin-policy-bar){grid-template-columns:1fr}
+  .ym-works-reports-page :deep(.ym-admin-metrics){grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ym-reports-secondary-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ym-works-reports-filter-grid.is-primary,.ym-works-reports-filter-grid.is-advanced{grid-template-columns:1fr}
+  .ym-works-reports-filter-grid.is-primary .is-search{grid-column:auto}
+  .ym-works-reports-filter-toolbar{align-items:stretch;flex-direction:column}
+  .ym-works-reports-filter-actions{display:grid;grid-template-columns:1fr 1fr}
+  .ym-works-reports-table tbody tr{grid-template-columns:1fr}
+  .ym-works-reports-pagination{align-items:stretch;flex-direction:column}
+}
+@media(max-width:440px){
+  .ym-works-reports-page :deep(.ym-admin-metrics),.ym-reports-secondary-summary{grid-template-columns:1fr}
+  .ym-works-reports-table tbody td{grid-template-columns:1fr}
+}
 </style>
