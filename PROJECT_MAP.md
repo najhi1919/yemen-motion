@@ -2461,6 +2461,51 @@ Admin Works Settings and Permissions Station
 
 تبدأ بعد تأكيد المستخدم، ولا تدخل ضمن إغلاق محطة Taxonomy.
 
+### 0.39 Completed Admin Works Activity Log Station — 2026-07-27
+
+**Task ID:** `YM-WORKS-LOG-STATION-CLOSURE-015`
+
+**Closure baseline:** `feat(works): complete activity log station`
+
+أُغلقت محطة سجل الأعمال على المسار المعتمد `/admin/works/log`، مع إبقاء
+`/admin/works/activity` مسارًا متوافقًا. تشمل المحطة تبويبي السجل التشغيلي
+ودورة حياة الأعمال، والبحث والفلاتر والترقيم وتفاصيل الحدث، ودعم Light وDark
+وRTL وLTR والتصميم المتجاوب.
+
+#### Data Sources and Validation
+
+- يستخدم السجل التشغيلي `GET /api/admin/works/activity?source=audit`.
+- تستخدم دورة حياة الأعمال `GET /api/admin/works/activity?source=lifecycle`.
+- أصلح ربط المسار `/admin/works/log`.
+- أصلح إغلاق لوحة الفلاتر المتقدمة.
+- منع Horizontal overflow على Mobile.
+
+```text
+WorksActivityAuditFoundationTest: 17 tests / 235 assertions
+WorksActivityAuditApiTest: 38 tests / 209 assertions
+WorksActivityApiTest: 47 tests / 339 assertions
+Total: 102 tests / 783 assertions
+Frontend production build: Build complete (Client, Server, Nitro)
+git diff --check: passed
+```
+
+بقيت تحذيرات البناء العامة غير المانعة فقط: sourcemap، و`authStore` mixed
+static/dynamic import، وchunk size.
+
+#### Closure Status
+
+مكتملة ومغلقة. يوثق ملف
+`docs/ym-sdd/tasks/YM-WORKS-LOG-STATION-CLOSURE-015.md` تفاصيل الإغلاق.
+
+#### Recommended Next Station
+
+```text
+Admin Works Settings and Permissions Station
+/admin/works/settings
+```
+
+هذه هي المحطة التالية المسجلة في الخطة الحالية، ولا تدخل ضمن إغلاق سجل الأعمال.
+
 ---
 
 ## 1. TECH_STACK — المعمارية النهائية المعتمدة
