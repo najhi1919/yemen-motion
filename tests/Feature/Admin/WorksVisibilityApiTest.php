@@ -143,6 +143,7 @@ class WorksVisibilityApiTest extends TestCase
         $item = $response->json('data.items.0');
 
         $this->assertSame([
+            'approved_at',
             'category_id',
             'created_at',
             'designer',

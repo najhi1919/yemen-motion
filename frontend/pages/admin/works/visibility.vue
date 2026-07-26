@@ -1,28 +1,20 @@
 <template>
-  <div class="ym-works-visibility-page space-y-7">
-    <section class="ym-works-visibility-hero">
-      <div class="ym-works-visibility-hero__glow is-one" />
-      <div class="ym-works-visibility-hero__glow is-two" />
-      <div class="ym-works-visibility-hero__grid" aria-hidden="true" />
-
-      <div class="ym-works-visibility-hero__content">
-        <div>
-          <div class="ym-works-visibility-chips">
-            <span class="ym-works-visibility-chip is-brand">Yemen Motion</span>
-            <span class="ym-works-visibility-chip is-readonly">{{ copy.readonly }}</span>
-          </div>
-          <p class="ym-works-visibility-kicker">{{ copy.kicker }}</p>
-          <h1>{{ copy.title }}</h1>
-          <p class="ym-works-visibility-description">{{ copy.description }}</p>
-        </div>
-
-        <div class="ym-works-visibility-hero__summary">
-          <span>{{ copy.totalWorks }}</span>
-          <strong>{{ formatNumber(summary.total) }}</strong>
-          <small>{{ copy.filteredScope }}</small>
-        </div>
-      </div>
-    </section>
+  <div class="ym-works-visibility-page ym-admin-page" data-admin-accent="visibility">
+    <AdminPageHero
+      :breadcrumbs="visibilityBreadcrumbs"
+      :breadcrumb-label="copy.filtersTitle"
+      :eyebrow="copy.kicker"
+      :badge="copy.readonly"
+      :title="copy.title"
+      :description="copy.description"
+    >
+      <template #icon>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+          <circle cx="12" cy="12" r="3" />
+        </svg>
+      </template>
+    </AdminPageHero>
 
     <section
       v-if="authPending"
@@ -46,160 +38,161 @@
     </section>
 
     <template v-else>
-      <aside class="ym-works-visibility-notice" role="note">
-        <span>{{ copy.readonly }}</span>
-        <div>
-          <strong>{{ copy.noticeTitle }}</strong>
-          <p>{{ copy.notice }}</p>
-        </div>
-      </aside>
+      <AdminMetricStrip
+        :items="metricItems"
+        :locale="currentLocale"
+        :aria-label="copy.summaryLabel"
+        :loading="loading && items.length === 0"
+        :updating="loading && items.length > 0"
+      />
 
-      <section class="ym-works-visibility-summary-grid" :aria-label="copy.summaryLabel">
-        <article
-          v-for="card in summaryCards"
-          :key="card.key"
-          class="ym-works-visibility-summary-card"
-          :class="{
-            'is-alert': card.key === 'reported' && card.value > 0,
-            'is-promoted': card.key === 'promoted' && card.value > 0
-          }"
-          :style="{ '--visibility-accent': card.color }"
-        >
-          <span>{{ card.label }}</span>
-          <strong>{{ formatNumber(card.value) }}</strong>
-          <small>{{ card.hint }}</small>
-        </article>
-      </section>
+      <section class="ym-works-visibility-filter-card ym-admin-surface">
+        <form class="ym-works-visibility-filter-form" @submit.prevent="applyFilters">
+          <div class="ym-works-visibility-filter-grid">
+            <label class="is-search">
+              <span>{{ copy.search }}</span>
+              <input
+                v-model.trim="filters.q"
+                type="search"
+                minlength="2"
+                maxlength="80"
+                :placeholder="copy.searchPlaceholder"
+                autocomplete="off"
+              />
+              <small>{{ copy.searchHint }}</small>
+            </label>
 
-      <section class="ym-works-visibility-filter-card">
-        <header>
-          <div>
-            <h2>{{ copy.filtersTitle }}</h2>
-            <p>{{ copy.filtersCopy }}</p>
+            <label>
+              <span>{{ copy.status }}</span>
+              <select v-model="filters.status">
+                <option value="">{{ copy.all }}</option>
+                <option v-for="option in statusOptions" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+            </label>
+
+            <label>
+              <span>{{ copy.visibility }}</span>
+              <select v-model="filters.visibility_status">
+                <option value="">{{ copy.all }}</option>
+                <option value="public">{{ copy.publicVisibility }}</option>
+                <option value="hidden">{{ copy.hiddenVisibility }}</option>
+              </select>
+            </label>
+
+            <label>
+              <span>{{ copy.mediaType }}</span>
+              <input
+                v-model.trim="filters.media_type"
+                type="text"
+                maxlength="40"
+                placeholder="image"
+                dir="ltr"
+              />
+            </label>
+
+            <label>
+              <span>{{ copy.featuredLabel }}</span>
+              <select v-model="filters.is_featured">
+                <option v-for="option in booleanOptions" :key="'featured-' + option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+            </label>
+
+            <label>
+              <span>{{ copy.pinnedLabel }}</span>
+              <select v-model="filters.is_pinned">
+                <option v-for="option in booleanOptions" :key="'pinned-' + option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+            </label>
           </div>
-          <button
-            type="button"
-            class="ym-works-visibility-button is-secondary"
-            :disabled="loading"
-            :title="copy.resetHint"
-            @click="resetFilters"
-          >
-            {{ copy.reset }}
-          </button>
-        </header>
 
-        <form class="ym-works-visibility-filter-grid" @submit.prevent="applyFilters">
-          <label class="is-search">
-            <span>{{ copy.search }}</span>
-            <input
-              v-model.trim="filters.q"
-              type="search"
-              minlength="2"
-              maxlength="80"
-              :placeholder="copy.searchPlaceholder"
-              autocomplete="off"
-            />
-            <small>{{ copy.searchHint }}</small>
-          </label>
-
-          <label>
-            <span>{{ copy.status }}</span>
-            <select v-model="filters.status">
-              <option value="">{{ copy.all }}</option>
-              <option v-for="option in statusOptions" :key="option.value" :value="option.value">
-                {{ option.label }}
-              </option>
-            </select>
-          </label>
-
-          <label>
-            <span>{{ copy.visibility }}</span>
-            <select v-model="filters.visibility_status">
-              <option value="">{{ copy.all }}</option>
-              <option value="public">{{ copy.publicVisibility }}</option>
-              <option value="hidden">{{ copy.hiddenVisibility }}</option>
-            </select>
-          </label>
-
-          <label>
-            <span>{{ copy.mediaType }}</span>
-            <input
-              v-model.trim="filters.media_type"
-              type="text"
-              maxlength="40"
-              placeholder="image"
-              dir="ltr"
-            />
-          </label>
-
-          <label>
-            <span>{{ copy.designerId }}</span>
-            <input v-model="filters.designer_id" type="number" min="1" inputmode="numeric" />
-          </label>
-
-          <label>
-            <span>{{ copy.reviewerId }}</span>
-            <input v-model="filters.reviewer_id" type="number" min="1" inputmode="numeric" />
-          </label>
-
-          <label>
-            <span>{{ copy.categoryId }}</span>
-            <input v-model="filters.category_id" type="number" min="1" inputmode="numeric" />
-          </label>
-
-          <label>
-            <span>{{ copy.featuredLabel }}</span>
-            <select v-model="filters.is_featured">
-              <option v-for="option in booleanOptions" :key="'featured-' + option.value" :value="option.value">
-                {{ option.label }}
-              </option>
-            </select>
-          </label>
-
-          <label>
-            <span>{{ copy.pinnedLabel }}</span>
-            <select v-model="filters.is_pinned">
-              <option v-for="option in booleanOptions" :key="'pinned-' + option.value" :value="option.value">
-                {{ option.label }}
-              </option>
-            </select>
-          </label>
-
-          <label>
-            <span>{{ copy.reported }}</span>
-            <select v-model="filters.reported">
-              <option v-for="option in booleanOptions" :key="'reported-' + option.value" :value="option.value">
-                {{ option.label }}
-              </option>
-            </select>
-          </label>
-
-          <label>
-            <span>{{ copy.from }}</span>
-            <input v-model="filters.from" type="date" />
-            <small>{{ copy.updatedRangeHint }}</small>
-          </label>
-
-          <label>
-            <span>{{ copy.to }}</span>
-            <input v-model="filters.to" type="date" />
-            <small>{{ copy.updatedRangeHint }}</small>
-          </label>
-
-          <label>
-            <span>{{ copy.perPage }}</span>
-            <select v-model.number="filters.per_page">
-              <option :value="15">15</option>
-              <option :value="25">25</option>
-              <option :value="50">50</option>
-            </select>
-          </label>
-
-          <div class="ym-works-visibility-filter-actions">
-            <button type="submit" class="ym-works-visibility-button is-primary" :disabled="loading">
-              {{ copy.apply }}
+          <div class="ym-works-visibility-filter-toolbar">
+            <button
+              type="button"
+              class="ym-works-visibility-advanced-toggle"
+              :class="{ 'is-open': showAdvancedFilters }"
+              @click="showAdvancedFilters = !showAdvancedFilters"
+            >
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" />
+                <line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" />
+                <line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" />
+                <line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" />
+                <line x1="17" y1="16" x2="23" y2="16" />
+              </svg>
+              <span>{{ copy.advancedFilters }}</span>
+              <b v-if="activeAdvancedFiltersCount > 0" class="ym-works-visibility-advanced-badge">
+                {{ activeAdvancedFiltersCount }}
+              </b>
             </button>
+
+            <div class="ym-works-visibility-filter-actions">
+              <button type="submit" class="ym-works-visibility-button is-primary" :disabled="loading">
+                {{ copy.apply }}
+              </button>
+              <button
+                type="button"
+                class="ym-works-visibility-button is-secondary"
+                :disabled="loading"
+                @click="resetFilters"
+              >
+                {{ copy.reset }}
+              </button>
+            </div>
           </div>
+
+          <div v-show="showAdvancedFilters" class="ym-works-visibility-filter-grid is-advanced">
+            <label>
+              <span>{{ copy.designerId }}</span>
+              <input v-model="filters.designer_id" type="number" min="1" inputmode="numeric" class="ym-works-visibility-number-input" />
+            </label>
+
+            <label>
+              <span>{{ copy.reviewerId }}</span>
+              <input v-model="filters.reviewer_id" type="number" min="1" inputmode="numeric" class="ym-works-visibility-number-input" />
+            </label>
+
+            <label>
+              <span>{{ copy.categoryId }}</span>
+              <input v-model="filters.category_id" type="number" min="1" inputmode="numeric" class="ym-works-visibility-number-input" />
+            </label>
+
+            <label>
+              <span>{{ copy.reported }}</span>
+              <select v-model="filters.reported">
+                <option v-for="option in booleanOptions" :key="'reported-' + option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+            </label>
+
+            <label>
+              <span>{{ copy.from }}</span>
+              <input v-model="filters.from" type="date" />
+              <small>{{ copy.updatedRangeHint }}</small>
+            </label>
+
+            <label>
+              <span>{{ copy.to }}</span>
+              <input v-model="filters.to" type="date" />
+              <small>{{ copy.updatedRangeHint }}</small>
+            </label>
+
+            <label>
+              <span>{{ copy.perPage }}</span>
+              <select v-model.number="filters.per_page">
+                <option :value="15">15</option>
+                <option :value="25">25</option>
+                <option :value="50">50</option>
+              </select>
+            </label>
+          </div>
+
         </form>
 
         <p v-if="filterError" class="ym-works-visibility-filter-error" role="alert">
@@ -207,20 +200,7 @@
         </p>
       </section>
 
-      <section class="ym-works-visibility-table-card">
-        <header class="ym-works-visibility-table-card__head">
-          <div>
-            <h2>{{ copy.tableTitle }}</h2>
-            <p>{{ copy.tableCopy }}</p>
-          </div>
-          <div class="ym-works-visibility-table-state">
-            <span>{{ copy.currentPage }}</span>
-            <strong>
-              {{ formatNumber(pagination.current_page) }} / {{ formatNumber(pagination.last_page) }}
-            </strong>
-          </div>
-        </header>
-
+      <section class="ym-works-visibility-table-card ym-admin-surface">
         <aside
           v-if="actionStatus"
           class="ym-works-visibility-action-status"
@@ -262,6 +242,7 @@
           <table class="ym-works-visibility-table">
             <thead>
               <tr>
+                <th class="is-sequence">#</th>
                 <th class="is-title">
                   <button type="button" class="ym-works-visibility-sort" @click="changeSort('title')">
                     {{ copy.workTitle }}
@@ -270,56 +251,21 @@
                 </th>
                 <th>
                   <button type="button" class="ym-works-visibility-sort" @click="changeSort('status')">
-                    {{ copy.status }}
+                    {{ copy.statusAndVisibility }}
                     <span aria-hidden="true">{{ sortIndicator('status') }}</span>
                   </button>
                 </th>
-                <th>{{ copy.visibility }}</th>
-                <th>{{ copy.mediaType }}</th>
-                <th>{{ copy.designer }}</th>
-                <th>{{ copy.reviewer }}</th>
-                <th>{{ copy.category }}</th>
-                <th>{{ copy.featuredLabel }}</th>
-                <th>{{ copy.pinnedLabel }}</th>
-                <th>{{ copy.publicFlag }}</th>
-                <th>{{ copy.hiddenFlag }}</th>
-                <th>{{ copy.promotedFlag }}</th>
-                <th>{{ copy.reportedFlag }}</th>
+                <th>{{ copy.promotion }}</th>
                 <th>
                   <button type="button" class="ym-works-visibility-sort" @click="changeSort('reports_count')">
-                    {{ copy.reports }}
+                    {{ copy.metrics }}
                     <span aria-hidden="true">{{ sortIndicator('reports_count') }}</span>
                   </button>
                 </th>
                 <th>
-                  <button type="button" class="ym-works-visibility-sort" @click="changeSort('views_count')">
-                    {{ copy.views }}
-                    <span aria-hidden="true">{{ sortIndicator('views_count') }}</span>
-                  </button>
-                </th>
-                <th>
-                  <button type="button" class="ym-works-visibility-sort" @click="changeSort('likes_count')">
-                    {{ copy.likes }}
-                    <span aria-hidden="true">{{ sortIndicator('likes_count') }}</span>
-                  </button>
-                </th>
-                <th>
                   <button type="button" class="ym-works-visibility-sort" @click="changeSort('published_at')">
-                    {{ copy.publishedAt }}
+                    {{ copy.dates }}
                     <span aria-hidden="true">{{ sortIndicator('published_at') }}</span>
-                  </button>
-                </th>
-                <th>{{ copy.hiddenAt }}</th>
-                <th>
-                  <button type="button" class="ym-works-visibility-sort" @click="changeSort('created_at')">
-                    {{ copy.createdAt }}
-                    <span aria-hidden="true">{{ sortIndicator('created_at') }}</span>
-                  </button>
-                </th>
-                <th>
-                  <button type="button" class="ym-works-visibility-sort" @click="changeSort('updated_at')">
-                    {{ copy.updatedAt }}
-                    <span aria-hidden="true">{{ sortIndicator('updated_at') }}</span>
                   </button>
                 </th>
                 <th class="is-visibility-actions">{{ copy.visibilityActions }}</th>
@@ -328,97 +274,86 @@
             </thead>
             <tbody>
               <tr
-                v-for="work in items"
+                v-for="(work, index) in items"
                 :key="work.id"
                 :class="{
                   'is-promoted-row': work.visibility_flags.is_promoted,
                   'has-reports-row': work.visibility_flags.has_reports
                 }"
               >
-                <td class="is-title">
+                <td class="is-sequence" data-label="#">
+                  {{ formatNumber((pagination.current_page - 1) * pagination.per_page + index + 1) }}
+                </td>
+                <td class="is-title" :data-label="copy.workTitle">
                   <strong :dir="textDirection(work.title)">{{ work.title }}</strong>
-                  <code dir="ltr">{{ work.slug }}</code>
                   <small v-if="work.summary" :title="work.summary" :dir="textDirection(work.summary)">
-                    {{ truncateText(work.summary, 74) }}
+                    {{ truncateText(work.summary, 48) }}
                   </small>
                 </td>
-                <td>
-                  <span class="ym-works-visibility-badge is-status" :class="statusClass(work.status)">
-                    {{ statusLabel(work.status) }}
-                  </span>
+                <td :data-label="copy.statusAndVisibility">
+                  <div class="ym-works-visibility-cell-stack">
+                    <span class="ym-works-visibility-badge is-status" :class="statusClass(work.status)">
+                      {{ statusLabel(work.status) }}
+                    </span>
+                    <span class="ym-works-visibility-badge" :class="visibilityClass(work.visibility_status)">
+                      {{ visibilityLabel(work.visibility_status) }}
+                    </span>
+                  </div>
                 </td>
-                <td>
-                  <span class="ym-works-visibility-badge" :class="visibilityClass(work.visibility_status)">
-                    {{ visibilityLabel(work.visibility_status) }}
-                  </span>
+                <td :data-label="copy.promotion">
+                  <div class="ym-works-visibility-cell-stack is-promotion">
+                    <span class="ym-works-visibility-flag" :class="work.is_featured ? 'is-featured' : 'is-neutral'">
+                      <b aria-hidden="true">★</b>
+                      {{ copy.featuredLabel }}: {{ booleanLabel(work.is_featured) }}
+                    </span>
+                    <span class="ym-works-visibility-flag" :class="work.is_pinned ? 'is-pinned' : 'is-neutral'">
+                      <b aria-hidden="true">📌</b>
+                      {{ copy.pinnedLabel }}: {{ booleanLabel(work.is_pinned) }}
+                    </span>
+                  </div>
                 </td>
-                <td><code dir="ltr">{{ displayValue(work.media_type) }}</code></td>
-                <td>
-                  <span v-if="work.designer" class="ym-works-visibility-person">
-                    <strong :dir="textDirection(work.designer.name)">{{ work.designer.name }}</strong>
-                    <small dir="ltr">#{{ work.designer.id }}</small>
-                  </span>
-                  <span v-else>—</span>
+                <td :data-label="copy.metrics">
+                  <div class="ym-works-visibility-cell-stack is-metrics">
+                    <span>
+                      <b aria-hidden="true">👁</b>
+                      <small>{{ copy.views }}</small>
+                      <strong>{{ formatNumber(work.views_count) }}</strong>
+                    </span>
+                    <span>
+                      <b class="is-like" aria-hidden="true">♥</b>
+                      <small>{{ copy.likes }}</small>
+                      <strong>{{ formatNumber(work.likes_count) }}</strong>
+                    </span>
+                    <span :class="work.reports_count > 0 ? 'is-alert' : ''">
+                      <b class="is-report" aria-hidden="true">⚠</b>
+                      <small>{{ copy.reports }}</small>
+                      <strong>{{ formatNumber(work.reports_count) }}</strong>
+                    </span>
+                  </div>
                 </td>
-                <td>
-                  <span v-if="work.reviewer" class="ym-works-visibility-person">
-                    <strong :dir="textDirection(work.reviewer.name)">{{ work.reviewer.name }}</strong>
-                    <small dir="ltr">#{{ work.reviewer.id }}</small>
-                  </span>
-                  <span v-else>—</span>
+                <td :data-label="copy.dates">
+                  <div class="ym-works-visibility-cell-stack is-dates">
+                    <time :datetime="work.published_at || undefined">
+                      <b>{{ copy.publishedShort }}:</b>
+                      {{ work.published_at ? formatDateTime(work.published_at) : copy.unpublished }}
+                    </time>
+                    <time :datetime="work.updated_at || undefined">
+                      <b>{{ copy.updatedShort }}:</b>
+                      {{ formatDateTime(work.updated_at) }}
+                    </time>
+                  </div>
                 </td>
-                <td><code dir="ltr">{{ work.category_id ?? '—' }}</code></td>
-                <td>
-                  <span class="ym-works-visibility-flag" :class="work.is_featured ? 'is-featured' : 'is-neutral'">
-                    {{ booleanLabel(work.is_featured) }}
-                  </span>
-                </td>
-                <td>
-                  <span class="ym-works-visibility-flag" :class="work.is_pinned ? 'is-pinned' : 'is-neutral'">
-                    {{ booleanLabel(work.is_pinned) }}
-                  </span>
-                </td>
-                <td>
-                  <span class="ym-works-visibility-flag" :class="flagClass('public', work.visibility_flags.is_public)">
-                    {{ flagLabel('public', work.visibility_flags.is_public) }}
-                  </span>
-                </td>
-                <td>
-                  <span class="ym-works-visibility-flag" :class="flagClass('hidden', work.visibility_flags.is_hidden)">
-                    {{ flagLabel('hidden', work.visibility_flags.is_hidden) }}
-                  </span>
-                </td>
-                <td>
-                  <span class="ym-works-visibility-flag" :class="flagClass('promoted', work.visibility_flags.is_promoted)">
-                    {{ flagLabel('promoted', work.visibility_flags.is_promoted) }}
-                  </span>
-                </td>
-                <td>
-                  <span class="ym-works-visibility-flag" :class="flagClass('reported', work.visibility_flags.has_reports)">
-                    {{ flagLabel('reported', work.visibility_flags.has_reports) }}
-                  </span>
-                </td>
-                <td>
-                  <span class="ym-works-visibility-count" :class="work.reports_count > 0 ? 'is-alert' : ''">
-                    {{ formatNumber(work.reports_count) }}
-                  </span>
-                </td>
-                <td><span class="ym-works-visibility-count">{{ formatNumber(work.views_count) }}</span></td>
-                <td><span class="ym-works-visibility-count">{{ formatNumber(work.likes_count) }}</span></td>
-                <td><time :datetime="work.published_at || undefined">{{ formatDateTime(work.published_at) }}</time></td>
-                <td><time :datetime="work.hidden_at || undefined">{{ formatDateTime(work.hidden_at) }}</time></td>
-                <td><time :datetime="work.created_at || undefined">{{ formatDateTime(work.created_at) }}</time></td>
-                <td><time :datetime="work.updated_at || undefined">{{ formatDateTime(work.updated_at) }}</time></td>
-                <td class="is-visibility-actions">
-                  <div class="ym-works-visibility-action-group" :aria-label="copy.actionsFor(work.title)">
+                <td class="is-visibility-actions" :data-label="copy.visibilityActions">
+                  <div class="ym-works-visibility-action-icons" :aria-label="copy.actionsFor(work.title)">
                     <button
                       v-for="action in availableActions(work)"
                       :key="action.key"
                       type="button"
-                      class="ym-works-visibility-action-button"
+                      class="ym-works-visibility-icon-button"
                       :class="'is-' + action.tone"
                       :disabled="!action.enabled || actionWorkId === work.id"
                       :title="actionWorkId === work.id ? copy.actionInProgress : action.reason"
+                      :aria-label="actionWorkId === work.id ? copy.actionInProgress : action.reason"
                       @click="requestAction(work, action.key)"
                     >
                       <span
@@ -426,17 +361,29 @@
                         class="ym-works-visibility-action-spinner"
                         aria-hidden="true"
                       />
-                      {{ action.label }}
+                      <svg
+                        v-else
+                        viewBox="0 0 24 24"
+                        width="18"
+                        height="18"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                        v-html="actionSvgPath(action.key)"
+                      />
                     </button>
                   </div>
                 </td>
-                <td class="is-action">
+                <td class="is-action" :data-label="copy.readAction">
                   <button
                     type="button"
                     class="ym-works-visibility-details-button"
                     :disabled="!canViewDetails"
                     :title="canViewDetails ? copy.viewDetailsHint : copy.detailsPermissionRequired"
-                    @click="openDetails(work)"
+                    @click="openDetails(work, $event)"
                   >
                     {{ copy.viewDetails }}
                   </button>
@@ -475,8 +422,22 @@
       </section>
     </template>
 
+    <WorksReviewDetailWorkspace
+      v-if="drawerOpen && selectedWorkId !== null"
+      :work-id="selectedWorkId"
+      :title="selectedWorkTitle"
+      :detail="detail"
+      :loading="detailLoading"
+      :error="detailError"
+      :locale="currentLocale"
+      :context-note="detailPublishNote"
+      section="visibility"
+      @close="closeDetails"
+      @retry="retrySelectedDetails"
+    />
+
     <div
-      v-if="drawerOpen"
+      v-if="drawerOpen && selectedWorkId === null"
       class="ym-visibility-detail-backdrop"
       role="presentation"
       @click.self="closeDetails"
@@ -584,7 +545,7 @@
               </div>
               <div>
                 <dt>{{ copy.mediaType }}</dt>
-                <dd><code dir="ltr">{{ displayValue(detail.work.media_type) }}</code></dd>
+                <dd>{{ displayMediaType(detail.work.media_type) }}</dd>
               </div>
               <div>
                 <dt>{{ copy.featuredLabel }}</dt>
@@ -637,7 +598,7 @@
             <div v-if="detail.media" class="ym-visibility-detail-media">
               <span>
                 {{ copy.mediaType }}:
-                <code dir="ltr">{{ displayValue(detail.media.media_type) }}</code>
+                <strong>{{ displayMediaType(detail.media.media_type) }}</strong>
               </span>
               <strong :class="detail.media.has_media ? 'is-present' : 'is-absent'">
                 {{ detail.media.has_media ? copy.mediaPresent : copy.mediaAbsent }}
@@ -733,11 +694,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useApiClient } from '~/composables/useApiClient'
 import { useAuthStore } from '~/stores/authStore'
+import AdminPageHero from '~/components/admin/visual/AdminPageHero.vue'
+import AdminMetricStrip from '~/components/admin/visual/AdminMetricStrip.vue'
+import { formatYmDateTime, formatYmNumber } from '~/utils/ymFormatting'
 
 definePageMeta({ layout: 'admin' })
+
+const showAdvancedFilters = ref(false)
 
 type Locale = 'ar' | 'en'
 type WorkStatus = 'draft' | 'submitted' | 'in_review' | 'changes_requested' | 'approved' | 'published' | 'rejected' | 'hidden' | 'archived'
@@ -778,6 +744,7 @@ interface VisibilityWorkItem {
   reports_count: number
   views_count: number
   likes_count: number
+  approved_at: string | null
   published_at: string | null
   hidden_at: string | null
   updated_at: string | null
@@ -868,6 +835,7 @@ interface PendingVisibilityAction {
   label: string
   workId: number
   workLabel: string
+  expectedUpdatedAt: string
 }
 
 interface VisibilityActionStatus {
@@ -1077,6 +1045,7 @@ const copyMap = {
     actionDenied: 'غير مصرح بتنفيذ هذا الإجراء.',
     actionNotFound: 'لم يعد العمل موجودًا.',
     actionFailed: 'تعذر تنفيذ إجراء الظهور. حاول مرة أخرى.',
+    actionConflict: 'تغير العمل في الخادم. حُمّلت النسخة الأحدث؛ راجعها قبل إعادة المحاولة.',
     actionResponseInvalid: 'تعذر اعتماد نتيجة الإجراء. أُبقيت بيانات الصفحة دون تغيير.',
     readyAction: 'الإجراء متاح لهذه الحالة.',
     statusDoesNotAllow: 'حالة العمل الحالية لا تسمح بهذا الإجراء.',
@@ -1091,6 +1060,7 @@ const copyMap = {
     alreadyPinned: 'مثبت بالفعل.',
     notPinned: 'العمل غير مثبت بالفعل.',
     publishedPublicRequired: 'يتطلب الإجراء عملًا منشورًا وعامًا.',
+    approvalRequired: 'لا يمكن النشر أو استعادة الظهور قبل اعتماد العمل.',
     readAction: 'إجراء القراءة',
     viewDetails: 'عرض التفاصيل',
     viewDetailsHint: 'فتح تفاصيل العمل الآمنة',
@@ -1144,7 +1114,17 @@ const copyMap = {
     changeRequestNotes: 'ملاحظات طلب التعديل',
     privateNotesUnavailable: 'الملاحظات الخاصة غير متاحة حسب الصلاحية.',
     publicVisibility: 'عام',
-    hiddenVisibility: 'مخفي'
+    hiddenVisibility: 'مخفي',
+    advancedFilters: 'فلاتر متقدمة',
+    statusAndVisibility: 'الحالة والظهور',
+    promotion: 'الترويج',
+    dates: 'التواريخ',
+    metrics: 'الإحصائيات',
+    publishedShort: 'نشر',
+    updatedShort: 'تحديث',
+    unpublished: 'غير منشور',
+    imageMedia: 'صورة',
+    videoMedia: 'فيديو'
   },
   en: {
     readonly: 'Controlled visibility actions',
@@ -1254,6 +1234,7 @@ const copyMap = {
     actionDenied: 'You are not authorized to run this action.',
     actionNotFound: 'The work no longer exists.',
     actionFailed: 'The visibility action could not be completed. Try again.',
+    actionConflict: 'The work changed on the server. The latest version was loaded; review it before retrying.',
     actionResponseInvalid: 'The action result could not be accepted. Page data was left unchanged.',
     readyAction: 'The action is available for this state.',
     statusDoesNotAllow: 'The current work state does not allow this action.',
@@ -1268,6 +1249,7 @@ const copyMap = {
     alreadyPinned: 'Already pinned.',
     notPinned: 'The work is already not pinned.',
     publishedPublicRequired: 'This action requires a published and public work.',
+    approvalRequired: 'The work must be approved before it can be published or restored.',
     readAction: 'Read action',
     viewDetails: 'View details',
     viewDetailsHint: 'Open safe work details',
@@ -1321,7 +1303,17 @@ const copyMap = {
     changeRequestNotes: 'Change request notes',
     privateNotesUnavailable: 'Private notes are unavailable for this permission scope.',
     publicVisibility: 'Public',
-    hiddenVisibility: 'Hidden'
+    hiddenVisibility: 'Hidden',
+    advancedFilters: 'Advanced filters',
+    statusAndVisibility: 'Status & visibility',
+    promotion: 'Promotion',
+    dates: 'Dates',
+    metrics: 'Metrics',
+    publishedShort: 'Published',
+    updatedShort: 'Updated',
+    unpublished: 'Unpublished',
+    imageMedia: 'Image',
+    videoMedia: 'Video'
   }
 } as const
 
@@ -1350,21 +1342,15 @@ const actionLabels = computed<Record<VisibilityActionKey, string>>(() => current
 const authPending = computed(() => !authStore.isInitialized)
 const hasVisibilityAccess = computed(() => {
   if (!authStore.isInitialized || !authStore.isAuthenticated) return false
-  if (authStore.role === 'super-admin') return true
-  if (!['admin', 'staff'].includes(authStore.role || '')) return false
+  if (!['super-admin', 'admin', 'staff'].includes(authStore.role || '')) return false
 
-  return authStore.permissions.includes('admin.works.access')
-    && authStore.permissions.includes('admin.works.visibility.view')
+  return authStore.can('admin.works.access')
+    && authStore.can('admin.works.visibility.view')
 })
 const canViewDetails = computed(() => (
   hasVisibilityAccess.value
-  && (
-    authStore.role === 'super-admin'
-    || (
-      authStore.permissions.includes('admin.works.all.view')
-      && authStore.permissions.includes('admin.works.detail.view')
-    )
-  )
+  && authStore.can('admin.works.all.view')
+  && authStore.can('admin.works.detail.view')
 ))
 const serverForbidden = ref(false)
 const forbidden = computed(() => (
@@ -1428,6 +1414,7 @@ const detail = ref<WorkDetailData | null>(null)
 const detailLoading = ref(false)
 const detailError = ref<string | null>(null)
 const drawerTitleId = 'ym-visibility-work-detail-title'
+const detailsTrigger = ref<HTMLElement | null>(null)
 const pendingAction = ref<PendingVisibilityAction | null>(null)
 const actionWorkId = ref<number | null>(null)
 const actionStatus = ref<VisibilityActionStatus | null>(null)
@@ -1439,6 +1426,7 @@ let loadedAuthorizationSignature: string | null = null
 let accessRevision = 0
 let listRequestRevision = 0
 let detailRequestRevision = 0
+let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 const authorizationSignature = computed(() => [
   authStore.isInitialized ? 'ready' : 'pending',
@@ -1473,9 +1461,75 @@ const summaryCards = computed(() => [
   { key: 'pinned', label: copy.value.pinnedSummary, value: summary.pinned, hint: copy.value.pinnedHint, color: '#a855f7' },
   { key: 'published', label: copy.value.published, value: summary.published, hint: copy.value.publishedHint, color: '#22c55e' },
   { key: 'hidden_status', label: copy.value.hiddenStatus, value: summary.hidden_status, hint: copy.value.hiddenStatusHint, color: '#94a3b8' },
-  { key: 'reported', label: copy.value.reported, value: summary.reported, hint: copy.value.reportedHint, color: '#f43f5e' },
-  { key: 'promoted', label: copy.value.promoted, value: summary.promoted, hint: copy.value.promotedHint, color: '#e879f9' }
+  { key: 'reported', label: copy.value.reported, value: summary.reported, hint: copy.value.reportedHint, color: '#f43f5e' }
 ])
+
+const visibilityBreadcrumbs = computed(() => ['Admin', 'Works', copy.value.title])
+
+const metricItems = computed(() => summaryCards.value.map(card => ({
+  key: card.key,
+  label: card.label,
+  description: card.hint,
+  value: card.value,
+  tone: metricTone(card.key),
+  icon: metricIcon(card.key)
+})))
+
+function metricTone(key: string): 'violet' | 'cyan' | 'indigo' | 'amber' | 'emerald' | 'neutral' | 'rose' | 'magenta' {
+  const map: Record<string, 'violet' | 'cyan' | 'indigo' | 'amber' | 'emerald' | 'neutral' | 'rose' | 'magenta'> = {
+    total: 'neutral',
+    public: 'cyan',
+    hidden: 'neutral',
+    featured: 'amber',
+    pinned: 'neutral',
+    published: 'cyan',
+    hidden_status: 'neutral',
+    reported: 'rose',
+    promoted: 'magenta'
+  }
+  return map[key] ?? 'neutral'
+}
+
+function metricIcon(key: string): string {
+  const map: Record<string, string> = {
+    total: '⊞',
+    public: '◉',
+    hidden: '◌',
+    featured: '★',
+    pinned: '◈',
+    published: '↗',
+    hidden_status: '•',
+    reported: '⚠',
+    promoted: '♦'
+  }
+  return map[key] ?? '·'
+}
+
+const activeAdvancedFiltersCount = computed(() => {
+  let count = 0
+  if (filters.designer_id) count++
+  if (filters.reviewer_id) count++
+  if (filters.category_id) count++
+  if (filters.reported) count++
+  if (filters.from) count++
+  if (filters.to) count++
+  if (filters.per_page !== 15) count++
+  return count
+})
+
+function actionSvgPath(key: VisibilityActionKey): string {
+  const paths: Record<VisibilityActionKey, string> = {
+    publish: '<circle cx="12" cy="12" r="10"/><polyline points="16 8 12 12 8 8"/>',
+    unpublish: '<circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/>',
+    hide: '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>',
+    restore: '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
+    feature: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+    unfeature: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" fill="none"/>',
+    pin: '<path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76z"/>',
+    unpin: '<path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76z"/><line x1="2" y1="2" x2="22" y2="22"/>'
+  }
+  return paths[key]
+}
 
 const lifecycleItems = computed(() => {
   const work = detail.value?.work
@@ -1493,20 +1547,27 @@ const lifecycleItems = computed(() => {
   ]
 })
 
+const detailPublishNote = computed(() => {
+  const work = detail.value?.work
+  if (!work) return null
+
+  if (
+    work.status === 'approved'
+    || work.status === 'published'
+    || (work.status === 'hidden' && work.approved_at !== null)
+  ) {
+    return null
+  }
+
+  return copy.value.approvalRequired
+})
+
 function formatNumber(value: number): string {
-  return new Intl.NumberFormat(currentLocale.value === 'ar' ? 'ar-YE' : 'en-US').format(value)
+  return formatYmNumber(value, currentLocale.value)
 }
 
 function formatDateTime(value: string | null): string {
-  if (!value) return '—'
-
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-
-  return new Intl.DateTimeFormat(currentLocale.value === 'ar' ? 'ar-YE' : 'en-US', {
-    dateStyle: 'medium',
-    timeStyle: 'short'
-  }).format(date)
+  return formatYmDateTime(value, currentLocale.value)
 }
 
 function textDirection(value: string | null | undefined): 'rtl' | 'ltr' {
@@ -1522,6 +1583,13 @@ function truncateText(value: string, limit: number): string {
 
 function displayValue(value: string | null | undefined): string {
   return value === null || value === undefined || value.trim() === '' ? '—' : value
+}
+
+function displayMediaType(value: string | null | undefined): string {
+  const normalizedValue = value?.trim().toLowerCase()
+  if (normalizedValue === 'image') return copy.value.imageMedia
+  if (normalizedValue === 'video') return copy.value.videoMedia
+  return displayValue(value)
 }
 
 function booleanLabel(value: boolean): string {
@@ -1576,8 +1644,7 @@ function flagClass(key: VisibilityFlagKey, active: boolean): string {
 }
 
 function hasActionPermission(permission: string): boolean {
-  if (!hasVisibilityAccess.value) return false
-  return authStore.role === 'super-admin' || authStore.permissions.includes(permission)
+  return hasVisibilityAccess.value && authStore.can(permission)
 }
 
 function actionAvailability(
@@ -1590,6 +1657,9 @@ function actionAvailability(
   if (key === 'publish') {
     if (isArchived) return { enabled: false, reason: copy.value.archivedUnavailable }
     if (isPublishedPublic) return { enabled: false, reason: copy.value.alreadyPublishedPublic }
+    if (work.status === 'hidden' && !work.approved_at) {
+      return { enabled: false, reason: copy.value.approvalRequired }
+    }
     const enabled = ['approved', 'hidden', 'published'].includes(work.status)
     return { enabled, reason: enabled ? copy.value.readyAction : copy.value.statusDoesNotAllow }
   }
@@ -1613,6 +1683,9 @@ function actionAvailability(
   if (key === 'restore') {
     if (isArchived) return { enabled: false, reason: copy.value.archivedUnavailable }
     if (isPublishedPublic) return { enabled: false, reason: copy.value.alreadyVisible }
+    if (work.status === 'hidden' && !work.approved_at) {
+      return { enabled: false, reason: copy.value.approvalRequired }
+    }
     const enabled = work.status === 'hidden'
       || (work.visibility_status === 'hidden' && ['approved', 'published'].includes(work.status))
     return { enabled, reason: enabled ? copy.value.readyAction : copy.value.restoreUnavailable }
@@ -1650,11 +1723,17 @@ function actionAvailability(
 function availableActions(work: VisibilityWorkItem): VisibilityActionView[] {
   return visibilityActionDefinitions
     .filter((action) => hasActionPermission(action.permission))
-    .map((action) => ({
-      ...action,
-      label: actionLabels.value[action.key],
-      ...actionAvailability(work, action.key)
-    }))
+    .map((action) => {
+      const availability = actionAvailability(work, action.key)
+      const label = actionLabels.value[action.key]
+
+      return {
+        ...action,
+        label,
+        enabled: availability.enabled,
+        reason: availability.enabled ? label : availability.reason
+      }
+    })
 }
 
 function requestAction(work: VisibilityWorkItem, key: VisibilityActionKey): void {
@@ -1670,7 +1749,8 @@ function requestAction(work: VisibilityWorkItem, key: VisibilityActionKey): void
     key,
     label: actionLabels.value[key],
     workId: work.id,
-    workLabel: work.title || work.slug
+    workLabel: work.title || work.slug,
+    expectedUpdatedAt: work.updated_at || ''
   }
 }
 
@@ -1748,7 +1828,12 @@ async function confirmAction(): Promise<void> {
   try {
     const response = await apiFetch<VisibilityActionResponse>(
       '/admin/works/' + action.workId + '/visibility/' + definition.endpoint,
-      { method: 'PATCH' }
+      {
+        method: 'PATCH',
+        body: {
+          expected_updated_at: action.expectedUpdatedAt
+        }
+      }
     )
 
     if (!response.success || !response.data?.work) {
@@ -1781,6 +1866,13 @@ async function confirmAction(): Promise<void> {
 
     if (status === 422) message = serverErrorMessage(requestError) || copy.value.actionValidationFailed
     if (status === 401 || status === 403) message = copy.value.actionDenied
+    if (status === 409) {
+      message = copy.value.actionConflict
+      void fetchVisibilityWorks(true)
+      if (drawerOpen.value && selectedWorkId.value === action.workId && canViewDetails.value) {
+        void fetchWorkDetails(action.workId)
+      }
+    }
     if (status === 404) {
       message = copy.value.actionNotFound
       items.value = items.value.filter((work) => work.id !== action.workId)
@@ -2003,9 +2095,12 @@ function changePage(nextPage: number): void {
   void fetchVisibilityWorks()
 }
 
-function openDetails(work: VisibilityWorkItem): void {
+function openDetails(work: VisibilityWorkItem, event?: Event): void {
   if (!canViewDetails.value) return
 
+  detailsTrigger.value = event?.currentTarget instanceof HTMLElement
+    ? event.currentTarget
+    : null
   drawerOpen.value = true
   selectedWorkId.value = work.id
   selectedWorkTitle.value = work.title
@@ -2072,6 +2167,7 @@ async function fetchWorkDetails(workId: number): Promise<void> {
 }
 
 function closeDetails(): void {
+  const trigger = detailsTrigger.value
   detailRequestRevision += 1
   drawerOpen.value = false
   selectedWorkId.value = null
@@ -2079,6 +2175,8 @@ function closeDetails(): void {
   detail.value = null
   detailError.value = null
   detailLoading.value = false
+  detailsTrigger.value = null
+  if (trigger) void nextTick(() => trigger.focus())
 }
 
 function retrySelectedDetails(): void {
@@ -2141,1350 +2239,568 @@ watch(
   { flush: 'post' }
 )
 
+watch(
+  () => filters.q,
+  (value) => {
+    if (searchTimer) clearTimeout(searchTimer)
+
+    const query = value.trim()
+    if (query.length === 1) {
+      filterError.value = copy.value.searchTooShort
+      return
+    }
+
+    filterError.value = null
+    if (query === appliedFilters.q.trim()) return
+
+    searchTimer = setTimeout(() => {
+      appliedFilters.q = query
+      page.value = 1
+      void fetchVisibilityWorks()
+    }, 320)
+  }
+)
+
 onMounted(() => {
   pageMounted = true
   syncVisibilityAccessState()
 })
+
+onBeforeUnmount(() => {
+  pageMounted = false
+  listRequestRevision += 1
+  detailRequestRevision += 1
+  if (searchTimer) clearTimeout(searchTimer)
+})
 </script>
 
 <style scoped>
-.ym-works-visibility-page {
-  color: var(--ym-text);
+/* ── page base and local section identity ── */
+.ym-works-visibility-page{
+  --ym-visibility-accent:#0f8f6f;
+  --ym-visibility-accent-bright:#34d399;
+  --ym-visibility-accent-soft:rgba(16,185,129,.14);
+  --ym-visibility-gold:#c49a43;
+  --ym-visibility-violet:#312e55;
+  --ym-visibility-topbar-clearance:6.5rem;
+  display:grid;gap:10px;color:var(--ym-text)
 }
-
-.ym-works-visibility-hero,
-.ym-works-visibility-filter-card,
-.ym-works-visibility-table-card,
-.ym-works-visibility-access-state {
-  border: 1px solid var(--ym-card-border);
-  border-radius: 30px;
-  background: var(--ym-card-bg);
-  box-shadow: var(--ym-card-shadow);
-}
-
-.ym-works-visibility-hero {
-  position: relative;
-  min-height: 270px;
-  overflow: hidden;
+.ym-works-visibility-page :deep(.ym-admin-hero){
+  --ym-admin-section-accent:var(--ym-visibility-accent);
+  --ym-admin-section-accent-soft:var(--ym-visibility-accent-soft);
+  --ym-admin-section-accent-secondary:var(--ym-visibility-gold);
+  --ym-admin-section-highlight:#84a654;
+  border-color:color-mix(in srgb,var(--ym-visibility-accent) 35%,var(--ym-card-border));
   background:
-    linear-gradient(135deg, rgba(6, 78, 59, 0.94), rgba(15, 23, 42, 0.96) 54%, rgba(88, 28, 135, 0.92)),
-    var(--ym-card-bg);
-  color: #fff;
-  padding: clamp(1.35rem, 4vw, 2.35rem);
+    radial-gradient(circle at 82% 18%,rgba(196,154,67,.1),transparent 26%),
+    linear-gradient(135deg,color-mix(in srgb,var(--ym-visibility-accent) 16%,var(--ym-card-bg)),color-mix(in srgb,#66733b 9%,var(--ym-card-bg)) 58%,color-mix(in srgb,var(--ym-visibility-violet) 7%,var(--ym-card-bg)));
+  padding-block:clamp(1rem,2vw,1.35rem)
 }
-
-.ym-works-visibility-hero__grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-  background-size: 32px 32px;
-  mask-image: linear-gradient(to bottom, #000, transparent 92%);
-  opacity: 0.4;
-}
-
-.ym-works-visibility-hero__glow {
-  position: absolute;
-  width: 220px;
-  height: 220px;
-  border-radius: 999px;
-  filter: blur(12px);
-  opacity: 0.34;
-}
-
-.ym-works-visibility-hero__glow.is-one {
-  inset-block-start: -90px;
-  inset-inline-end: 8%;
-  background: #34d399;
-}
-
-.ym-works-visibility-hero__glow.is-two {
-  inset-block-end: -130px;
-  inset-inline-start: 12%;
-  background: #d946ef;
-}
-
-.ym-works-visibility-hero__content {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  min-height: 200px;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 2rem;
-}
-
-.ym-works-visibility-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.55rem;
-}
-
-.ym-works-visibility-chip {
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.82);
-  font-size: 11px;
-  font-weight: 950;
-  padding: 0.4rem 0.72rem;
-}
-
-.ym-works-visibility-chip.is-brand {
-  border-color: rgba(52, 211, 153, 0.36);
-  color: #6ee7b7;
-}
-
-.ym-works-visibility-chip.is-readonly {
-  border-color: rgba(216, 180, 254, 0.34);
-  color: #e9d5ff;
-}
-
-.ym-works-visibility-kicker {
-  color: #6ee7b7;
-  font-size: 12px;
-  font-weight: 950;
-  letter-spacing: 0.04em;
-  margin: 1.1rem 0 0.4rem;
-}
-
-.ym-works-visibility-hero h1 {
-  max-width: 760px;
-  color: #fff;
-  font-size: clamp(2.25rem, 5vw, 4rem);
-  font-weight: 950;
-  letter-spacing: -0.04em;
-  line-height: 1.1;
-  margin: 0;
-}
-
-.ym-works-visibility-description {
-  max-width: 700px;
-  color: rgba(255, 255, 255, 0.72);
-  font-size: 14px;
-  font-weight: 750;
-  line-height: 1.85;
-  margin: 0.9rem 0 0;
-}
-
-.ym-works-visibility-hero__summary {
-  display: grid;
-  flex: 0 0 auto;
-  min-width: 190px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 24px;
-  background: rgba(15, 23, 42, 0.42);
-  backdrop-filter: blur(14px);
-  padding: 1rem 1.15rem;
-}
-
-.ym-works-visibility-hero__summary span,
-.ym-works-visibility-hero__summary small {
-  color: rgba(255, 255, 255, 0.66);
-  font-size: 11px;
-  font-weight: 850;
-}
-
-.ym-works-visibility-hero__summary strong {
-  color: #fff;
-  font-size: 2rem;
-  font-weight: 950;
-  margin: 0.25rem 0;
-}
-
-.ym-works-visibility-notice {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.9rem;
-  border: 1px solid rgba(245, 158, 11, 0.28);
-  border-radius: 22px;
-  background: color-mix(in srgb, #f59e0b 8%, var(--ym-control-bg));
-  padding: 1rem 1.15rem;
-}
-
-.ym-works-visibility-notice > span {
-  flex: 0 0 auto;
-  border-radius: 999px;
-  background: rgba(245, 158, 11, 0.14);
-  color: #fbbf24;
-  font-size: 11px;
-  font-weight: 950;
-  padding: 0.38rem 0.7rem;
-}
-
-.ym-works-visibility-notice strong {
-  display: block;
-  color: var(--ym-text);
-  font-size: 13px;
-  font-weight: 950;
-}
-
-.ym-works-visibility-notice p {
-  color: var(--ym-muted);
-  font-size: 13px;
-  font-weight: 800;
-  line-height: 1.7;
-  margin: 0.2rem 0 0;
-}
-
-.ym-works-visibility-summary-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1rem;
-}
-
-.ym-works-visibility-summary-card {
-  position: relative;
-  overflow: hidden;
-  border: 1px solid var(--ym-soft-border);
-  border-radius: 24px;
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--visibility-accent) 17%, transparent), transparent 52%),
-    var(--ym-card-bg);
-  box-shadow: var(--ym-card-shadow);
-  padding: 1rem;
-}
-
-.ym-works-visibility-summary-card::after {
-  position: absolute;
-  inset-block: 0;
-  inset-inline-start: 0;
-  width: 3px;
-  background: var(--visibility-accent);
-  content: '';
-  opacity: 0.85;
-}
-
-.ym-works-visibility-summary-card.is-alert {
-  border-color: rgba(244, 63, 94, 0.35);
-}
-
-.ym-works-visibility-summary-card.is-promoted {
-  border-color: rgba(232, 121, 249, 0.3);
-}
-
-.ym-works-visibility-summary-card span,
-.ym-works-visibility-summary-card small {
-  display: block;
-  color: var(--ym-muted);
-  font-size: 12px;
-  font-weight: 850;
-}
-
-.ym-works-visibility-summary-card strong {
-  display: block;
-  color: var(--ym-text);
-  font-size: 2rem;
-  font-weight: 950;
-  margin: 0.35rem 0;
-}
-
-.ym-works-visibility-filter-card,
-.ym-works-visibility-table-card {
-  padding: clamp(1rem, 2.4vw, 1.45rem);
-}
-
-.ym-works-visibility-filter-card > header,
-.ym-works-visibility-table-card__head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.ym-works-visibility-filter-card h2,
-.ym-works-visibility-table-card h2,
-.ym-works-visibility-access-state h2 {
-  color: var(--ym-text);
-  font-size: 1.25rem;
-  font-weight: 950;
-  margin: 0;
-}
-
-.ym-works-visibility-filter-card header p,
-.ym-works-visibility-table-card__head p,
-.ym-works-visibility-access-state p {
-  color: var(--ym-muted);
-  font-size: 13px;
-  font-weight: 800;
-  line-height: 1.7;
-  margin: 0.3rem 0 0;
-}
-
-.ym-works-visibility-filter-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.9rem;
-}
-
-.ym-works-visibility-filter-grid label {
-  display: grid;
-  align-content: start;
-  gap: 0.42rem;
-}
-
-.ym-works-visibility-filter-grid label.is-search {
-  grid-column: span 2;
-}
-
-.ym-works-visibility-filter-grid label > span {
-  color: var(--ym-muted);
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.ym-works-visibility-filter-grid label > small {
-  color: var(--ym-muted);
-  font-size: 10px;
-  font-weight: 750;
-}
-
-.ym-works-visibility-filter-grid input,
-.ym-works-visibility-filter-grid select {
-  width: 100%;
-  min-height: 45px;
-  border: 1px solid var(--ym-control-border);
-  border-radius: 14px;
-  outline: none;
-  background: var(--ym-control-bg);
-  color: var(--ym-text);
-  font-size: 13px;
-  font-weight: 800;
-  padding: 0.7rem 0.8rem;
-  transition: border-color 160ms ease, box-shadow 160ms ease;
-}
-
-.ym-works-visibility-filter-grid input:focus,
-.ym-works-visibility-filter-grid select:focus {
-  border-color: #10b981;
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.14);
-}
-
-.ym-works-visibility-filter-grid select option {
-  background: var(--ym-dropdown-bg);
-  color: var(--ym-text);
-}
-
-.ym-works-visibility-filter-actions {
-  display: flex;
-  align-items: flex-end;
-}
-
-.ym-works-visibility-button {
-  display: inline-flex;
-  min-height: 44px;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid transparent;
-  border-radius: 14px;
-  font-size: 13px;
-  font-weight: 950;
-  padding: 0.7rem 1rem;
-  transition: transform 160ms ease, border-color 160ms ease, opacity 160ms ease;
-}
-
-.ym-works-visibility-button.is-primary {
-  min-width: 130px;
-  background: linear-gradient(135deg, #059669, #7c3aed);
-  color: #fff;
-  box-shadow: 0 12px 28px rgba(5, 150, 105, 0.2);
-}
-
-.ym-works-visibility-button.is-secondary {
-  border-color: var(--ym-control-border);
-  background: var(--ym-control-bg);
-  color: var(--ym-text);
-}
-
-.ym-works-visibility-button:hover:not(:disabled) {
-  transform: translateY(-1px);
-}
-
-.ym-works-visibility-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.ym-works-visibility-filter-error {
-  border: 1px solid rgba(244, 63, 94, 0.34);
-  border-radius: 15px;
-  background: rgba(244, 63, 94, 0.1);
-  color: #fb7185;
-  font-size: 12px;
-  font-weight: 850;
-  margin: 1rem 0 0;
-  padding: 0.75rem 0.85rem;
-}
-
-.ym-works-visibility-table-card__head {
-  align-items: center;
-}
-
-.ym-works-visibility-table-state {
-  display: grid;
-  min-width: 130px;
-  border: 1px solid var(--ym-soft-border);
-  border-radius: 17px;
-  background: var(--ym-control-bg);
-  padding: 0.65rem 0.8rem;
-}
-
-.ym-works-visibility-table-state span {
-  color: var(--ym-muted);
-  font-size: 10px;
-  font-weight: 850;
-}
-
-.ym-works-visibility-table-state strong {
-  color: var(--ym-text);
-  font-size: 14px;
-  font-weight: 950;
-}
-
-.ym-works-visibility-table-wrap {
-  overflow-x: auto;
-  border: 1px solid var(--ym-soft-border);
-  border-radius: 20px;
-  scrollbar-color: rgba(148, 163, 184, 0.55) transparent;
-}
-
-.ym-works-visibility-table {
-  width: 100%;
-  min-width: 3340px;
-  border-collapse: collapse;
-  background: color-mix(in srgb, var(--ym-card-bg) 88%, transparent);
-}
-
-.ym-works-visibility-table th,
-.ym-works-visibility-table td {
-  border-bottom: 1px solid var(--ym-soft-border);
-  color: var(--ym-muted);
-  font-size: 12px;
-  padding: 0.86rem 0.75rem;
-  text-align: start;
-  vertical-align: middle;
-}
-
-.ym-works-visibility-table th {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: var(--ym-dropdown-bg);
-  color: var(--ym-text);
-  font-weight: 950;
-  white-space: nowrap;
-}
-
-.ym-works-visibility-table tbody tr {
-  transition: background 150ms ease;
-}
-
-.ym-works-visibility-table tbody tr.is-promoted-row {
-  background: color-mix(in srgb, #e879f9 3.5%, transparent);
-}
-
-.ym-works-visibility-table tbody tr.has-reports-row {
-  box-shadow: inset 3px 0 0 rgba(244, 63, 94, 0.6);
-}
-
-.ym-works-visibility-table tbody tr:hover {
-  background: var(--ym-row-hover);
-}
-
-.ym-works-visibility-table tbody tr:last-child td {
-  border-bottom: 0;
-}
-
-.ym-works-visibility-table th.is-title,
-.ym-works-visibility-table td.is-title {
-  width: 310px;
-  min-width: 310px;
-}
-
-.ym-works-visibility-table td.is-title strong,
-.ym-works-visibility-table td.is-title code,
-.ym-works-visibility-table td.is-title small,
-.ym-works-visibility-person strong,
-.ym-works-visibility-person small {
-  display: block;
-}
-
-.ym-works-visibility-table td.is-title strong {
-  color: var(--ym-text);
-  font-size: 13px;
-  font-weight: 950;
-}
-
-.ym-works-visibility-table td.is-title code {
-  color: #34d399;
-  font-size: 10px;
-  margin-top: 0.2rem;
-  overflow-wrap: anywhere;
-}
-
-.ym-works-visibility-table td.is-title small {
-  max-width: 290px;
-  color: var(--ym-muted);
-  font-size: 10px;
-  line-height: 1.55;
-  margin-top: 0.35rem;
-}
-
-.ym-works-visibility-sort {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.42rem;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  padding: 0;
-}
-
-.ym-works-visibility-sort span {
-  display: inline-grid;
-  width: 1.35rem;
-  height: 1.35rem;
-  place-items: center;
-  border-radius: 7px;
-  background: rgba(16, 185, 129, 0.13);
-  color: #34d399;
-}
-
-.ym-works-visibility-badge,
-.ym-works-visibility-flag {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--ym-soft-border);
-  border-radius: 999px;
-  background: var(--ym-control-bg);
-  color: var(--ym-muted);
-  font-size: 10px;
-  font-weight: 950;
-  padding: 0.34rem 0.58rem;
-  white-space: nowrap;
-}
-
-.ym-works-visibility-badge.is-submitted,
-.ym-works-visibility-badge.is-in-review {
-  border-color: rgba(56, 189, 248, 0.35);
-  background: rgba(56, 189, 248, 0.12);
-  color: #38bdf8;
-}
-
-.ym-works-visibility-badge.is-changes-requested {
-  border-color: rgba(245, 158, 11, 0.38);
-  background: rgba(245, 158, 11, 0.12);
-  color: #fbbf24;
-}
-
-.ym-works-visibility-badge.is-approved,
-.ym-works-visibility-badge.is-published,
-.ym-works-visibility-badge.is-public {
-  border-color: rgba(16, 185, 129, 0.35);
-  background: rgba(16, 185, 129, 0.12);
-  color: #34d399;
-}
-
-.ym-works-visibility-badge.is-draft,
-.ym-works-visibility-badge.is-hidden,
-.ym-works-visibility-badge.is-archived {
-  border-color: rgba(148, 163, 184, 0.35);
-  background: rgba(100, 116, 139, 0.13);
-  color: #cbd5e1;
-}
-
-.ym-works-visibility-badge.is-rejected {
-  border-color: rgba(244, 63, 94, 0.36);
-  background: rgba(244, 63, 94, 0.12);
-  color: #fb7185;
-}
-
-.ym-works-visibility-flag.is-featured,
-.ym-works-visibility-flag.is-promoted {
-  border-color: rgba(245, 158, 11, 0.38);
-  background: rgba(245, 158, 11, 0.12);
-  color: #fbbf24;
-}
-
-.ym-works-visibility-flag.is-pinned {
-  border-color: rgba(168, 85, 247, 0.38);
-  background: rgba(168, 85, 247, 0.12);
-  color: #d8b4fe;
-}
-
-.ym-works-visibility-flag.is-public {
-  border-color: rgba(16, 185, 129, 0.35);
-  background: rgba(16, 185, 129, 0.1);
-  color: #6ee7b7;
-}
-
-.ym-works-visibility-flag.is-hidden {
-  border-color: rgba(148, 163, 184, 0.36);
-  background: rgba(100, 116, 139, 0.12);
-  color: #cbd5e1;
-}
-
-.ym-works-visibility-flag.is-reported {
-  border-color: rgba(244, 63, 94, 0.4);
-  background: rgba(244, 63, 94, 0.13);
-  color: #fb7185;
-}
-
-.ym-works-visibility-flag.is-neutral {
-  color: #94a3b8;
-}
-
-.ym-works-visibility-person {
-  min-width: 130px;
-}
-
-.ym-works-visibility-person strong {
-  color: var(--ym-text);
-  font-size: 11px;
-  font-weight: 900;
-}
-
-.ym-works-visibility-person small {
-  color: var(--ym-muted);
-  font-size: 9px;
-  margin-top: 0.18rem;
-}
-
-.ym-works-visibility-count {
-  display: inline-grid;
-  min-width: 2.2rem;
-  min-height: 2rem;
-  place-items: center;
-  border-radius: 10px;
-  background: var(--ym-control-bg);
-  color: var(--ym-text);
-  font-weight: 950;
-  padding: 0.2rem 0.45rem;
-}
-
-.ym-works-visibility-count.is-alert {
-  background: rgba(244, 63, 94, 0.13);
-  color: #fb7185;
-}
-
-.ym-works-visibility-table time {
-  display: inline-block;
-  min-width: 125px;
-  color: var(--ym-muted);
-  font-size: 10px;
-  line-height: 1.5;
-}
-
-.ym-works-visibility-table th.is-action,
-.ym-works-visibility-table td.is-action {
-  position: sticky;
-  inset-inline-end: 0;
-  z-index: 1;
-  min-width: 130px;
-  background: var(--ym-dropdown-bg);
-}
-
-.ym-works-visibility-table th.is-visibility-actions,
-.ym-works-visibility-table td.is-visibility-actions {
-  position: sticky;
-  inset-inline-end: 130px;
-  z-index: 1;
-  width: 390px;
-  min-width: 390px;
-  background: var(--ym-dropdown-bg);
-}
-
-.ym-works-visibility-table th.is-visibility-actions {
-  z-index: 3;
-}
-
-.ym-works-visibility-action-group {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.42rem;
-}
-
-.ym-works-visibility-action-button {
-  display: inline-flex;
-  min-height: 34px;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  border: 1px solid var(--ym-soft-border);
-  border-radius: 10px;
-  background: var(--ym-control-bg);
-  color: var(--ym-text);
-  font-size: 10px;
-  font-weight: 950;
-  padding: 0.42rem 0.55rem;
-  transition: background 150ms ease, border-color 150ms ease, transform 150ms ease;
-  white-space: nowrap;
-}
-
-.ym-works-visibility-action-button.is-positive {
-  border-color: rgba(16, 185, 129, 0.4);
-  background: rgba(16, 185, 129, 0.11);
-  color: #34d399;
-}
-
-.ym-works-visibility-action-button.is-warning {
-  border-color: rgba(245, 158, 11, 0.4);
-  background: rgba(245, 158, 11, 0.11);
-  color: #fbbf24;
-}
-
-.ym-works-visibility-action-button.is-promotion {
-  border-color: rgba(168, 85, 247, 0.42);
-  background: rgba(168, 85, 247, 0.12);
-  color: #d8b4fe;
-}
-
-.ym-works-visibility-action-button.is-neutral {
-  border-color: rgba(148, 163, 184, 0.38);
-  background: rgba(100, 116, 139, 0.11);
-  color: #cbd5e1;
-}
-
-.ym-works-visibility-action-button:hover:not(:disabled) {
-  filter: brightness(1.15);
-  transform: translateY(-1px);
-}
-
-.ym-works-visibility-action-button:disabled {
-  cursor: not-allowed;
-  filter: grayscale(0.65);
-  opacity: 0.42;
-}
-
-.ym-works-visibility-action-spinner {
-  display: inline-block;
-  flex: 0 0 auto;
-  width: 0.85rem;
-  height: 0.85rem;
-  border: 2px solid currentColor;
-  border-inline-end-color: transparent;
-  border-radius: 999px;
-  animation: ym-works-visibility-spin 760ms linear infinite;
-}
-
-.ym-works-visibility-action-status {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  border: 1px solid var(--ym-soft-border);
-  border-radius: 16px;
-  margin: 0 1.2rem 1rem;
-  padding: 0.75rem 0.9rem;
-}
-
-.ym-works-visibility-action-status.is-success {
-  border-color: rgba(16, 185, 129, 0.35);
-  background: rgba(16, 185, 129, 0.09);
-}
-
-.ym-works-visibility-action-status.is-error {
-  border-color: rgba(244, 63, 94, 0.36);
-  background: rgba(244, 63, 94, 0.09);
+.ym-works-visibility-page :deep(.ym-admin-hero h1){
+  background:linear-gradient(100deg,var(--ym-text) 8%,var(--ym-visibility-accent-bright) 65%,#9a8a3f);
+  background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent
 }
-
-.ym-works-visibility-action-status div {
-  display: grid;
-  gap: 0.18rem;
-}
-
-.ym-works-visibility-action-status strong {
-  color: var(--ym-text);
-  font-size: 12px;
-  font-weight: 950;
-}
-
-.ym-works-visibility-action-status span {
-  color: var(--ym-muted);
-  font-size: 10px;
-  font-weight: 850;
-}
-
-.ym-works-visibility-action-status__changed {
-  flex: 0 0 auto;
-  border-radius: 999px;
-  background: var(--ym-control-bg);
-  padding: 0.38rem 0.62rem;
-}
-
-.ym-works-visibility-table th.is-action {
-  z-index: 3;
+.ym-works-visibility-page :deep(.ym-admin-hero__icon),
+.ym-works-visibility-page :deep(.ym-admin-hero__eyebrow b){
+  border-color:color-mix(in srgb,var(--ym-visibility-accent) 45%,var(--ym-soft-border));
+  background:var(--ym-visibility-accent-soft);
+  color:var(--ym-visibility-accent-bright)
 }
-
-.ym-works-visibility-details-button {
-  width: 100%;
-  min-height: 38px;
-  border: 1px solid rgba(16, 185, 129, 0.4);
-  border-radius: 12px;
-  background: rgba(16, 185, 129, 0.12);
-  color: #6ee7b7;
-  font-size: 11px;
-  font-weight: 950;
-  padding: 0.55rem 0.7rem;
-  transition: background 160ms ease, transform 160ms ease;
-}
-
-.ym-works-visibility-details-button:hover:not(:disabled) {
-  background: rgba(16, 185, 129, 0.2);
-  transform: translateY(-1px);
+.ym-works-visibility-page :deep(.ym-admin-hero__eyebrow){color:color-mix(in srgb,var(--ym-visibility-accent-bright) 82%,var(--ym-text))}
+.ym-works-visibility-page :deep(.ym-admin-metrics){
+  grid-template-columns:repeat(4,minmax(0,1fr))
 }
-
-.ym-works-visibility-details-button:disabled {
-  cursor: not-allowed;
-  filter: grayscale(0.6);
-  opacity: 0.45;
+.ym-works-visibility-page :deep(.ym-admin-metrics > *){
+  min-height:68px;border-color:color-mix(in srgb,var(--ym-card-border) 91%,#0891b2);
+  background:color-mix(in srgb,var(--ym-card-bg) 97%,#0891b2 3%)
 }
 
-.ym-works-visibility-state,
+/* ── access / loading / forbidden ── */
 .ym-works-visibility-access-state,
-.ym-visibility-detail-state {
-  display: grid;
-  min-height: 240px;
-  place-items: center;
-  align-content: center;
-  gap: 0.7rem;
-  color: var(--ym-muted);
-  padding: 2rem;
-  text-align: center;
+.ym-works-visibility-state,
+.ym-visibility-detail-state{
+  display:grid;min-height:240px;place-items:center;align-content:center;
+  gap:.7rem;color:var(--ym-muted);padding:2rem;text-align:center
+}
+.ym-works-visibility-access-state{
+  border:1px solid var(--ym-card-border);border-radius:30px;
+  background:var(--ym-card-bg);box-shadow:var(--ym-card-shadow)
+}
+.ym-works-visibility-state h3,.ym-visibility-detail-state h3{color:var(--ym-text);font-size:1.1rem;font-weight:950;margin:0}
+.ym-works-visibility-state p,.ym-visibility-detail-state p{max-width:34rem;color:var(--ym-muted);font-size:13px;font-weight:800;line-height:1.7;margin:0}
+.ym-works-visibility-state.is-error,.ym-visibility-detail-state.is-error,.ym-works-visibility-access-state.is-forbidden{color:#fb7185}
+.ym-works-visibility-state__icon,.ym-works-visibility-empty-icon{
+  display:grid;width:3rem;height:3rem;place-items:center;border-radius:999px;
+  background:rgba(244,63,94,.13);color:#fb7185;font-size:1.1rem;font-weight:950
+}
+.ym-works-visibility-empty-icon{background:rgba(148,163,184,.13);color:var(--ym-muted)}
+.ym-works-visibility-spinner{
+  width:2.35rem;height:2.35rem;border:3px solid rgba(16,185,129,.2);
+  border-top-color:#34d399;border-radius:999px;
+  animation:ym-vis-spin 760ms linear infinite
 }
 
-.ym-works-visibility-state h3,
-.ym-visibility-detail-state h3 {
-  color: var(--ym-text);
-  font-size: 1.1rem;
-  font-weight: 950;
-  margin: 0;
+/* ── notice ── */
+.ym-works-visibility-notice{
+  display:flex;align-items:flex-start;gap:.9rem;
+  border:1px solid rgba(245,158,11,.28);border-radius:22px;
+  background:color-mix(in srgb,#f59e0b 8%,var(--ym-control-bg));
+  padding:1rem 1.15rem
+}
+.ym-works-visibility-notice>span{
+  flex:0 0 auto;border-radius:999px;background:rgba(245,158,11,.14);
+  color:#fbbf24;font-size:11px;font-weight:950;padding:.38rem .7rem
+}
+.ym-works-visibility-notice strong{display:block;color:var(--ym-text);font-size:13px;font-weight:950}
+.ym-works-visibility-notice p{color:var(--ym-muted);font-size:13px;font-weight:800;line-height:1.7;margin:.2rem 0 0}
+
+/* ── filter card ── */
+.ym-works-visibility-filter-card{padding:.7rem .8rem}
+.ym-works-visibility-filter-card>header{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:1rem
+}
+.ym-works-visibility-filter-card h2{color:var(--ym-text);font-size:1.25rem;font-weight:950;margin:0}
+.ym-works-visibility-filter-card header p{color:var(--ym-muted);font-size:13px;font-weight:800;line-height:1.7;margin:.3rem 0 0}
+.ym-works-visibility-filter-form{display:grid;gap:.6rem}
+
+/* ── filter grid ── */
+.ym-works-visibility-filter-grid{display:grid;grid-template-columns:2fr repeat(5,minmax(132px,1fr));gap:.55rem}
+.ym-works-visibility-filter-grid.is-advanced{border-top:1px solid var(--ym-soft-border);padding-top:.65rem}
+.ym-works-visibility-filter-grid label{display:grid;align-content:start;gap:.28rem}
+.ym-works-visibility-filter-grid label>span{color:var(--ym-muted);font-size:12px;font-weight:900}
+.ym-works-visibility-filter-grid label>small{color:var(--ym-muted);font-size:10px;font-weight:750}
+.ym-works-visibility-filter-grid input,.ym-works-visibility-filter-grid select{
+  width:100%;min-height:39px;border:1px solid var(--ym-control-border);border-radius:11px;
+  outline:none;background:var(--ym-control-bg);color:var(--ym-text);
+  font-size:12px;font-weight:800;padding:.52rem .65rem;
+  transition:border-color 160ms ease,box-shadow 160ms ease
+}
+.ym-works-visibility-filter-grid input:focus,.ym-works-visibility-filter-grid select:focus{
+  border-color:#3b8d99;box-shadow:0 0 0 3px rgba(59,141,153,.13)
+}
+.ym-works-visibility-filter-grid select option{background:var(--ym-dropdown-bg);color:var(--ym-text)}
+.ym-works-visibility-number-input{appearance:textfield;-moz-appearance:textfield}
+.ym-works-visibility-number-input::-webkit-outer-spin-button,.ym-works-visibility-number-input::-webkit-inner-spin-button{
+  -webkit-appearance:none;margin:0
 }
 
-.ym-works-visibility-state p,
-.ym-visibility-detail-state p {
-  max-width: 34rem;
-  color: var(--ym-muted);
-  font-size: 13px;
-  font-weight: 800;
-  line-height: 1.7;
-  margin: 0;
+/* ── advanced toggle ── */
+.ym-works-visibility-advanced-toggle{
+  display:inline-flex;align-items:center;gap:.5rem;
+  min-height:36px;border:1px solid var(--ym-soft-border);border-radius:10px;
+  background:var(--ym-control-bg);color:var(--ym-muted);
+  font-size:11px;font-weight:900;padding:.4rem .65rem;
+  cursor:pointer;transition:background 160ms ease,border-color 160ms ease,color 160ms ease
+}
+.ym-works-visibility-advanced-toggle:hover{background:color-mix(in srgb,var(--ym-control-bg) 85%,#fff);color:var(--ym-text)}
+.ym-works-visibility-advanced-toggle.is-open{border-color:rgba(59,141,153,.38);color:#67b5c1}
+.ym-works-visibility-advanced-badge{
+  display:inline-grid;min-width:20px;height:20px;place-items:center;
+  border-radius:999px;background:rgba(59,141,153,.13);color:#67b5c1;
+  font-size:10px;font-weight:950
 }
 
-.ym-works-visibility-state.is-error,
-.ym-visibility-detail-state.is-error,
-.ym-works-visibility-access-state.is-forbidden {
-  color: #fb7185;
+/* ── filter actions ── */
+.ym-works-visibility-filter-actions{
+  display:flex;align-items:center;gap:.45rem
+}
+.ym-works-visibility-filter-toolbar{display:flex;align-items:center;justify-content:space-between;gap:.65rem}
+
+/* ── buttons ── */
+.ym-works-visibility-button{
+  display:inline-flex;min-height:38px;align-items:center;justify-content:center;
+  border:1px solid transparent;border-radius:11px;font-size:12px;font-weight:950;
+  padding:.5rem .8rem;cursor:pointer;
+  transition:transform 160ms ease,border-color 160ms ease,opacity 160ms ease
+}
+.ym-works-visibility-button.is-primary{
+  min-width:110px;
+  background:linear-gradient(135deg,#337f83,#3b82a0);color:#fff;
+  box-shadow:0 8px 20px rgba(14,116,144,.14)
+}
+.ym-works-visibility-button.is-secondary{
+  border-color:var(--ym-control-border);background:var(--ym-control-bg);color:var(--ym-text)
+}
+.ym-works-visibility-button:hover:not(:disabled){transform:translateY(-1px)}
+.ym-works-visibility-button:disabled{cursor:not-allowed;opacity:.5}
+
+/* ── filter error ── */
+.ym-works-visibility-filter-error{
+  border:1px solid rgba(244,63,94,.34);border-radius:15px;
+  background:rgba(244,63,94,.1);color:#fb7185;
+  font-size:12px;font-weight:850;margin:1rem 0 0;padding:.75rem .85rem
 }
 
-.ym-works-visibility-state__icon,
-.ym-works-visibility-empty-icon {
-  display: grid;
-  width: 3rem;
-  height: 3rem;
-  place-items: center;
-  border-radius: 999px;
-  background: rgba(244, 63, 94, 0.13);
-  color: #fb7185;
-  font-size: 1.1rem;
-  font-weight: 950;
+/* ── table card ── */
+.ym-works-visibility-table-card{padding:.55rem}
+.ym-works-visibility-table-card__head{
+  display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1rem
+}
+.ym-works-visibility-table-card h2{color:var(--ym-text);font-size:1.25rem;font-weight:950;margin:0}
+.ym-works-visibility-table-card__head p{color:var(--ym-muted);font-size:13px;font-weight:800;line-height:1.7;margin:.3rem 0 0}
+/* ── action status ── */
+.ym-works-visibility-action-status{
+  display:flex;align-items:center;justify-content:space-between;gap:1rem;
+  border:1px solid var(--ym-soft-border);border-radius:16px;
+  margin:0 0 .55rem;padding:.65rem .8rem
+}
+.ym-works-visibility-action-status.is-success{border-color:rgba(16,185,129,.35);background:rgba(16,185,129,.09)}
+.ym-works-visibility-action-status.is-error{border-color:rgba(244,63,94,.36);background:rgba(244,63,94,.09)}
+.ym-works-visibility-action-status div{display:grid;gap:.18rem}
+.ym-works-visibility-action-status strong{color:var(--ym-text);font-size:12px;font-weight:950}
+.ym-works-visibility-action-status span{color:var(--ym-muted);font-size:10px;font-weight:850}
+.ym-works-visibility-action-status__changed{flex:0 0 auto;border-radius:999px;background:var(--ym-control-bg);padding:.38rem .62rem}
+
+/* ── table ── */
+.ym-works-visibility-table-wrap{
+  overflow:hidden;border:1px solid var(--ym-soft-border);border-radius:20px;
+  background:color-mix(in srgb,var(--ym-card-bg) 97%,var(--ym-visibility-violet) 3%);
+  scrollbar-color:rgba(148,163,184,.55) transparent
+}
+.ym-works-visibility-table{
+  width:100%;min-width:0;border-collapse:collapse;
+  background:color-mix(in srgb,var(--ym-card-bg) 97%,var(--ym-visibility-violet) 3%);
+  table-layout:fixed
+}
+.ym-works-visibility-table th,.ym-works-visibility-table td{
+  border-bottom:1px solid var(--ym-soft-border);color:var(--ym-muted);
+  font-size:13px;padding:.62rem .5rem;text-align:center;vertical-align:middle;min-width:0
+}
+.ym-works-visibility-table th{
+  position:static;top:auto;z-index:auto;
+  border-bottom:2px solid color-mix(in srgb,var(--ym-control-border) 74%,#64748b);
+  background:color-mix(in srgb,var(--ym-dropdown-bg) 92%,#dcecf0);
+  box-shadow:none;color:var(--ym-text);font-weight:950;white-space:nowrap
+}
+.ym-works-visibility-table tbody tr{height:82px;transition:background 150ms ease}
+.ym-works-visibility-table tbody tr.is-promoted-row{background:color-mix(in srgb,var(--ym-visibility-gold) 4%,transparent)}
+.ym-works-visibility-table tbody tr.has-reports-row{box-shadow:inset 3px 0 0 rgba(244,63,94,.6)}
+.ym-works-visibility-table tbody tr:hover{background:var(--ym-row-hover)}
+.ym-works-visibility-table tbody tr:last-child td{border-bottom:0}
+
+/* ── column widths (8-col layout) ── */
+.ym-works-visibility-table .is-sequence{
+  width:5%;color:var(--ym-text);font-size:15px;font-weight:950;font-variant-numeric:tabular-nums
+}
+.ym-works-visibility-table th.is-title,.ym-works-visibility-table td.is-title{width:19%;text-align:start}
+.ym-works-visibility-table th:nth-child(3),.ym-works-visibility-table td:nth-child(3){width:12%}
+.ym-works-visibility-table th:nth-child(4),.ym-works-visibility-table td:nth-child(4){width:12%}
+.ym-works-visibility-table th:nth-child(5),.ym-works-visibility-table td:nth-child(5){width:12%}
+.ym-works-visibility-table th:nth-child(6),.ym-works-visibility-table td:nth-child(6){width:14%}
+.ym-works-visibility-table td.is-title strong,.ym-works-visibility-table td.is-title small{display:block}
+.ym-works-visibility-table td.is-title strong{color:var(--ym-text);font-size:14px;font-weight:950}
+.ym-works-visibility-table td.is-title code{color:#34d399;font-size:11px;margin-top:.2rem;overflow-wrap:anywhere}
+.ym-works-visibility-table td.is-title small{
+  display:-webkit-box;max-width:290px;overflow:hidden;-webkit-box-orient:vertical;
+  -webkit-line-clamp:1;color:var(--ym-muted);font-size:11px;line-height:1.35;margin-top:.2rem
+}
+.ym-works-visibility-table th.is-visibility-actions,.ym-works-visibility-table td.is-visibility-actions{width:19%}
+.ym-works-visibility-table th.is-action,.ym-works-visibility-table td.is-action{width:7%}
+
+/* ── sort button ── */
+.ym-works-visibility-sort{
+  display:inline-flex;align-items:center;gap:.42rem;border:0;
+  background:transparent;color:inherit;font:inherit;padding:0;cursor:pointer
+}
+.ym-works-visibility-sort span{
+  display:inline-grid;width:1.35rem;height:1.35rem;place-items:center;
+  border-radius:7px;background:rgba(59,141,153,.12);color:#67b5c1
 }
 
-.ym-works-visibility-empty-icon {
-  background: rgba(148, 163, 184, 0.13);
-  color: var(--ym-muted);
+/* ── badges ── */
+.ym-works-visibility-badge,.ym-works-visibility-flag{
+  display:inline-flex;min-height:28px;align-items:center;justify-content:center;
+  border:1px solid #64748b;border-radius:999px;
+  background:#334155;color:#f8fafc;
+  font-size:12.5px;font-weight:950;line-height:1.25;padding:.32rem .64rem;white-space:nowrap
+}
+.ym-works-visibility-badge.is-submitted,.ym-works-visibility-badge.is-in-review{border-color:#38bdf8;background:#155e75;color:#ecfeff}
+.ym-works-visibility-badge.is-changes-requested{border-color:#f59e0b;background:#78350f;color:#fffbeb}
+.ym-works-visibility-badge.is-approved,.ym-works-visibility-badge.is-published,.ym-works-visibility-badge.is-public{border-color:#34d399;background:#065f46;color:#ecfdf5}
+.ym-works-visibility-badge.is-draft,.ym-works-visibility-badge.is-hidden,.ym-works-visibility-badge.is-archived{border-color:#94a3b8;background:#334155;color:#f8fafc}
+.ym-works-visibility-badge.is-rejected{border-color:#fb7185;background:#881337;color:#fff1f2}
+
+/* ── flags ── */
+.ym-works-visibility-flag.is-featured,.ym-works-visibility-flag.is-promoted{border-color:#f59e0b;background:#78350f;color:#fffbeb}
+.ym-works-visibility-flag.is-pinned{border-color:#2dd4bf;background:#115e59;color:#f0fdfa}
+.ym-works-visibility-flag.is-public{border-color:#34d399;background:#065f46;color:#ecfdf5}
+.ym-works-visibility-flag.is-hidden{border-color:#94a3b8;background:#334155;color:#f8fafc}
+.ym-works-visibility-flag.is-reported{border-color:#fb7185;background:#881337;color:#fff1f2}
+.ym-works-visibility-flag.is-neutral{border-color:#94a3b8;background:#334155;color:#f8fafc}
+
+/* ── cell stacks ── */
+.ym-works-visibility-cell-stack{display:grid;gap:.28rem}
+.ym-works-visibility-cell-stack.is-promotion b{color:#fff;font-size:13px;line-height:1}
+.ym-works-visibility-cell-stack.is-metrics span{
+  display:grid;grid-template-columns:14px minmax(0,1fr) auto;min-width:0;min-height:1.65rem;
+  align-items:center;gap:.26rem;border:1px solid color-mix(in srgb,var(--ym-soft-border) 72%,#64748b);
+  border-radius:10px;background:color-mix(in srgb,var(--ym-control-bg) 92%,#64748b 8%);
+  color:var(--ym-text);font-size:11px;font-weight:900;padding:.12rem .36rem
+}
+.ym-works-visibility-cell-stack.is-metrics b{font-size:11px;line-height:1}
+.ym-works-visibility-cell-stack.is-metrics b.is-like{color:#fb7185;font-size:13px}
+.ym-works-visibility-cell-stack.is-metrics b.is-report{color:#f59e0b}
+.ym-works-visibility-cell-stack.is-metrics small{overflow:hidden;color:color-mix(in srgb,var(--ym-muted) 78%,#cbd5e1);font-size:11px;font-weight:850;text-overflow:ellipsis;white-space:nowrap}
+.ym-works-visibility-cell-stack.is-metrics strong{color:var(--ym-text);font-size:13px;font-weight:950;font-variant-numeric:tabular-nums}
+.ym-works-visibility-cell-stack.is-metrics .is-alert{background:rgba(244,63,94,.13);color:#fb7185}
+.ym-works-visibility-cell-stack.is-dates{gap:.34rem}
+.ym-works-visibility-cell-stack.is-dates time{display:block;color:var(--ym-text);font-size:13px;font-weight:900;line-height:1.45}
+.ym-works-visibility-cell-stack.is-dates time b{color:color-mix(in srgb,var(--ym-muted) 78%,#cbd5e1);font-size:12px;font-weight:950}
+.ym-works-visibility-state-text{font-size:12px;font-weight:900}
+.ym-works-visibility-state-text.is-public{color:#34d399}
+
+/* ── icon buttons ── */
+.ym-works-visibility-action-icons{display:flex;flex-wrap:wrap;gap:.4rem;justify-content:center}
+.ym-works-visibility-icon-button{
+  display:inline-grid;width:40px;height:40px;place-items:center;
+  border:1px solid var(--ym-soft-border);border-radius:10px;
+  background:#334155;color:#f8fafc;cursor:pointer;
+  box-shadow:0 4px 12px rgba(15,23,42,.1);
+  transition:background 150ms ease,border-color 150ms ease,box-shadow 150ms ease,transform 150ms ease
+}
+.ym-works-visibility-icon-button svg{pointer-events:none;stroke-width:2.25}
+.ym-works-visibility-icon-button.is-positive:not(:disabled){border-color:#34d399;background:#065f46;color:#fff;box-shadow:0 4px 13px rgba(16,185,129,.18)}
+.ym-works-visibility-icon-button.is-warning:not(:disabled){border-color:#f59e0b;background:#78350f;color:#fff;box-shadow:0 4px 13px rgba(245,158,11,.16)}
+.ym-works-visibility-icon-button.is-promotion:not(:disabled){border-color:#d6b55a;background:#6b4f16;color:#fff;box-shadow:0 4px 13px rgba(196,154,67,.16)}
+.ym-works-visibility-icon-button.is-neutral:not(:disabled){border-color:#94a3b8;background:#334155;color:#fff;box-shadow:0 4px 12px rgba(100,116,139,.15)}
+.ym-works-visibility-icon-button:hover:not(:disabled){
+  filter:brightness(1.12);transform:translateY(-2px);box-shadow:0 7px 18px color-mix(in srgb,currentColor 22%,transparent)
+}
+.ym-works-visibility-icon-button:disabled{border-color:#64748b;background:#334155;color:#f1f5f9;cursor:not-allowed;box-shadow:none;filter:grayscale(.2);opacity:.82}
+.ym-works-visibility-action-spinner{
+  display:inline-block;width:.85rem;height:.85rem;
+  border:2px solid currentColor;border-inline-end-color:transparent;
+  border-radius:999px;animation:ym-vis-spin 760ms linear infinite
 }
 
-.ym-works-visibility-spinner {
-  width: 2.35rem;
-  height: 2.35rem;
-  border: 3px solid rgba(16, 185, 129, 0.2);
-  border-top-color: #34d399;
-  border-radius: 999px;
-  animation: ym-works-visibility-spin 760ms linear infinite;
+/* ── details button ── */
+.ym-works-visibility-details-button{
+  width:auto;min-width:78px;min-height:38px;border:1px solid #34d399;border-radius:11px;
+  background:#065f46;color:#fff;font-size:12.5px;font-weight:950;line-height:1.25;
+  padding:.45rem .65rem;cursor:pointer;
+  transition:background 160ms ease,border-color 160ms ease,box-shadow 160ms ease,transform 160ms ease
+}
+.ym-works-visibility-details-button:hover:not(:disabled){border-color:#6ee7b7;background:#047857;box-shadow:0 5px 14px rgba(16,185,129,.22);transform:translateY(-1px)}
+.ym-works-visibility-details-button:focus-visible{outline:3px solid rgba(45,212,191,.26);outline-offset:2px}
+.ym-works-visibility-details-button:disabled{border-color:#64748b;background:#334155;color:#f1f5f9;cursor:not-allowed;filter:grayscale(.2);opacity:.82}
+
+/* ── pagination ── */
+.ym-works-visibility-pagination{
+  display:flex;align-items:center;justify-content:space-between;gap:1rem;
+  border-top:1px solid var(--ym-soft-border);margin-top:.75rem;padding-top:.85rem
+}
+.ym-works-visibility-pagination>div{display:flex;align-items:baseline;gap:.45rem;color:var(--ym-muted);font-size:12px;font-weight:850}
+.ym-works-visibility-pagination>div strong{color:var(--ym-text);font-size:1.1rem;font-weight:950}
+.ym-works-visibility-pagination nav{display:flex;align-items:center;gap:.75rem}
+.ym-works-visibility-pagination nav span{color:var(--ym-muted);font-size:12px;font-weight:900}
+
+/* ── detail drawer ── */
+.ym-visibility-detail-backdrop{
+  position:fixed;inset:0;z-index:120;display:flex;justify-content:flex-end;
+  background:rgba(2,6,23,.68);backdrop-filter:blur(6px)
+}
+.ym-visibility-detail-drawer{
+  width:min(660px,100%);height:100dvh;overflow-y:auto;
+  border-inline-start:1px solid var(--ym-card-border);
+  background:var(--ym-dropdown-bg);box-shadow:-24px 0 64px rgba(2,6,23,.38);color:var(--ym-text)
+}
+.ym-visibility-detail-drawer__head{
+  position:sticky;top:0;z-index:4;display:flex;align-items:flex-start;
+  justify-content:space-between;gap:1rem;
+  border-bottom:1px solid var(--ym-soft-border);
+  background:color-mix(in srgb,var(--ym-dropdown-bg) 92%,transparent);
+  backdrop-filter:blur(18px);padding:1.2rem 1.35rem
+}
+.ym-visibility-detail-drawer__head span,.ym-visibility-detail-drawer__head code{display:block;color:var(--ym-muted);font-size:11px;font-weight:850}
+.ym-visibility-detail-drawer__head h2{color:var(--ym-text);font-size:1.35rem;font-weight:950;line-height:1.35;margin:.2rem 0}
+.ym-visibility-detail-drawer__close{
+  display:grid;flex:0 0 auto;width:42px;height:42px;place-items:center;
+  border:1px solid var(--ym-control-border);border-radius:14px;
+  background:var(--ym-control-bg);color:var(--ym-text);
+  font-size:1.45rem;line-height:1;cursor:pointer
+}
+.ym-visibility-detail-content{display:grid;gap:1rem;padding:1.25rem}
+.ym-visibility-detail-intro,.ym-visibility-detail-section{
+  border:1px solid var(--ym-soft-border);border-radius:22px;
+  background:var(--ym-card-bg);box-shadow:inset 0 1px 0 rgba(255,255,255,.07);padding:1rem
+}
+.ym-visibility-detail-intro>div{display:flex;flex-wrap:wrap;gap:.45rem}
+.ym-visibility-detail-intro h3{color:var(--ym-text);font-size:1.35rem;font-weight:950;line-height:1.45;margin:.8rem 0 .25rem}
+.ym-visibility-detail-intro code{color:#34d399;font-size:11px;overflow-wrap:anywhere}
+.ym-visibility-detail-intro p{color:var(--ym-muted);font-size:13px;font-weight:750;line-height:1.8;margin:.75rem 0 0}
+.ym-visibility-detail-section>header{margin-bottom:.8rem}
+.ym-visibility-detail-section>header h3{color:var(--ym-text);font-size:1rem;font-weight:950;margin:0}
+.ym-visibility-detail-section>header p{color:var(--ym-muted);font-size:11px;font-weight:750;line-height:1.65;margin:.25rem 0 0}
+
+/* ── access grid ── */
+.ym-visibility-detail-access-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.65rem}
+.ym-visibility-detail-access-grid>span{display:grid;gap:.22rem;border:1px solid var(--ym-soft-border);border-radius:15px;background:var(--ym-control-bg);color:var(--ym-muted);font-size:11px;font-weight:850;padding:.7rem}
+.ym-visibility-detail-access-grid>span strong{font-size:12px;font-weight:950}
+.ym-visibility-detail-access-grid>span.is-allowed strong{color:#34d399}
+.ym-visibility-detail-access-grid>span.is-denied strong{color:#94a3b8}
+
+/* ── detail grid ── */
+.ym-visibility-detail-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.65rem;margin:0}
+.ym-visibility-detail-grid.is-lifecycle{grid-template-columns:repeat(2,minmax(0,1fr))}
+.ym-visibility-detail-grid>div,.ym-visibility-detail-people article,.ym-visibility-detail-notes>div{
+  min-width:0;border:1px solid var(--ym-soft-border);border-radius:15px;
+  background:var(--ym-control-bg);padding:.7rem
+}
+.ym-visibility-detail-grid dt,.ym-visibility-detail-notes dt,.ym-visibility-detail-people span{color:var(--ym-muted);font-size:10px;font-weight:850}
+.ym-visibility-detail-grid dd,.ym-visibility-detail-notes dd{color:var(--ym-text);font-size:12px;font-weight:900;line-height:1.65;margin:.3rem 0 0;overflow-wrap:anywhere}
+
+/* ── people ── */
+.ym-visibility-detail-people{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.65rem}
+.ym-visibility-detail-people strong,.ym-visibility-detail-people small{display:block}
+.ym-visibility-detail-people strong{color:var(--ym-text);font-size:12px;font-weight:950;margin-top:.3rem}
+.ym-visibility-detail-people small{color:var(--ym-muted);font-size:10px;margin-top:.18rem}
+
+/* ── media ── */
+.ym-visibility-detail-media{
+  display:flex;align-items:center;justify-content:space-between;gap:1rem;
+  border:1px solid var(--ym-soft-border);border-radius:15px;
+  background:var(--ym-control-bg);color:var(--ym-muted);font-size:12px;font-weight:850;padding:.8rem
+}
+.ym-visibility-detail-media strong.is-present{color:#34d399}
+.ym-visibility-detail-media strong.is-absent{color:#94a3b8}
+
+/* ── notes ── */
+.ym-visibility-detail-notes{display:grid;gap:.65rem;margin:0}
+.ym-visibility-detail-section.is-private{border-color:color-mix(in srgb,#a78bfa 30%,var(--ym-soft-border))}
+.ym-visibility-detail-unavailable{
+  border:1px dashed var(--ym-control-border);border-radius:15px;
+  background:var(--ym-control-bg);color:var(--ym-muted);
+  font-size:12px;font-weight:850;line-height:1.7;margin:0;padding:.8rem
 }
 
-.ym-works-visibility-pagination {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-top: 1rem;
+/* ── action dialog ── */
+.ym-visibility-action-backdrop{
+  position:fixed;inset:0;z-index:140;display:grid;place-items:center;
+  background:rgba(2,6,23,.72);backdrop-filter:blur(7px);padding:1rem
 }
-
-.ym-works-visibility-pagination > div {
-  display: flex;
-  align-items: baseline;
-  gap: 0.45rem;
-  color: var(--ym-muted);
-  font-size: 12px;
-  font-weight: 850;
+.ym-visibility-action-dialog{
+  width:min(520px,100%);border:1px solid var(--ym-card-border);border-radius:24px;
+  background:var(--ym-dropdown-bg);box-shadow:0 28px 80px rgba(2,6,23,.48);color:var(--ym-text);padding:1.35rem
 }
-
-.ym-works-visibility-pagination > div strong {
-  color: var(--ym-text);
-  font-size: 1.1rem;
-  font-weight: 950;
+.ym-visibility-action-dialog__eyebrow{color:#a78bfa;font-size:11px;font-weight:950}
+.ym-visibility-action-dialog h2{font-size:1.3rem;font-weight:950;margin:.35rem 0 0}
+.ym-visibility-action-dialog>p{color:var(--ym-muted);font-size:13px;font-weight:800;line-height:1.75;margin:.65rem 0 0}
+.ym-visibility-action-dialog__work{
+  display:grid;gap:.22rem;border:1px solid var(--ym-soft-border);border-radius:16px;
+  background:var(--ym-control-bg);margin-top:1rem;padding:.85rem
 }
+.ym-visibility-action-dialog__work span,.ym-visibility-action-dialog__work code{color:var(--ym-muted);font-size:10px;font-weight:850}
+.ym-visibility-action-dialog__work strong{color:var(--ym-text);font-size:13px;font-weight:950}
+.ym-visibility-action-dialog__buttons{display:flex;justify-content:flex-end;gap:.65rem;margin-top:1rem}
 
-.ym-works-visibility-pagination nav {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
+/* ── animation ── */
+@keyframes ym-vis-spin{to{transform:rotate(360deg)}}
+
+/* ── light mode contrast and local watermark restraint ── */
+:global(.ym-dashboard-light) .ym-works-visibility-filter-card,
+:global(.ym-dashboard-light) .ym-works-visibility-table-card{
+  border-color:color-mix(in srgb,var(--ym-control-border) 82%,#64748b);
+  background:color-mix(in srgb,var(--ym-card-bg) 88%,rgba(255,255,255,.86));
+  backdrop-filter:blur(20px) saturate(118%)
 }
-
-.ym-works-visibility-pagination nav span {
-  color: var(--ym-muted);
-  font-size: 12px;
-  font-weight: 900;
+:global(.ym-dashboard-light) .ym-works-visibility-table-wrap,
+:global(.ym-dashboard-light) .ym-works-visibility-table{
+  border-color:color-mix(in srgb,var(--ym-control-border) 78%,#64748b);
+  background:color-mix(in srgb,var(--ym-card-bg) 91%,rgba(236,253,245,.82))
 }
-
-.ym-visibility-detail-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 120;
-  display: flex;
-  justify-content: flex-end;
-  background: rgba(2, 6, 23, 0.68);
-  backdrop-filter: blur(6px);
+:global(.ym-dashboard-light) .ym-works-visibility-table th{
+  border-bottom-color:color-mix(in srgb,var(--ym-control-border) 72%,#475569);
+  background:color-mix(in srgb,var(--ym-dropdown-bg) 89%,#e8f2ec);
+  box-shadow:0 1px 0 color-mix(in srgb,var(--ym-control-border) 70%,#64748b),0 8px 18px rgba(15,23,42,.07);
+  color:color-mix(in srgb,var(--ym-text) 94%,#0f172a)
 }
-
-.ym-visibility-action-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 140;
-  display: grid;
-  place-items: center;
-  background: rgba(2, 6, 23, 0.72);
-  backdrop-filter: blur(7px);
-  padding: 1rem;
+:global(.ym-dashboard-light) .ym-works-visibility-table td{
+  border-bottom-color:color-mix(in srgb,var(--ym-soft-border) 65%,#94a3b8);
+  color:color-mix(in srgb,var(--ym-muted) 78%,#334155)
 }
-
-.ym-visibility-action-dialog {
-  width: min(520px, 100%);
-  border: 1px solid var(--ym-card-border);
-  border-radius: 24px;
-  background: var(--ym-dropdown-bg);
-  box-shadow: 0 28px 80px rgba(2, 6, 23, 0.48);
-  color: var(--ym-text);
-  padding: 1.35rem;
+:global(.ym-dashboard-light) .ym-works-visibility-table td.is-title small,
+:global(.ym-dashboard-light) .ym-works-visibility-cell-stack.is-metrics small,
+:global(.ym-dashboard-light) .ym-works-visibility-cell-stack.is-dates time,
+:global(.ym-dashboard-light) .ym-works-visibility-state-text{
+  color:color-mix(in srgb,var(--ym-muted) 70%,#334155)
 }
-
-.ym-visibility-action-dialog__eyebrow {
-  color: #a78bfa;
-  font-size: 11px;
-  font-weight: 950;
+:global(.ym-dashboard-light) .ym-works-visibility-badge.is-approved,
+:global(.ym-dashboard-light) .ym-works-visibility-badge.is-published,
+:global(.ym-dashboard-light) .ym-works-visibility-badge.is-public{
+  border-color:rgba(5,150,105,.48);background:rgba(5,150,105,.13);color:#047857
 }
-
-.ym-visibility-action-dialog h2 {
-  font-size: 1.3rem;
-  font-weight: 950;
-  margin: 0.35rem 0 0;
+:global(.ym-dashboard-light) .ym-works-visibility-badge.is-draft,
+:global(.ym-dashboard-light) .ym-works-visibility-badge.is-hidden,
+:global(.ym-dashboard-light) .ym-works-visibility-badge.is-archived,
+:global(.ym-dashboard-light) .ym-works-visibility-flag.is-neutral{
+  border-color:rgba(100,116,139,.4);background:rgba(100,116,139,.11);color:#475569
 }
-
-.ym-visibility-action-dialog > p {
-  color: var(--ym-muted);
-  font-size: 13px;
-  font-weight: 800;
-  line-height: 1.75;
-  margin: 0.65rem 0 0;
+:global(.ym-dashboard-light) .ym-works-visibility-flag.is-pinned{
+  border-color:rgba(15,118,110,.44);background:rgba(15,118,110,.12);color:#0f766e
 }
-
-.ym-visibility-action-dialog__work {
-  display: grid;
-  gap: 0.22rem;
-  border: 1px solid var(--ym-soft-border);
-  border-radius: 16px;
-  background: var(--ym-control-bg);
-  margin-top: 1rem;
-  padding: 0.85rem;
+:global(.ym-dashboard-light) .ym-works-visibility-cell-stack.is-metrics small,
+:global(.ym-dashboard-light) .ym-works-visibility-cell-stack.is-dates time b{color:#475569}
+:global(.ym-dashboard-light) .ym-works-visibility-details-button{
+  border-color:rgba(5,150,105,.5);background:rgba(5,150,105,.13);color:#047857
 }
+:global(.ym-dashboard-light:has(.ym-works-visibility-page) .ym-background-watermark .ym-watermark-logo){opacity:.04}
+:global(.ym-dashboard-light:has(.ym-works-visibility-page) .ym-background-watermark .ym-watermark-name){opacity:.03}
 
-.ym-visibility-action-dialog__work span,
-.ym-visibility-action-dialog__work code {
-  color: var(--ym-muted);
-  font-size: 10px;
-  font-weight: 850;
+/* ── responsive ── */
+@media(min-width:1760px){
+  .ym-works-visibility-page :deep(.ym-admin-metrics){grid-template-columns:repeat(8,minmax(0,1fr))}
 }
-
-.ym-visibility-action-dialog__work strong {
-  color: var(--ym-text);
-  font-size: 13px;
-  font-weight: 950;
+@media(max-width:1280px){
+  .ym-works-visibility-page :deep(.ym-admin-metrics){grid-template-columns:repeat(4,minmax(0,1fr))}
+  .ym-works-visibility-filter-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
 }
-
-.ym-visibility-action-dialog__buttons {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.65rem;
-  margin-top: 1rem;
+@media(max-width:1050px){
+  .ym-works-visibility-page :deep(.ym-admin-metrics){grid-template-columns:repeat(3,minmax(0,1fr))}
 }
-
-.ym-visibility-detail-drawer {
-  width: min(660px, 100%);
-  height: 100dvh;
-  overflow-y: auto;
-  border-inline-start: 1px solid var(--ym-card-border);
-  background: var(--ym-dropdown-bg);
-  box-shadow: -24px 0 64px rgba(2, 6, 23, 0.38);
-  color: var(--ym-text);
+@media(max-width:900px){
+  .ym-works-visibility-filter-card>header,.ym-works-visibility-table-card__head,.ym-works-visibility-pagination{flex-direction:column;align-items:stretch}
+  .ym-works-visibility-page :deep(.ym-admin-metrics){grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ym-works-visibility-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ym-works-visibility-pagination nav{justify-content:space-between}
+  .ym-works-visibility-table th{position:static;box-shadow:0 1px 0 var(--ym-control-border)}
 }
-
-.ym-visibility-detail-drawer__head {
-  position: sticky;
-  top: 0;
-  z-index: 4;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  border-bottom: 1px solid var(--ym-soft-border);
-  background: color-mix(in srgb, var(--ym-dropdown-bg) 92%, transparent);
-  backdrop-filter: blur(18px);
-  padding: 1.2rem 1.35rem;
-}
-
-.ym-visibility-detail-drawer__head span,
-.ym-visibility-detail-drawer__head code {
-  display: block;
-  color: var(--ym-muted);
-  font-size: 11px;
-  font-weight: 850;
-}
-
-.ym-visibility-detail-drawer__head h2 {
-  color: var(--ym-text);
-  font-size: 1.35rem;
-  font-weight: 950;
-  line-height: 1.35;
-  margin: 0.2rem 0;
-}
-
-.ym-visibility-detail-drawer__close {
-  display: grid;
-  flex: 0 0 auto;
-  width: 42px;
-  height: 42px;
-  place-items: center;
-  border: 1px solid var(--ym-control-border);
-  border-radius: 14px;
-  background: var(--ym-control-bg);
-  color: var(--ym-text);
-  font-size: 1.45rem;
-  line-height: 1;
-}
-
-.ym-visibility-detail-content {
-  display: grid;
-  gap: 1rem;
-  padding: 1.25rem;
-}
-
-.ym-visibility-detail-intro,
-.ym-visibility-detail-section {
-  border: 1px solid var(--ym-soft-border);
-  border-radius: 22px;
-  background: var(--ym-card-bg);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
-  padding: 1rem;
-}
-
-.ym-visibility-detail-intro > div {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-}
-
-.ym-visibility-detail-intro h3 {
-  color: var(--ym-text);
-  font-size: 1.35rem;
-  font-weight: 950;
-  line-height: 1.45;
-  margin: 0.8rem 0 0.25rem;
-}
-
-.ym-visibility-detail-intro code {
-  color: #34d399;
-  font-size: 11px;
-  overflow-wrap: anywhere;
-}
-
-.ym-visibility-detail-intro p {
-  color: var(--ym-muted);
-  font-size: 13px;
-  font-weight: 750;
-  line-height: 1.8;
-  margin: 0.75rem 0 0;
-}
-
-.ym-visibility-detail-section > header {
-  margin-bottom: 0.8rem;
-}
-
-.ym-visibility-detail-section > header h3 {
-  color: var(--ym-text);
-  font-size: 1rem;
-  font-weight: 950;
-  margin: 0;
-}
-
-.ym-visibility-detail-section > header p {
-  color: var(--ym-muted);
-  font-size: 11px;
-  font-weight: 750;
-  line-height: 1.65;
-  margin: 0.25rem 0 0;
-}
-
-.ym-visibility-detail-access-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.65rem;
-}
-
-.ym-visibility-detail-access-grid > span {
-  display: grid;
-  gap: 0.22rem;
-  border: 1px solid var(--ym-soft-border);
-  border-radius: 15px;
-  background: var(--ym-control-bg);
-  color: var(--ym-muted);
-  font-size: 11px;
-  font-weight: 850;
-  padding: 0.7rem;
-}
-
-.ym-visibility-detail-access-grid > span strong {
-  font-size: 12px;
-  font-weight: 950;
-}
-
-.ym-visibility-detail-access-grid > span.is-allowed strong {
-  color: #34d399;
-}
-
-.ym-visibility-detail-access-grid > span.is-denied strong {
-  color: #94a3b8;
-}
-
-.ym-visibility-detail-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.65rem;
-  margin: 0;
-}
-
-.ym-visibility-detail-grid > div,
-.ym-visibility-detail-people article,
-.ym-visibility-detail-notes > div {
-  min-width: 0;
-  border: 1px solid var(--ym-soft-border);
-  border-radius: 15px;
-  background: var(--ym-control-bg);
-  padding: 0.7rem;
-}
-
-.ym-visibility-detail-grid dt,
-.ym-visibility-detail-notes dt,
-.ym-visibility-detail-people span {
-  color: var(--ym-muted);
-  font-size: 10px;
-  font-weight: 850;
-}
-
-.ym-visibility-detail-grid dd,
-.ym-visibility-detail-notes dd {
-  color: var(--ym-text);
-  font-size: 12px;
-  font-weight: 900;
-  line-height: 1.65;
-  margin: 0.3rem 0 0;
-  overflow-wrap: anywhere;
-}
-
-.ym-visibility-detail-grid.is-lifecycle {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.ym-visibility-detail-people {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.65rem;
-}
-
-.ym-visibility-detail-people strong,
-.ym-visibility-detail-people small {
-  display: block;
-}
-
-.ym-visibility-detail-people strong {
-  color: var(--ym-text);
-  font-size: 12px;
-  font-weight: 950;
-  margin-top: 0.3rem;
-}
-
-.ym-visibility-detail-people small {
-  color: var(--ym-muted);
-  font-size: 10px;
-  margin-top: 0.18rem;
-}
-
-.ym-visibility-detail-media {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  border: 1px solid var(--ym-soft-border);
-  border-radius: 15px;
-  background: var(--ym-control-bg);
-  color: var(--ym-muted);
-  font-size: 12px;
-  font-weight: 850;
-  padding: 0.8rem;
-}
-
-.ym-visibility-detail-media strong.is-present {
-  color: #34d399;
-}
-
-.ym-visibility-detail-media strong.is-absent {
-  color: #94a3b8;
-}
-
-.ym-visibility-detail-notes {
-  display: grid;
-  gap: 0.65rem;
-  margin: 0;
-}
-
-.ym-visibility-detail-section.is-private {
-  border-color: color-mix(in srgb, #a78bfa 30%, var(--ym-soft-border));
-}
-
-.ym-visibility-detail-unavailable {
-  border: 1px dashed var(--ym-control-border);
-  border-radius: 15px;
-  background: var(--ym-control-bg);
-  color: var(--ym-muted);
-  font-size: 12px;
-  font-weight: 850;
-  line-height: 1.7;
-  margin: 0;
-  padding: 0.8rem;
-}
-
-@keyframes ym-works-visibility-spin {
-  to {
-    transform: rotate(360deg);
+@media(max-width:760px){
+  .ym-works-visibility-table thead{display:none}
+  .ym-works-visibility-table,.ym-works-visibility-table tbody{display:grid;width:100%}
+  .ym-works-visibility-table tbody{gap:.8rem}
+  .ym-works-visibility-table tbody tr{
+    display:grid;width:100%;overflow:hidden;border:1px solid var(--ym-soft-border);
+    border-radius:18px;background:color-mix(in srgb,var(--ym-card-bg) 97%,#059669 3%)
   }
+  .ym-works-visibility-table tbody td{
+    display:grid;width:100%;grid-template-columns:minmax(7.5rem,38%) minmax(0,1fr);
+    align-items:center;gap:.75rem;border-block-end:1px solid var(--ym-soft-border);text-align:start
+  }
+  .ym-works-visibility-table tbody td::before{content:attr(data-label);color:var(--ym-muted);font-size:.75rem;font-weight:850}
+  .ym-works-visibility-table tbody td.is-title,.ym-works-visibility-table tbody td.is-visibility-actions,.ym-works-visibility-table tbody td.is-action,.ym-works-visibility-table tbody td.is-sequence{width:100%}
+  .ym-works-visibility-table tbody td.is-title{display:block}
+  .ym-works-visibility-table tbody td.is-title::before{display:block;margin-block-end:.4rem}
+  .ym-works-visibility-filter-grid{grid-template-columns:1fr}
+  .ym-works-visibility-filter-toolbar{align-items:stretch;flex-direction:column}
+  .ym-works-visibility-filter-actions{flex-direction:column}
+  .ym-works-visibility-filter-actions .ym-works-visibility-button{width:100%}
+  .ym-works-visibility-pagination nav{display:grid;grid-template-columns:1fr;text-align:center}
+  .ym-visibility-detail-drawer__head,.ym-visibility-detail-content{padding-inline:1rem}
+  .ym-visibility-detail-access-grid,.ym-visibility-detail-grid,.ym-visibility-detail-grid.is-lifecycle,.ym-visibility-detail-people{grid-template-columns:1fr}
 }
-
-@media (max-width: 1280px) {
-  .ym-works-visibility-filter-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
+@media(max-width:640px){
+  .ym-works-visibility-page{font-size:14px}
+  .ym-works-visibility-page :deep(.ym-admin-metrics){grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ym-works-visibility-access-state{border-radius:22px}
+  .ym-works-visibility-notice{flex-direction:column}
+  .ym-works-visibility-action-status,.ym-visibility-action-dialog__buttons{flex-direction:column;align-items:stretch}
+  .ym-visibility-action-dialog__buttons .ym-works-visibility-button{width:100%}
 }
-
-@media (max-width: 900px) {
-  .ym-works-visibility-hero__content,
-  .ym-works-visibility-filter-card > header,
-  .ym-works-visibility-table-card__head,
-  .ym-works-visibility-pagination {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .ym-works-visibility-hero__summary {
-    min-width: 0;
-  }
-
-  .ym-works-visibility-summary-grid,
-  .ym-works-visibility-filter-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .ym-works-visibility-pagination nav {
-    justify-content: space-between;
-  }
+@media(max-width:430px){
+  .ym-works-visibility-page :deep(.ym-admin-metrics){grid-template-columns:1fr}
 }
-
-@media (max-width: 640px) {
-  .ym-works-visibility-page {
-    font-size: 14px;
-  }
-
-  .ym-works-visibility-hero,
-  .ym-works-visibility-filter-card,
-  .ym-works-visibility-table-card,
-  .ym-works-visibility-access-state {
-    border-radius: 22px;
-  }
-
-  .ym-works-visibility-hero h1 {
-    font-size: 2rem;
-  }
-
-  .ym-works-visibility-notice {
-    flex-direction: column;
-  }
-
-  .ym-works-visibility-action-status,
-  .ym-visibility-action-dialog__buttons {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .ym-visibility-action-dialog__buttons .ym-works-visibility-button {
-    width: 100%;
-  }
-
-  .ym-works-visibility-summary-grid,
-  .ym-works-visibility-filter-grid,
-  .ym-visibility-detail-access-grid,
-  .ym-visibility-detail-grid,
-  .ym-visibility-detail-grid.is-lifecycle,
-  .ym-visibility-detail-people {
-    grid-template-columns: 1fr;
-  }
-
-  .ym-works-visibility-filter-grid label.is-search {
-    grid-column: auto;
-  }
-
-  .ym-works-visibility-filter-actions,
-  .ym-works-visibility-filter-actions .ym-works-visibility-button {
-    width: 100%;
-  }
-
-  .ym-works-visibility-pagination nav {
-    display: grid;
-    grid-template-columns: 1fr;
-    text-align: center;
-  }
-
-  .ym-visibility-detail-drawer__head,
-  .ym-visibility-detail-content {
-    padding-inline: 1rem;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ym-works-visibility-spinner {
-    animation-duration: 1.8s;
-  }
-
-  .ym-works-visibility-button,
-  .ym-works-visibility-details-button,
-  .ym-works-visibility-action-button,
-  .ym-works-visibility-table tbody tr {
-    transition: none;
-  }
+@media(prefers-reduced-motion:reduce){
+  .ym-works-visibility-spinner{animation-duration:1.8s}
+  .ym-works-visibility-button,.ym-works-visibility-details-button,.ym-works-visibility-icon-button,.ym-works-visibility-table tbody tr{transition:none}
 }
 </style>

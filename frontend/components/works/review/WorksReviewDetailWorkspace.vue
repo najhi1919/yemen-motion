@@ -2,7 +2,7 @@
   <Teleport to="body">
     <div
       class="ym-review-workspace-backdrop"
-      :class="dashboardTheme === 'light' ? 'is-light' : 'is-dark'"
+      :class="[dashboardTheme === 'light' ? 'is-light' : 'is-dark', `is-${section}`]"
       :dir="locale === 'ar' ? 'rtl' : 'ltr'"
       @mousedown.self="$emit('close')"
       @keydown="trapFocus"
@@ -163,6 +163,10 @@
             <main class="ym-review-inspector">
               <section class="ym-review-inspector__section">
                 <header><span>{{ text.summaryEyebrow }}</span><h3>{{ text.summary }}</h3></header>
+                <p v-if="contextNote" class="ym-review-inspector__context-note">
+                  <strong>{{ text.visibilityNotice }}</strong>
+                  {{ contextNote }}
+                </p>
                 <h4 dir="auto">{{ detail.work.title }}</h4>
                 <p v-if="detail.work.summary" dir="auto">{{ detail.work.summary }}</p>
                 <p v-else class="is-muted">{{ text.noSummary }}</p>
@@ -267,6 +271,8 @@ const props = defineProps<{
   loading: boolean
   error: string | null
   locale: 'ar' | 'en'
+  contextNote?: string | null
+  section?: 'review' | 'visibility'
 }>()
 const emit = defineEmits<{ close: []; retry: [] }>()
 
@@ -287,6 +293,8 @@ const previewErrors = ref<Record<number, boolean>>({})
 const zoom = ref(1)
 const controllers = new Map<string, AbortController>()
 const titleId = `ym-review-workspace-title-${props.workId}`
+const section = computed(() => props.section ?? 'review')
+const contextNote = computed(() => props.contextNote ?? null)
 let mediaRevision = 0
 let previousBodyOverflow = ''
 
@@ -299,6 +307,7 @@ const text = computed(() => props.locale === 'ar' ? {
   previewFailed: 'تعذر تحميل المعاينة المحمية', retryPreview: 'إعادة تحميل المعاينة', previewLoading: 'جارٍ تجهيز المعاينة…',
   zoomIn: 'تكبير الصورة', zoomOut: 'تصغير الصورة', dimensions: 'الأبعاد', duration: 'المدة', previous: 'الوسيط السابق', next: 'الوسيط التالي',
   summaryEyebrow: 'الأولوية', summary: 'ملخص المراجعة', noSummary: 'لا يوجد ملخص مسجل.', status: 'الحالة',
+  visibilityNotice: 'تنبيه الظهور:',
   submittedAt: 'أرسل للمراجعة', designer: 'المصمم', reviewer: 'المراجع', category: 'التصنيف',
   quickEyebrow: 'نظرة سريعة', quickFacts: 'حقائق سريعة', mediaType: 'نوع الوسائط', price: 'السعر',
   delivery: 'مدة التسليم', featured: 'مميز', pinned: 'مثبت', notesEyebrow: 'السياق', notes: 'ملاحظات المراجعة',
@@ -319,6 +328,7 @@ const text = computed(() => props.locale === 'ar' ? {
   previewFailed: 'Protected preview could not be loaded', retryPreview: 'Reload preview', previewLoading: 'Preparing preview…',
   zoomIn: 'Zoom image in', zoomOut: 'Zoom image out', dimensions: 'Dimensions', duration: 'Duration', previous: 'Previous media', next: 'Next media',
   summaryEyebrow: 'Priority', summary: 'Review summary', noSummary: 'No summary is recorded.', status: 'Status',
+  visibilityNotice: 'Visibility notice:',
   submittedAt: 'Submitted for review', designer: 'Designer', reviewer: 'Reviewer', category: 'Category',
   quickEyebrow: 'At a glance', quickFacts: 'Quick facts', mediaType: 'Media type', price: 'Price',
   delivery: 'Delivery time', featured: 'Featured', pinned: 'Pinned', notesEyebrow: 'Context', notes: 'Review notes',
@@ -371,9 +381,15 @@ const mediaTypeLabel = (value: string | null): string => ({
   image: text.value.image, video: text.value.video, gallery: text.value.gallery,
 }[value || ''] || text.value.unknown)
 const statusLabel = (value: string): string => ({
+  draft: props.locale === 'ar' ? 'مسودة' : 'Draft',
   submitted: props.locale === 'ar' ? 'قيد المراجعة' : 'Submitted',
   in_review: props.locale === 'ar' ? 'تحت المراجعة' : 'In review',
   changes_requested: props.locale === 'ar' ? 'تعديلات مطلوبة' : 'Changes requested',
+  approved: props.locale === 'ar' ? 'معتمد' : 'Approved',
+  published: props.locale === 'ar' ? 'منشور' : 'Published',
+  rejected: props.locale === 'ar' ? 'مرفوض' : 'Rejected',
+  hidden: props.locale === 'ar' ? 'مخفي' : 'Hidden',
+  archived: props.locale === 'ar' ? 'مؤرشف' : 'Archived',
 }[value] || value)
 const dimensions = (item: MediaItem): string => item.width && item.height
   ? `${formatNumber(item.width)} × ${formatNumber(item.height)}`
@@ -543,4 +559,10 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .ym-review-workspace-backdrop{--ym-text:#f0f6ff;--ym-muted:#cbd5e1;--ym-card-bg:#111827;--ym-dropdown-bg:#0f172a;--ym-control-bg:#172033;--ym-control-border:rgba(148,163,184,.34);--ym-card-border:rgba(148,163,184,.3);--ym-soft-border:rgba(148,163,184,.22);position:fixed;inset:0;z-index:var(--ym-admin-layer-detail,1500);display:flex;justify-content:flex-start;overflow:hidden;background:rgba(2,6,23,.7);backdrop-filter:blur(7px)}.ym-review-workspace-backdrop.is-light{--ym-text:#182033;--ym-muted:#59647a;--ym-card-bg:#fff;--ym-dropdown-bg:#fff;--ym-control-bg:#f3f0fa;--ym-control-border:rgba(91,78,132,.26);--ym-card-border:rgba(91,78,132,.22);--ym-soft-border:rgba(91,78,132,.17);background:rgba(30,24,54,.32)}.ym-review-workspace{display:grid;width:clamp(760px,58vw,980px);max-width:100vw;height:100dvh;grid-template-rows:auto minmax(0,1fr);overflow:hidden;border-inline-end:1px solid color-mix(in srgb,var(--ym-admin-section-accent,#6366f1) 24%,var(--ym-card-border));color:var(--ym-text);background:color-mix(in srgb,var(--ym-dropdown-bg) 97%,#6366f1 3%);box-shadow:24px 0 70px rgba(2,6,23,.45)}.ym-review-workspace__head{position:relative;z-index:3;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;border-block-end:1px solid var(--ym-soft-border);padding:14px 18px;background:color-mix(in srgb,var(--ym-dropdown-bg) 94%,transparent);backdrop-filter:blur(16px)}.ym-review-workspace__heading{display:grid;min-width:0;gap:3px}.ym-review-workspace__readonly{width:max-content;border:1px solid color-mix(in srgb,#6366f1 26%,var(--ym-soft-border));border-radius:999px;padding:3px 8px;color:#818cf8;background:color-mix(in srgb,#6366f1 8%,transparent);font-size:11px;font-weight:900}.ym-review-workspace__head h2{max-width:720px;margin:0;overflow:hidden;color:var(--ym-text);font-size:20px;font-weight:950;line-height:1.4;text-overflow:ellipsis;white-space:nowrap}.ym-review-workspace__head-meta{display:flex;flex-wrap:wrap;gap:5px}.ym-review-workspace__head-meta span{border-radius:999px;padding:3px 7px;color:var(--ym-muted);background:var(--ym-control-bg);font-size:11.5px;font-weight:800}.ym-review-workspace__close{display:grid;width:44px;height:44px;flex:0 0 44px;place-items:center;border:1px solid var(--ym-control-border);border-radius:13px;color:var(--ym-text);background:var(--ym-control-bg);font-size:24px}.ym-review-workspace__close:focus-visible,.ym-review-workspace button:focus-visible,.ym-review-workspace summary:focus-visible{outline:3px solid color-mix(in srgb,#6366f1 38%,transparent);outline-offset:2px}.ym-review-workspace__scroll{min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:16px}.ym-review-workspace__grid{display:grid;grid-template-columns:minmax(0,1.32fr) minmax(300px,1fr);align-items:start;gap:16px}.ym-review-preview{position:sticky;top:0;display:grid;min-width:0;gap:12px;border:1px solid var(--ym-soft-border);border-radius:18px;padding:14px;background:color-mix(in srgb,var(--ym-card-bg) 96%,#6366f1 4%);box-shadow:inset 0 1px rgba(255,255,255,.07)}.ym-review-preview>header{display:flex;align-items:center;justify-content:space-between;gap:10px}.ym-review-preview>header span,.ym-review-inspector__section>header span{color:#818cf8;font-size:11px;font-weight:900}.ym-review-preview h3,.ym-review-inspector h3{margin:2px 0 0;color:var(--ym-text);font-size:16px}.ym-review-preview__stage{position:relative;display:grid;min-height:300px;max-height:520px;overflow:hidden;place-items:center;border:1px solid color-mix(in srgb,#6366f1 18%,var(--ym-control-border));border-radius:15px;background:#050914}.ym-review-preview__stage>img,.ym-review-preview__stage>video{width:100%;height:100%;max-height:520px;object-fit:contain;transition:transform .18s ease}.ym-review-preview__loading,.ym-review-preview__message,.ym-review-preview__processing{display:grid;width:100%;min-height:280px;place-items:center;align-content:center;gap:9px;padding:20px;color:#cbd5e1;text-align:center}.ym-review-preview__message>span,.ym-review-preview__processing>span{font-size:34px;color:#818cf8}.ym-review-preview__message p,.ym-review-preview__processing p{max-width:420px;margin:0;color:#94a3b8;font-size:13px;line-height:1.6}.ym-review-preview__message.is-error>span,.ym-review-preview__message.is-error>strong{color:#fb7185}.ym-review-preview__processing>div{width:min(320px,88%);height:8px;overflow:hidden;border-radius:999px;background:rgba(148,163,184,.18)}.ym-review-preview__processing i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#6366f1,#8b5cf6)}.ym-review-preview__processing b{color:#c4b5fd;font-variant-numeric:tabular-nums}.ym-review-workspace__skeleton{display:block;width:min(520px,90%);height:18px;border-radius:8px;background:linear-gradient(100deg,rgba(148,163,184,.1),rgba(148,163,184,.22),rgba(148,163,184,.1));background-size:200% 100%;animation:ym-review-skeleton 1.2s ease infinite}.ym-review-workspace__skeleton.is-preview{width:100%;height:260px}.ym-review-workspace__skeleton.is-short{width:44%}.ym-review-workspace__state{display:grid;min-height:0;overflow-y:auto;place-items:center;align-content:center;gap:12px;padding:24px;text-align:center}.ym-review-workspace__state.is-error>span{font-size:36px;color:#fb7185}.ym-review-workspace__state p{max-width:520px;margin:0;color:var(--ym-muted)}.ym-review-preview__toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px}.ym-review-preview__toolbar>div{display:flex;align-items:center;gap:7px}.ym-review-preview__toolbar button,.ym-review-preview__navigation>button{display:grid;width:38px;height:38px;place-items:center;border:1px solid var(--ym-control-border);border-radius:10px;color:var(--ym-text);background:var(--ym-control-bg);font-size:18px}.ym-review-preview__toolbar dl{display:flex;gap:12px;margin:0}.ym-review-preview__toolbar dl div{display:grid}.ym-review-preview__toolbar dt{color:var(--ym-muted);font-size:10px}.ym-review-preview__toolbar dd{margin:0;color:var(--ym-text);font-size:12px;font-weight:850}.ym-review-preview__navigation{display:grid;grid-template-columns:38px minmax(0,1fr) 38px;align-items:center;gap:8px}.ym-review-preview__thumbs{display:grid;grid-template-columns:repeat(auto-fit,minmax(54px,1fr));gap:7px}.ym-review-preview__thumbs button{display:grid;min-width:0;aspect-ratio:16/10;overflow:hidden;place-items:center;border:1px solid var(--ym-control-border);border-radius:9px;color:var(--ym-muted);background:#080d19}.ym-review-preview__thumbs button.is-selected{border-color:#818cf8;box-shadow:0 0 0 2px color-mix(in srgb,#6366f1 24%,transparent)}.ym-review-preview__thumbs img{width:100%;height:100%;object-fit:cover}.ym-review-preview__filename{margin:0;overflow:hidden;color:var(--ym-muted);font-size:12px;text-align:start;text-overflow:ellipsis;unicode-bidi:plaintext;white-space:nowrap}.ym-review-inspector{display:grid;min-width:0;gap:12px}.ym-review-inspector__section,.ym-review-inspector__disclosure{border:1px solid var(--ym-soft-border);border-radius:15px;padding:13px;background:color-mix(in srgb,var(--ym-card-bg) 97%,#6366f1 3%)}.ym-review-inspector__section>header{margin-block-end:10px}.ym-review-inspector__section h4{margin:0 0 7px;color:var(--ym-text);font-size:16px;line-height:1.5}.ym-review-inspector__section>p{margin:0;color:var(--ym-text);font-size:13.5px;line-height:1.75}.ym-review-inspector .is-muted{color:var(--ym-muted)}.ym-review-inspector__summary,.ym-review-inspector__facts,.ym-review-inspector__notes,.ym-review-inspector__permissions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:11px 0 0}.ym-review-inspector dl>div{min-width:0}.ym-review-inspector dt{color:var(--ym-muted);font-size:11px;font-weight:800}.ym-review-inspector dd{margin:3px 0 0;color:var(--ym-text);font-size:12.5px;font-weight:850;overflow-wrap:anywhere}.ym-review-inspector__facts>div{border-radius:10px;padding:8px;background:var(--ym-control-bg)}.ym-review-inspector__notes{grid-template-columns:1fr}.ym-review-inspector__notes>div{border-inline-start:3px solid #818cf8;padding-inline-start:9px}.ym-review-inspector__notes dd{line-height:1.65}.ym-review-inspector__disclosure{padding:0;overflow:hidden}.ym-review-inspector__disclosure summary{min-height:46px;padding:12px 13px;color:var(--ym-text);font-size:13px;font-weight:900;cursor:pointer}.ym-review-inspector__disclosure[open] summary{border-block-end:1px solid var(--ym-soft-border)}.ym-review-inspector__disclosure>dl,.ym-review-inspector__disclosure>ol{margin:0;padding:12px 13px}.ym-review-inspector__timeline{display:grid;gap:10px;list-style:none}.ym-review-inspector__timeline li{display:grid;grid-template-columns:24px minmax(0,1fr);gap:8px}.ym-review-inspector__timeline li>span{display:grid;width:22px;height:22px;place-items:center;border-radius:50%;color:#a5b4fc;background:color-mix(in srgb,#6366f1 12%,transparent);font-size:10px}.ym-review-inspector__timeline li div{display:grid}.ym-review-inspector__timeline strong{font-size:12.5px}.ym-review-inspector__timeline time{direction:ltr;unicode-bidi:isolate;color:var(--ym-muted);font-size:11.5px}.ym-review-inspector__permissions dd{color:#818cf8}.ym-review-workspace__state .ym-admin-button,.ym-review-preview__message .ym-admin-button{min-height:42px}.ym-review-workspace__head-meta,.ym-review-preview__toolbar,.ym-review-inspector time{font-variant-numeric:tabular-nums}@keyframes ym-review-skeleton{to{background-position:-200% 0}}@media(max-width:1100px){.ym-review-workspace{width:min(88vw,980px)}.ym-review-workspace__grid{grid-template-columns:1fr}.ym-review-preview{position:relative}.ym-review-preview__stage{min-height:340px}}@media(max-width:700px){.ym-review-workspace{width:100vw;max-width:none;border:0}.ym-review-workspace__head{padding:12px max(12px,env(safe-area-inset-right)) 12px max(12px,env(safe-area-inset-left))}.ym-review-workspace__head h2{font-size:18px}.ym-review-workspace__scroll{padding:12px;padding-block-end:max(18px,env(safe-area-inset-bottom))}.ym-review-preview,.ym-review-inspector__section{border-radius:14px}.ym-review-preview__stage{min-height:240px}.ym-review-preview__toolbar{align-items:flex-start;flex-direction:column}.ym-review-inspector__summary,.ym-review-inspector__facts,.ym-review-inspector__permissions{grid-template-columns:1fr}}@media(prefers-reduced-motion:reduce){.ym-review-workspace__skeleton{animation:none}.ym-review-preview__stage>img,.ym-review-preview__stage>video{transition:none}.ym-review-workspace-backdrop{backdrop-filter:none}}
+.ym-review-inspector__context-note{border-inline-start:3px solid #f59e0b;border-radius:8px;padding:8px 10px!important;color:var(--ym-muted)!important;background:color-mix(in srgb,#f59e0b 10%,transparent)}
+.ym-review-inspector__context-note strong{color:#d97706}
+.ym-review-workspace-backdrop.is-visibility{--ym-admin-section-accent:#059669}
+.ym-review-workspace-backdrop.is-visibility .ym-review-workspace__readonly,.ym-review-workspace-backdrop.is-visibility .ym-review-preview>header span,.ym-review-workspace-backdrop.is-visibility .ym-review-inspector__section>header span{color:#34d399}
+.ym-review-workspace-backdrop.is-visibility .ym-review-workspace{background:color-mix(in srgb,var(--ym-dropdown-bg) 97%,#059669 3%)}
+.ym-review-workspace-backdrop.is-visibility .ym-review-preview,.ym-review-workspace-backdrop.is-visibility .ym-review-inspector__section,.ym-review-workspace-backdrop.is-visibility .ym-review-inspector__disclosure{background:color-mix(in srgb,var(--ym-card-bg) 97%,#059669 3%)}
 </style>

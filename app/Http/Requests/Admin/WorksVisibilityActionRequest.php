@@ -46,7 +46,19 @@ class WorksVisibilityActionRequest extends FormRequest
     /** @return array<string, mixed> */
     public function rules(): array
     {
-        return [];
+        return [
+            // يبقى اختياريًا لتوافق عملاء العقد السابق، وتلتزم به واجهة الإدارة الحالية.
+            'expected_updated_at' => ['nullable', 'string', 'date'],
+        ];
+    }
+
+    /** @return array<string, string> */
+    public function messages(): array
+    {
+        return [
+            'expected_updated_at.string' => 'وقت آخر تحديث المتوقع يجب أن يكون نصًا.',
+            'expected_updated_at.date' => 'وقت آخر تحديث المتوقع غير صالح.',
+        ];
     }
 
     public function withValidator(Validator $validator): void
@@ -56,7 +68,7 @@ class WorksVisibilityActionRequest extends FormRequest
                 $validator->errors()->add((string) $key, 'معاملات الاستعلام غير مدعومة لهذا الإجراء.');
             }
 
-            foreach (array_keys($this->request->all()) as $key) {
+            foreach (array_diff(array_keys($this->request->all()), ['expected_updated_at']) as $key) {
                 $validator->errors()->add((string) $key, 'بيانات الطلب غير مدعومة لهذا الإجراء.');
             }
         });

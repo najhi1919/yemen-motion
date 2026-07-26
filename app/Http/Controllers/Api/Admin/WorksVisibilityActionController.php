@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\WorksVisibilityActionRequest;
 use App\Models\Work;
 use App\Services\Audit\AuditEventLogger;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -78,6 +79,18 @@ class WorksVisibilityActionController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            $expectedUpdatedAt = $request->validated('expected_updated_at');
+            if (
+                is_string($expectedUpdatedAt)
+                && ! Carbon::parse($expectedUpdatedAt)->equalTo($currentWork->updated_at)
+            ) {
+                return [
+                    'conflict' => true,
+                    'changed' => false,
+                    'work' => $currentWork,
+                ];
+            }
+
             $oldState = $this->visibilityState($currentWork);
             $changes = $this->changesFor($currentWork, $action);
             $changed = $changes !== [];
@@ -91,10 +104,24 @@ class WorksVisibilityActionController extends Controller
             }
 
             return [
+                'conflict' => false,
                 'changed' => $changed,
                 'work' => $currentWork,
             ];
         });
+
+        if ($result['conflict']) {
+            return response()->json([
+                'success' => false,
+                'data' => [
+                    'current_status' => $result['work']->status,
+                    'current_visibility_status' => $result['work']->visibility_status,
+                    'current_updated_at' => $result['work']->updated_at?->toISOString(),
+                ],
+                'message' => 'تغير العمل في الخادم. حمّل النسخة الأحدث قبل تنفيذ الإجراء.',
+                'errors' => null,
+            ], 409);
+        }
 
         return response()->json([
             'success' => true,
@@ -129,6 +156,10 @@ class WorksVisibilityActionController extends Controller
     {
         if (! in_array($work->status, [Work::STATUS_APPROVED, Work::STATUS_HIDDEN, Work::STATUS_PUBLISHED], true)) {
             throw new HttpException(422, 'لا يمكن نشر العمل من حالته الحالية.');
+        }
+
+        if ($work->status === Work::STATUS_HIDDEN && $work->approved_at === null) {
+            throw new HttpException(422, 'لا يمكن نشر عمل مخفي لم يسبق اعتماده.');
         }
 
         if ($work->status === Work::STATUS_PUBLISHED && $work->visibility_status === Work::VISIBILITY_PUBLIC) {
@@ -190,7 +221,8 @@ class WorksVisibilityActionController extends Controller
         }
 
         $canRestore = $work->status === Work::STATUS_HIDDEN
-            || ($work->visibility_status === Work::VISIBILITY_HIDDEN
+            ? $work->approved_at !== null
+            : ($work->visibility_status === Work::VISIBILITY_HIDDEN
                 && in_array($work->status, [Work::STATUS_APPROVED, Work::STATUS_PUBLISHED], true));
 
         if (! $canRestore) {

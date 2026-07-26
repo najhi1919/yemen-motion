@@ -2332,14 +2332,43 @@ git diff --check: passed
 
 #### Recommended Next Station
 
-التوصية التالية غير الملزمة:
+اكتملت هذه المحطة لاحقًا، ويوثق القسم `0.36` إغلاقها.
 
 ```text
 Admin Works Visibility Station
 /admin/works/visibility
 ```
 
-تبدأ بعد تأكيد المستخدم، ولا تدخل ضمن إغلاق محطة الأعمال ودورة المراجعة.
+كانت هذه التوصية هي الحد التالي لإغلاق `0.35`.
+
+### 0.36 Completed Admin Works Visibility Station — 2026-07-26
+
+**Task ID:** `YM-WORKS-VISIBILITY-STATION-CLOSURE-014`
+
+**Closure baseline:** `feat(works): complete visibility management`
+
+أُغلقت محطة `/admin/works/visibility` بعد اكتمال البحث والفلاتر والفرز وPagination، وإجراءات النشر والإخفاء والاستعادة والتمييز والتثبيت وعكسها، وحماية `expected_updated_at` و`409`، وتسجيل Audit، ومعاينة الوسائط المحمية، والتحسين البصري النهائي.
+
+#### Verification Evidence
+
+```text
+Visibility tests: 62 passed / 694 assertions
+Super Admin authorization: 8 passed / 238 assertions
+Frontend production build: Build complete (Client, Server, Nitro)
+git diff --check: passed
+Manual visual and functional inspection: passed
+```
+
+التحذيرات غير المانعة: sourcemap، و`authStore` mixed static/dynamic import، وchunk size.
+
+#### Recommended Next Station
+
+```text
+Admin Works Reports Station
+/admin/works/reports
+```
+
+تبدأ بعد تأكيد المستخدم، ولا تدخل ضمن إغلاق محطة الظهور والتمييز.
 
 ---
 

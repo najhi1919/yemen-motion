@@ -140,6 +140,7 @@ class WorksVisibilityActionsApiTest extends TestCase
                 'status' => $status,
                 'visibility_status' => Work::VISIBILITY_HIDDEN,
                 'published_at' => $publishedAt,
+                'approved_at' => now()->subDays(2),
                 'is_featured' => true,
                 'is_pinned' => true,
             ]);
@@ -176,6 +177,47 @@ class WorksVisibilityActionsApiTest extends TestCase
 
             $this->assertSame($original, $work->fresh()->only(array_keys($original)));
         }
+    }
+
+    public function test_hidden_work_without_prior_approval_cannot_be_published_or_restored(): void
+    {
+        $this->actingAsRole('super-admin');
+
+        foreach (['publish', 'restore'] as $action) {
+            $work = Work::factory()->create([
+                'status' => Work::STATUS_HIDDEN,
+                'visibility_status' => Work::VISIBILITY_HIDDEN,
+                'approved_at' => null,
+            ]);
+
+            $this->patchJson($this->actionUrl($work, $action))
+                ->assertUnprocessable();
+
+            $work->refresh();
+            $this->assertSame(Work::STATUS_HIDDEN, $work->status);
+            $this->assertSame(Work::VISIBILITY_HIDDEN, $work->visibility_status);
+        }
+    }
+
+    public function test_stale_expected_updated_at_returns_409_without_change_or_audit(): void
+    {
+        $this->actingAsRole('super-admin');
+        $work = Work::factory()->approved()->create();
+        $staleUpdatedAt = $work->updated_at->copy()->subSecond()->toISOString();
+
+        $this->patchJson($this->actionUrl($work, 'publish'), [
+            'expected_updated_at' => $staleUpdatedAt,
+        ])
+            ->assertConflict()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('data.current_status', Work::STATUS_APPROVED)
+            ->assertJsonPath('data.current_visibility_status', Work::VISIBILITY_HIDDEN)
+            ->assertJsonPath('data.current_updated_at', $work->updated_at->toISOString());
+
+        $work->refresh();
+        $this->assertSame(Work::STATUS_APPROVED, $work->status);
+        $this->assertSame(Work::VISIBILITY_HIDDEN, $work->visibility_status);
+        $this->assertDatabaseCount('audit_events', 0);
     }
 
     public function test_unpublish_changes_published_to_approved_hidden_and_preserves_promotion_and_publish_time(): void
@@ -265,6 +307,7 @@ class WorksVisibilityActionsApiTest extends TestCase
                 'visibility_status' => Work::VISIBILITY_HIDDEN,
                 'published_at' => null,
                 'hidden_at' => $hiddenAt,
+                'approved_at' => now()->subDays(2),
             ]);
 
             $this->patchJson($this->actionUrl($work, 'restore'))
