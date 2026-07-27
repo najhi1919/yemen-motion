@@ -1957,24 +1957,56 @@ class WorksAdminMediaApiTest extends TestCase
         $this->assertNull($pending->processing_completed_at);
     }
 
-    public function test_composer_dev_runs_a_persistent_works_media_worker(): void
+    public function test_composer_dev_delegates_to_a_persistent_works_media_worker(): void
     {
         $composer = json_decode(
             (string) file_get_contents(base_path('composer.json')),
             true,
             flags: JSON_THROW_ON_ERROR,
         );
-        $devScript = implode("\n", $composer['scripts']['dev']);
 
-        $this->assertStringContainsString('queue:work redis', $devScript);
-        $this->assertStringContainsString('--queue=works-media,default', $devScript);
-        $this->assertStringContainsString('--sleep=1', $devScript);
-        $this->assertStringContainsString('--tries=3', $devScript);
-        $this->assertStringContainsString('--timeout=600', $devScript);
-        $this->assertStringContainsString('--max-time=3600', $devScript);
-        $this->assertStringContainsString('--restart-tries -1', $devScript);
-        $this->assertStringContainsString('--kill-others-on-fail', $devScript);
-        $this->assertStringNotContainsString('--stop-when-empty', $devScript);
+        $package = json_decode(
+            (string) file_get_contents(base_path('package.json')),
+            true,
+            flags: JSON_THROW_ON_ERROR,
+        );
+
+        $composerDevScript = implode("\n", $composer['scripts']['dev']);
+        $orchestratorScript = $package['scripts']['dev'];
+        $queueScript = $package['scripts']['dev:queue'];
+
+        $this->assertStringContainsString('npm run dev', $composerDevScript);
+        $this->assertStringContainsString(
+            'npm run dev:queue',
+            $orchestratorScript,
+        );
+
+        $this->assertStringContainsString(
+            '--restart-tries -1',
+            $orchestratorScript,
+        );
+        $this->assertStringContainsString(
+            '--restart-after 1000',
+            $orchestratorScript,
+        );
+        $this->assertStringContainsString(
+            '--kill-others-on-fail',
+            $orchestratorScript,
+        );
+
+        $this->assertStringContainsString('queue:work redis', $queueScript);
+        $this->assertStringContainsString(
+            '--queue=works-media,default',
+            $queueScript,
+        );
+        $this->assertStringContainsString('--sleep=1', $queueScript);
+        $this->assertStringContainsString('--tries=3', $queueScript);
+        $this->assertStringContainsString('--timeout=600', $queueScript);
+        $this->assertStringContainsString('--max-time=3600', $queueScript);
+        $this->assertStringNotContainsString(
+            '--stop-when-empty',
+            $queueScript,
+        );
     }
 
     private function validVideoBytes(): string
