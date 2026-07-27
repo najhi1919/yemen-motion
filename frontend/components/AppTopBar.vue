@@ -881,6 +881,14 @@ onBeforeUnmount(() => {
     inset 0 -1px 0 rgba(109, 40, 217, 0.1);
 }
 
+/* YM_TOPBAR_LIGHT_OPAQUE_SURFACE_V1 */
+:global(.ym-dashboard-light .ym-topbar-shell) {
+  background:
+    linear-gradient(180deg, rgba(250, 250, 255, 0.98), rgba(246, 247, 253, 0.96)),
+    var(--ym-shell-surface);
+  backdrop-filter: blur(18px);
+}
+
 .ym-topbar-heading,
 .ym-topbar-actions {
   position: relative;

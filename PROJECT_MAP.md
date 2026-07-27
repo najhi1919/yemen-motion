@@ -2506,6 +2506,47 @@ Admin Works Settings and Permissions Station
 
 هذه هي المحطة التالية المسجلة في الخطة الحالية، ولا تدخل ضمن إغلاق سجل الأعمال.
 
+### 0.40 Completed Admin Works Settings and Permissions Station — 2026-07-27
+
+**Task ID:** `YM-WORKS-SETTINGS-STATION-CLOSURE-024`
+
+**Closure baseline:** `feat(works): complete settings and permissions station`
+
+أُغلقت محطة إعدادات وصلاحيات الأعمال على المسار
+`/admin/works/settings`. تشمل المحطة مساحات الإعدادات التشغيلية وسير العمل
+والوصول الحالي وكتالوج الصلاحيات، مع دعم الحفظ الجزئي وحماية النسخة
+والتغييرات غير المحفوظة.
+
+#### Completed Contracts
+
+- إعداد مهلة المراجعة وثقة النشر المباشر وحدود وأنواع الوسائط.
+- حفظ الحقول المتغيرة فقط مع `version` الحالي.
+- معالجة `401` و`403` و`409` و`422` و`500`.
+- حماية `Dirty state` وحارس المسار و`beforeunload`.
+- تأكيد خاص لتفعيل ثقة النشر المباشر.
+- عرض قدرات الحساب الحالي دون تقديمها كمحرر أدوار.
+- كتالوج قراءة فقط يضم 79 صلاحية ضمن 11 مجموعة.
+- بحث وفلاتر و`Accordion` و`Drawer` محلية دون طلبات إضافية.
+- دعم `Light` و`Dark` و`RTL` و`LTR` و`Desktop` و`Tablet` و`Mobile`.
+- إصلاح نطاق تنسيقات الوضع الفاتح وشفافية `AppTopBar`.
+
+```text
+WorksSettingsPersistenceTest + WorksSettingsApiTest + WorksSettingsMutationApiTest
+Total: 77 tests / 468 assertions
+Frontend production build: Build complete (Client, Server, Nitro)
+Compiled CSS scope check: passed
+git diff --check: passed
+```
+
+#### Closure Status
+
+مكتملة ومغلقة. يوثق ملف
+`docs/ym-sdd/tasks/YM-WORKS-SETTINGS-STATION-CLOSURE-024.md` تفاصيل الإغلاق.
+
+#### Recommended Next Station
+
+المحطة التالية غير محددة في الخطة الحالية.
+
 ---
 
 ## 1. TECH_STACK — المعمارية النهائية المعتمدة
