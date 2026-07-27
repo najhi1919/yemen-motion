@@ -1,0 +1,182 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-tests:
+    name: Backend Tests (PHP 8.4 / PostgreSQL 18)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: yemen_motion_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d yemen_motion_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      COMPOSER_NO_INTERACTION: "1"
+      APP_ENV: testing
+      APP_DEBUG: "false"
+      APP_URL: http://127.0.0.1
+      APP_MAINTENANCE_DRIVER: file
+      BCRYPT_ROUNDS: "4"
+      BROADCAST_CONNECTION: "null"
+      CACHE_STORE: array
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_DATABASE: yemen_motion_test
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_URL: ""
+      MAIL_MAILER: array
+      QUEUE_CONNECTION: sync
+      SESSION_DRIVER: array
+      PULSE_ENABLED: "false"
+      TELESCOPE_ENABLED: "false"
+      NIGHTWATCH_ENABLED: "false"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: >-
+            ctype,
+            curl,
+            dom,
+            fileinfo,
+            filter,
+            gd,
+            intl,
+            json,
+            mbstring,
+            openssl,
+            pdo_pgsql,
+            tokenizer,
+            xml,
+            zip
+          coverage: none
+          tools: composer:v2
+
+      - name: Ensure FFmpeg tools are available
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! command -v ffmpeg >/dev/null 2>&1 ||
+             ! command -v ffprobe >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install \
+              --yes \
+              --no-install-recommends \
+              ffmpeg
+          fi
+
+          ffmpeg -version | head -1
+          ffprobe -version | head -1
+
+      - name: Prepare Laravel environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .env.example .env
+
+      - name: Validate Composer manifest
+        run: composer validate --strict --no-check-publish
+
+      - name: Install Composer dependencies
+        run: >
+          composer install
+          --no-interaction
+          --prefer-dist
+          --no-progress
+
+      - name: Generate application key
+        run: php artisan key:generate --force --ansi
+
+      - name: Verify PHP platform requirements
+        run: composer check-platform-reqs
+
+      - name: Prepare test database
+        shell: bash
+        run: |
+          set -euo pipefail
+          php artisan config:clear --ansi
+          php artisan migrate \
+            --force \
+            --no-interaction \
+            --ansi
+
+      - name: Run Laravel test suite
+        run: php artisan test --colors=always
+
+  frontend-build:
+    name: Frontend Build (Node 24 / Nuxt)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    env:
+      CI: "true"
+      NPM_CONFIG_AUDIT: "false"
+      NPM_CONFIG_FUND: "false"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install frontend dependencies
+        run: npm ci --prefix frontend
+
+      - name: Validate dependency trees
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ls --depth=0
+          npm --prefix frontend ls --depth=0
+
+      - name: Build Nuxt frontend
+        run: npm run build
