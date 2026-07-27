@@ -1,6 +1,44 @@
 # Tasks
 
-Tasks define one executable unit of work.
+يمثل كل ملف Task وحدة تنفيذ واحدة قابلة للتحقق والإغلاق.
 
-Each task should include scope, allowed files, forbidden files, required checks,
-and reporting requirements.
+## العقد الأدنى للمهمة
+
+يجب أن تحدد المهمة:
+
+- المعرّف والهدف.
+- الوضع الحالي والفجوة المراد إغلاقها.
+- النطاق المسموح.
+- الملفات المسموح تعديلها.
+- الملفات الممنوع تعديلها.
+- السلوك المتوقع.
+- الفحوص والاختبارات المطلوبة.
+- شروط النجاح.
+- صيغة التقرير والتسليم.
+
+## قواعد التنفيذ
+
+- لا توسع نطاق المهمة أثناء التنفيذ.
+- لا تستخدم `git add .`.
+- لا تنفذ `git reset` أو`git restore` أو`git clean` لمعالجة تغييرات غير مفهومة.
+- لا تنشئ Commit أوPush قبل نجاح الفحوص.
+- عند ظهور ملف غير متوقع، توقف وحدد سببه.
+- وثّق التحذيرات غير المانعة بدل إخفائها.
+
+## وثائق الإغلاق
+
+تُنشأ وثيقة Closure بعد نجاح التنفيذ والتحقق الفعلي. ويجب أن تتضمن:
+
+- الحالة وتاريخ الإغلاق.
+- النطاق المكتمل.
+- الملفات المعدلة.
+- أدلة الاختبار والبناء.
+- Commit SHA ورسالة Commit.
+- نتيجة Push وCI عند انطباقها.
+- التحذيرات غير المانعة.
+- حدود الإغلاق والقرار النهائي.
+
+## Foundation stabilization
+
+- [`YM-FOUNDATION-STABILIZATION-001A-CLOSURE.md`](YM-FOUNDATION-STABILIZATION-001A-CLOSURE.md) — ملكية الحزم وعقد التشغيل.
+- [`YM-FOUNDATION-STABILIZATION-001B-CLOSURE.md`](YM-FOUNDATION-STABILIZATION-001B-CLOSURE.md) — GitHub Actions CI baseline.

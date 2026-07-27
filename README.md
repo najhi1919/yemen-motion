@@ -1,58 +1,207 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# يمن موشن — Yemen Motion
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+[![CI](https://github.com/najhi1919/yemen-motion/actions/workflows/ci.yml/badge.svg)](https://github.com/najhi1919/yemen-motion/actions/workflows/ci.yml)
 
-## About Laravel
+منصة إبداعية قيد التطوير لإدارة الأعمال والتصاميم والمونتاج والخدمات المرتبطة بها. يجمع المستودع بين Backend مبني على Laravel وواجهة مستقلة مبنية على Nuxt.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## الحالة الحالية
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+المشروع تحت التطوير النشط. المرجع المعماري والبنائي الأعلى هو [`PROJECT_MAP.md`](PROJECT_MAP.md)، بينما تحفظ ملفات [`docs/ym-sdd`](docs/ym-sdd) مواصفات التنفيذ والمهام ووثائق الإغلاق.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+لا يعني نجاح البناء أوالاختبارات أن جميع وحدات المنتج العامة مكتملة.
 
-## Learning Laravel
+## المكدس التقني
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+- PHP `^8.3`، مع اعتماد PHP `8.4` في CI.
+- Laravel `^13.8`.
+- PostgreSQL، مع PostgreSQL `18` في CI.
+- Redis للـQueue وCache في بيئة التطوير.
+- Node.js `24`.
+- Nuxt `4.4.8`.
+- Tailwind CSS `3.4.1`.
+- Pinia `3.0.4`.
+- FFmpeg وFFprobe لمعالجة وسائط الأعمال.
+- GitHub Actions لفحص Backend وFrontend آليًا.
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## بنية المستودع
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
-
-```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+```text
+.
+├── app/                      Laravel application code
+├── database/                 migrations, factories, seeders
+├── frontend/                 Nuxt application and UI dependencies
+├── routes/                   Laravel routes
+├── tests/                    Backend test suite
+├── docs/ym-sdd/              implementation specifications and handoff memory
+├── .github/workflows/ci.yml  GitHub Actions CI
+├── composer.json             Backend dependencies and project orchestration
+├── package.json              root development orchestration only
+└── PROJECT_MAP.md            authoritative architecture and build roadmap
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+### ملكية الحزم
 
-## Contributing
+- جذر المستودع مسؤول عن تنسيق التشغيل، ويملك `concurrently` فقط.
+- `frontend/` هو المالك الحصري لحزم Nuxt وVue وTailwind وبقية حزم الواجهة.
+- لا تُنقل حزم الواجهة إلى الجذر دون مهمة مستقلة ومراجعة واضحة.
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+## المتطلبات
 
-## Code of Conduct
+ثبّت الأدوات التالية قبل إعداد المشروع:
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+- PHP `8.4` مع Extensions المطلوبة في `composer.json`.
+- Composer `2`.
+- Node.js `24` وnpm.
+- PostgreSQL.
+- Redis.
+- FFmpeg وFFprobe.
 
-## Security Vulnerabilities
+تحقق سريع:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```bash
+php -v
+composer --version
+node --version
+npm --version
+psql --version
+redis-cli --version
+ffmpeg -version
+ffprobe -version
+```
 
-## License
+## الإعداد لأول مرة
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+استنسخ المستودع، ثم جهّز ملف البيئة قبل تشغيل الإعداد:
+
+```bash
+git clone https://github.com/najhi1919/yemen-motion.git
+cd yemen-motion
+
+cp .env.example .env
+```
+
+عدّل القيم المحلية المطلوبة داخل `.env`، خصوصًا:
+
+```text
+APP_URL
+FRONTEND_URL
+DB_CONNECTION
+DB_HOST
+DB_PORT
+DB_DATABASE
+DB_USERNAME
+DB_PASSWORD
+REDIS_HOST
+REDIS_PORT
+```
+
+لا ترفع ملف `.env` أوأي بيانات سرية إلى Git.
+
+بعد إعداد PostgreSQL وRedis شغّل:
+
+```bash
+composer setup
+```
+
+ينفذ هذا الأمر:
+
+1. تثبيت Composer dependencies.
+2. إنشاء مفتاح التطبيق.
+3. تنفيذ migrations.
+4. تثبيت حزم الجذر بواسطة `npm ci`.
+5. تثبيت حزم الواجهة بواسطة `npm ci --prefix frontend`.
+6. بناء واجهة الإنتاج.
+
+## تشغيل بيئة التطوير
+
+الأمر المعتمد:
+
+```bash
+composer dev
+```
+
+ويمكن تشغيل العقد نفسه مباشرة عبر:
+
+```bash
+npm run dev
+```
+
+يشغّل الأمر أربع خدمات متزامنة:
+
+| الخدمة | العنوان أوالأمر |
+|---|---|
+| Backend | `http://127.0.0.1:8000` |
+| Frontend | `http://127.0.0.1:3000` |
+| Queue | `works-media,default` عبر Redis |
+| Logs | Laravel Pail |
+
+أوقف المجموعة باستخدام `Ctrl+C`. يتولى `concurrently` إنهاء العمليات التابعة.
+
+## الاختبارات والتحقق
+
+### Backend
+
+```bash
+composer test
+```
+
+أوتشغيل Laravel مباشرة:
+
+```bash
+php artisan test
+```
+
+### Frontend production build
+
+```bash
+npm run build
+```
+
+### فحوص التثبيت
+
+```bash
+composer validate --strict --no-check-publish
+composer check-platform-reqs
+npm ls --depth=0
+npm --prefix frontend ls --depth=0
+git diff --check
+```
+
+## التكامل المستمر
+
+Workflow الموجود في [`.github/workflows/ci.yml`](.github/workflows/ci.yml) يعمل عند:
+
+- Push إلى `main`.
+- Pull Request يستهدف `main`.
+- تشغيل يدوي بواسطة `workflow_dispatch`.
+
+ويشغّل Jobين متوازيين:
+
+1. Backend Tests باستخدام PHP `8.4` وPostgreSQL `18` وFFmpeg.
+2. Frontend Build باستخدام Node.js `24` وNuxt.
+
+نجاح CI لا يستبدل المراجعة البشرية، ولم تُفعّل ضمن هذا الخط الأساس قواعد Branch Protection أوDeployment.
+
+## التوثيق المعتمد
+
+ابدأ القراءة بهذا الترتيب:
+
+1. [`PROJECT_MAP.md`](PROJECT_MAP.md) — المرجع المعماري والبنائي الأعلى.
+2. [`docs/ym-sdd/README.md`](docs/ym-sdd/README.md) — قواعد نظام التوثيق والتنفيذ.
+3. [`docs/ym-sdd/tasks/README.md`](docs/ym-sdd/tasks/README.md) — عقد المهام ووثائق الإغلاق.
+4. المواصفة والمهمة المرتبطتان بالنطاق الجاري.
+5. وثائق الإغلاق السابقة ذات الصلة.
+
+وثائق تثبيت الأساس الحالية:
+
+- [`YM-FOUNDATION-STABILIZATION-001A-CLOSURE`](docs/ym-sdd/tasks/YM-FOUNDATION-STABILIZATION-001A-CLOSURE.md)
+- [`YM-FOUNDATION-STABILIZATION-001B-CLOSURE`](docs/ym-sdd/tasks/YM-FOUNDATION-STABILIZATION-001B-CLOSURE.md)
+
+## قواعد المساهمة
+
+- لا تنفيذ دون مهمة محددة النطاق.
+- لا تستخدم `git add .`.
+- لا تعدّل ملفات خارج النطاق المسموح.
+- لا تنفذ Commit أوPush قبل نجاح الفحوص المطلوبة.
+- لا تضف Secrets أوملفات بيئة.
+- حافظ على `PROJECT_MAP.md` بوصفه المرجع الأعلى، وعلى `docs/ym-sdd` بوصفه سجل التنفيذ.

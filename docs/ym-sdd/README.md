@@ -1,11 +1,63 @@
-# YM-Lite SDD v0.1
+# YM-Lite SDD
 
-YM-Lite SDD is a lightweight organization system stored inside `docs/ym-sdd`.
-It does not add external tools, runtime dependencies, or code structure changes.
+`docs/ym-sdd` هو نظام خفيف لتنظيم مواصفات مشروع يمن موشن ومهامه وذاكرة التسليم. لا يضيف أدوات خارجية أوRuntime dependencies، ولا يستبدل بنية التطبيق.
 
-Any agent working on this project must read the project context, agent rules,
-workflow, UI standards, relevant specification, and relevant task before making
-changes.
+## ترتيب المصادر
 
-No implementation should happen without a task. No commit should happen without
-human review.
+تُقرأ مصادر المشروع بهذا التسلسل:
+
+1. `PROJECT_MAP.md` — المرجع المعماري والبنائي الأعلى.
+2. `docs/ym-sdd/rules/` — قواعد عمل الوكلاء والتنفيذ.
+3. `docs/ym-sdd/workflow/` — دورة العمل والتحقق والتسليم.
+4. `docs/ym-sdd/standards/` — المعايير التقنية والبصرية.
+5. `docs/ym-sdd/specs/` — المواصفات المعتمدة.
+6. `docs/ym-sdd/tasks/` — وحدات العمل ووثائق الإغلاق.
+7. `docs/ym-sdd/memory/` — ذاكرة التسليم المرحلية.
+
+عند التعارض، لا تستبدل ملفات SDD قرارات `PROJECT_MAP.md`.
+
+## قاعدة التنفيذ
+
+كل تغيير يجب أن يرتبط بمهمة محددة توضّح:
+
+- الهدف والنطاق.
+- الملفات المسموح تعديلها.
+- الملفات الممنوع تعديلها.
+- الاختبارات والفحوص المطلوبة.
+- شروط النجاح والتقرير النهائي.
+
+لا يبدأ التنفيذ من ملاحظات عامة فقط، ولا يُنشأ Commit قبل نجاح التحقق المحدد للمهمة.
+
+## دورة العمل
+
+```text
+Audit
+  ↓
+Specification / Task
+  ↓
+Scoped implementation
+  ↓
+Targeted verification
+  ↓
+Human or approved automatic acceptance
+  ↓
+Commit and push
+  ↓
+Closure documentation
+```
+
+## استخدام ذاكرة المشروع
+
+- استخدم `memory/` لنقل الحالة بين الجلسات.
+- لا تعامل ملفات الذاكرة القديمة كمصدر أحدث من الكود أووثائق الإغلاق.
+- تحقق من Commit SHA وحالة `main` قبل استئناف أي محطة.
+- سجّل القرارات والحدود والتحذيرات غير المانعة في وثيقة الإغلاق.
+
+## الأساس المستقر الحالي
+
+أُغلقت محطتا التثبيت التاليتان:
+
+- `tasks/YM-FOUNDATION-STABILIZATION-001A-CLOSURE.md`
+- `tasks/YM-FOUNDATION-STABILIZATION-001B-CLOSURE.md`
+
+توثّق الأولى ملكية الحزم وعقد التشغيل، وتوثّق الثانية خط GitHub Actions CI.
