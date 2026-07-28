@@ -169,18 +169,7 @@
               <th class="is-roles">{{ copy.colRoles }}</th>
               <th class="is-status">{{ copy.accountStatus }}</th>
               <th class="is-date">{{ copy.colCreated }}</th>
-              <th
-                v-if="
-                  canUpdateStaff
-                  || canAssignStaffRoles
-                  || canAssignStaffPermissions
-                  || canViewActivity
-                  || canDisableStaff
-                  || canRestoreStaff
-                  || canDeleteStaff
-                "
-                class="is-actions"
-              >
+              <th class="is-actions">
                 {{ copy.colActions }}
               </th>
             </tr>
@@ -220,81 +209,188 @@
                 </span>
               </td>
               <td class="is-date">{{ formatDateTime(user.created_at) }}</td>
-              <td
-                v-if="
-                  canUpdateStaff
-                  || canAssignStaffRoles
-                  || canAssignStaffPermissions
-                  || canViewActivity
-                  || canDisableStaff
-                  || canRestoreStaff
-                  || canDeleteStaff
-                "
-                class="is-actions"
-              >
+              <td class="is-actions">
                 <div class="ym-staff-row-actions">
                   <button
-                    v-if="canUpdateStaff"
                     type="button"
                     class="ym-staff-row-action is-edit"
-                    @click="openEditStaffModal(user, $event)"
+                    :class="{ 'is-locked': !canUpdateStaff }"
+                    :disabled="!canUpdateStaff"
+                    :aria-disabled="!canUpdateStaff"
+                    :aria-label="canUpdateStaff ? copy.editStaff : copy.editStaffDenied"
+                    :title="canUpdateStaff ? copy.editStaff : copy.editStaffDenied"
+                    :data-tooltip="canUpdateStaff ? copy.editStaff : copy.editStaffDenied"
+                    v-on="canUpdateStaff
+                      ? { click: (event) => openEditStaffModal(user, event) }
+                      : {}"
                   >
-                    <span aria-hidden="true">✎</span>
-                    {{ copy.editStaff }}
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M4 20h4l10.6-10.6a2.1 2.1 0 0 0-4-3L4 17v3Z" />
+                      <path d="m13.5 7.5 3 3" />
+                    </svg>
+                    <span v-if="!canUpdateStaff" class="ym-staff-row-action__lock" aria-hidden="true">
+                      <svg viewBox="0 0 16 16">
+                        <rect x="3.5" y="7" width="9" height="6.5" rx="2" />
+                        <path d="M5.5 7V5.3a2.5 2.5 0 0 1 5 0V7" />
+                      </svg>
+                    </span>
                   </button>
                   <button
-                    v-if="canAssignStaffRoles"
                     type="button"
                     class="ym-staff-row-action is-roles"
-                    @click="openRoleModal(user, $event)"
+                    :class="{ 'is-locked': !canAssignStaffRoles }"
+                    :disabled="!canAssignStaffRoles"
+                    :aria-disabled="!canAssignStaffRoles"
+                    :aria-label="canAssignStaffRoles ? copy.manageRoles : copy.manageRolesDenied"
+                    :title="canAssignStaffRoles ? copy.manageRoles : copy.manageRolesDenied"
+                    :data-tooltip="canAssignStaffRoles ? copy.manageRoles : copy.manageRolesDenied"
+                    v-on="canAssignStaffRoles
+                      ? { click: (event) => openRoleModal(user, event) }
+                      : {}"
                   >
-                    <span aria-hidden="true">⌘</span>
-                    {{ copy.manageRoles }}
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <circle cx="8.5" cy="8" r="3" />
+                      <circle cx="16.5" cy="9" r="2.4" />
+                      <path d="M3.5 19c.4-3.2 2-5 5-5s4.6 1.8 5 5" />
+                      <path d="M14 14.2c3.5-.7 5.7.8 6.2 3.8" />
+                    </svg>
+                    <span v-if="!canAssignStaffRoles" class="ym-staff-row-action__lock" aria-hidden="true">
+                      <svg viewBox="0 0 16 16">
+                        <rect x="3.5" y="7" width="9" height="6.5" rx="2" />
+                        <path d="M5.5 7V5.3a2.5 2.5 0 0 1 5 0V7" />
+                      </svg>
+                    </span>
                   </button>
                   <button
-                    v-if="canAssignStaffPermissions"
                     type="button"
                     class="ym-staff-row-action is-permissions"
-                    @click="openPermissionsModal(user, $event)"
+                    :class="{ 'is-locked': !canAssignStaffPermissions }"
+                    :disabled="!canAssignStaffPermissions"
+                    :aria-disabled="!canAssignStaffPermissions"
+                    :aria-label="canAssignStaffPermissions ? copy.managePermissions : copy.managePermissionsDenied"
+                    :title="canAssignStaffPermissions ? copy.managePermissions : copy.managePermissionsDenied"
+                    :data-tooltip="canAssignStaffPermissions ? copy.managePermissions : copy.managePermissionsDenied"
+                    v-on="canAssignStaffPermissions
+                      ? { click: (event) => openPermissionsModal(user, event) }
+                      : {}"
                   >
-                    <span aria-hidden="true">✓</span>
-                    {{ copy.managePermissions }}
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 3 5 6v5c0 4.7 2.8 8 7 10 4.2-2 7-5.3 7-10V6l-7-3Z" />
+                      <path d="m9 12 2 2 4-4" />
+                    </svg>
+                    <span v-if="!canAssignStaffPermissions" class="ym-staff-row-action__lock" aria-hidden="true">
+                      <svg viewBox="0 0 16 16">
+                        <rect x="3.5" y="7" width="9" height="6.5" rx="2" />
+                        <path d="M5.5 7V5.3a2.5 2.5 0 0 1 5 0V7" />
+                      </svg>
+                    </span>
                   </button>
                   <button
-                    v-if="canViewActivity"
+                    type="button"
+                    class="ym-staff-row-action is-activity"
+                    :class="{ 'is-locked': !canViewActivity }"
+                    :disabled="!canViewActivity"
+                    :aria-disabled="!canViewActivity"
+                    :aria-label="canViewActivity ? copy.accountActivity : copy.accountActivityDenied"
+                    :title="canViewActivity ? copy.accountActivity : copy.accountActivityDenied"
+                    :data-tooltip="canViewActivity ? copy.accountActivity : copy.accountActivityDenied"
+                    v-on="canViewActivity
+                      ? { click: (event) => openActivity(user, event) }
+                      : {}"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <circle cx="12" cy="12" r="8" />
+                      <path d="M12 8v4l3 2" />
+                    </svg>
+                    <span v-if="!canViewActivity" class="ym-staff-row-action__lock" aria-hidden="true">
+                      <svg viewBox="0 0 16 16">
+                        <rect x="3.5" y="7" width="9" height="6.5" rx="2" />
+                        <path d="M5.5 7V5.3a2.5 2.5 0 0 1 5 0V7" />
+                      </svg>
+                    </span>
+                  </button>
+                  <button
                     type="button"
                     class="ym-staff-row-action"
-                    @click="openActivity(user, $event)"
+                    :class="[
+                      user.is_disabled ? 'is-restore' : 'is-disable',
+                      {
+                        'is-locked': user.is_disabled
+                          ? !canRestoreStaff
+                          : !canDisableStaff
+                      }
+                    ]"
+                    :disabled="user.is_disabled ? !canRestoreStaff : !canDisableStaff"
+                    :aria-disabled="user.is_disabled ? !canRestoreStaff : !canDisableStaff"
+                    :aria-label="user.is_disabled
+                      ? (canRestoreStaff ? copy.restoreAccount : copy.restoreAccountDenied)
+                      : (canDisableStaff ? copy.disableAccount : copy.disableAccountDenied)"
+                    :title="user.is_disabled
+                      ? (canRestoreStaff ? copy.restoreAccount : copy.restoreAccountDenied)
+                      : (canDisableStaff ? copy.disableAccount : copy.disableAccountDenied)"
+                    :data-tooltip="user.is_disabled
+                      ? (canRestoreStaff ? copy.restoreAccount : copy.restoreAccountDenied)
+                      : (canDisableStaff ? copy.disableAccount : copy.disableAccountDenied)"
+                    v-on="user.is_disabled
+                      ? (canRestoreStaff
+                        ? { click: (event) => openLifecycleModal(user, 'restore', event) }
+                        : {})
+                      : (canDisableStaff
+                        ? { click: (event) => openLifecycleModal(user, 'disable', event) }
+                        : {})"
                   >
-                    <span aria-hidden="true">◷</span>
-                    {{ copy.accountActivity }}
+                    <svg v-if="!user.is_disabled" viewBox="0 0 24 24" aria-hidden="true">
+                      <circle cx="12" cy="12" r="8" />
+                      <path d="m7 7 10 10" />
+                    </svg>
+                    <svg v-else viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M5 8v5h5" />
+                      <path d="M6.5 16.5A7 7 0 1 0 5 9" />
+                    </svg>
+                    <span
+                      v-if="user.is_disabled ? !canRestoreStaff : !canDisableStaff"
+                      class="ym-staff-row-action__lock"
+                      aria-hidden="true"
+                    >
+                      <svg viewBox="0 0 16 16">
+                        <rect x="3.5" y="7" width="9" height="6.5" rx="2" />
+                        <path d="M5.5 7V5.3a2.5 2.5 0 0 1 5 0V7" />
+                      </svg>
+                    </span>
                   </button>
                   <button
-                    v-if="!user.is_disabled && canDisableStaff"
-                    type="button"
-                    class="ym-staff-row-action is-disable"
-                    @click="openLifecycleModal(user, 'disable', $event)"
-                  >
-                    <span aria-hidden="true">⊘</span>
-                    {{ copy.disableAccount }}
-                  </button>
-                  <button
-                    v-if="user.is_disabled && canRestoreStaff"
-                    type="button"
-                    class="ym-staff-row-action is-restore"
-                    @click="openLifecycleModal(user, 'restore', $event)"
-                  >
-                    <span aria-hidden="true">↺</span>
-                    {{ copy.restoreAccount }}
-                  </button>
-                  <button
-                    v-if="user.is_disabled && canDeleteStaff"
                     type="button"
                     class="ym-staff-row-action is-delete"
-                    @click="openLifecycleModal(user, 'delete', $event)"
+                    :class="{ 'is-locked': !user.is_disabled || !canDeleteStaff }"
+                    :disabled="!user.is_disabled || !canDeleteStaff"
+                    :aria-disabled="!user.is_disabled || !canDeleteStaff"
+                    :aria-label="!user.is_disabled
+                      ? copy.deleteRequiresDisabled
+                      : (canDeleteStaff ? copy.deleteAccountTitle : copy.deleteAccountDenied)"
+                    :title="!user.is_disabled
+                      ? copy.deleteRequiresDisabled
+                      : (canDeleteStaff ? copy.deleteAccountTitle : copy.deleteAccountDenied)"
+                    :data-tooltip="!user.is_disabled
+                      ? copy.deleteRequiresDisabled
+                      : (canDeleteStaff ? copy.deleteAccountTitle : copy.deleteAccountDenied)"
+                    v-on="user.is_disabled && canDeleteStaff
+                      ? { click: (event) => openLifecycleModal(user, 'delete', event) }
+                      : {}"
                   >
-                    <span aria-hidden="true">×</span>
-                    {{ copy.deleteAccount }}
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M4 7h16m-10-3h4l1 3H9l1-3Z" />
+                      <path d="m7 7 1 13h8l1-13M10 11v5m4-5v5" />
+                    </svg>
+                    <span
+                      v-if="!user.is_disabled || !canDeleteStaff"
+                      class="ym-staff-row-action__lock"
+                      aria-hidden="true"
+                    >
+                      <svg viewBox="0 0 16 16">
+                        <rect x="3.5" y="7" width="9" height="6.5" rx="2" />
+                        <path d="M5.5 7V5.3a2.5 2.5 0 0 1 5 0V7" />
+                      </svg>
+                    </span>
                   </button>
                 </div>
               </td>
@@ -1483,6 +1579,14 @@ const copyMap = {
     editStaff: 'تعديل البيانات',
     manageRoles: 'إدارة الأدوار',
     managePermissions: 'إدارة الصلاحيات',
+    editStaffDenied: 'لا تملك صلاحية تعديل البيانات',
+    manageRolesDenied: 'لا تملك صلاحية إدارة الأدوار',
+    managePermissionsDenied: 'لا تملك صلاحية إدارة الصلاحيات',
+    accountActivityDenied: 'لا تملك صلاحية عرض سجل الحساب',
+    disableAccountDenied: 'لا تملك صلاحية تعطيل الحساب',
+    restoreAccountDenied: 'لا تملك صلاحية استعادة الحساب',
+    deleteAccountDenied: 'لا تملك صلاحية حذف الحساب',
+    deleteRequiresDisabled: 'عطّل الحساب أولًا لإتاحة الحذف',
     disableAccount: 'تعطيل الحساب',
     disableAccountTitle: 'تعطيل حساب الموظف',
     disableAccountDescription: 'سيتم منع الحساب من تسجيل الدخول فورًا، وإلغاء جلساته الحالية ووسائل الوصول الخاصة به.',
@@ -1651,6 +1755,14 @@ const copyMap = {
     editStaff: 'Edit profile',
     manageRoles: 'Manage roles',
     managePermissions: 'Manage permissions',
+    editStaffDenied: 'You do not have permission to edit staff data',
+    manageRolesDenied: 'You do not have permission to manage roles',
+    managePermissionsDenied: 'You do not have permission to manage permissions',
+    accountActivityDenied: 'You do not have permission to view account activity',
+    disableAccountDenied: 'You do not have permission to disable this account',
+    restoreAccountDenied: 'You do not have permission to restore this account',
+    deleteAccountDenied: 'You do not have permission to delete this account',
+    deleteRequiresDisabled: 'Disable the account before deleting it',
     disableAccount: 'Disable account',
     disableAccountTitle: 'Disable staff account',
     disableAccountDescription: 'The account will be blocked from signing in immediately, and its active sessions and access credentials will be revoked.',
@@ -3030,51 +3142,177 @@ onBeforeUnmount(() => {
 
 .ym-staff-row-actions {
   display: grid;
-  justify-items: center;
-  gap: 6px;
+  width: max-content;
+  max-width: 100%;
+  grid-template-columns: repeat(3, 38px);
+  grid-auto-rows: 38px;
+  align-items: center;
+  align-content: center;
+  justify-content: center;
+  gap: 8px;
+  margin-inline: auto;
+  padding: 3px;
+  overflow: visible;
 }
 
 .ym-staff-row-action {
-  min-height: 34px;
-  border-color: color-mix(in srgb, var(--ym-admin-section-accent-secondary) 28%, var(--ym-admin-border));
-  color: color-mix(in srgb, var(--ym-admin-section-accent-secondary) 76%, var(--ym-admin-text));
+  --ym-staff-action-color: #64748b;
+
+  position: relative;
+  width: 38px;
+  height: 38px;
+  min-height: 38px;
+  min-width: 38px;
+  box-sizing: border-box;
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--ym-staff-action-color) 34%, var(--ym-admin-border));
+  border-radius: 11px;
+  overflow: visible;
+  padding: 0;
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--ym-staff-action-color) 14%, var(--ym-admin-surface)),
+      color-mix(in srgb, var(--ym-staff-action-color) 5%, var(--ym-admin-surface-soft))
+    );
+  color: var(--ym-staff-action-color);
+  box-shadow:
+    0 5px 13px color-mix(in srgb, var(--ym-staff-action-color) 11%, transparent),
+    inset 0 1px rgba(255, 255, 255, .72);
+  transition:
+    transform .16s ease,
+    border-color .16s ease,
+    background .16s ease,
+    box-shadow .16s ease,
+    color .16s ease;
+}
+
+.ym-staff-row-action svg {
+  display: block;
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  pointer-events: none;
+}
+
+.ym-staff-row-action::after {
+  position: absolute;
+  z-index: 20;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  width: max-content;
+  max-width: 190px;
+  border: 1px solid rgba(148, 163, 184, .22);
+  border-radius: 9px;
+  padding: 6px 9px;
+  background: rgba(15, 23, 42, .96);
+  box-shadow: 0 10px 28px rgba(2, 6, 23, .26);
+  color: #f8fafc;
+  content: attr(data-tooltip);
+  direction: rtl;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.35;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 3px);
+  transition: opacity .14s ease, transform .14s ease;
   white-space: nowrap;
 }
 
+.ym-staff-row-action:hover::after,
+.ym-staff-row-action:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.ym-staff-row-action:focus-visible {
+  z-index: 21;
+  outline: 3px solid color-mix(in srgb, var(--ym-staff-action-color) 30%, transparent);
+  outline-offset: 2px;
+}
+
+.ym-staff-row-action:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.ym-staff-row-action:disabled {
+  cursor: not-allowed;
+  opacity: .62;
+}
+
+.ym-staff-row-action__lock {
+  position: absolute;
+  z-index: 2;
+  top: -4px;
+  inset-inline-end: -4px;
+  display: grid;
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--ym-staff-action-color) 30%, #fff);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 3px 8px rgba(15, 23, 42, .22);
+  color: color-mix(in srgb, var(--ym-staff-action-color) 78%, #334155);
+  pointer-events: none;
+}
+
+.ym-staff-row-action__lock svg {
+  width: 8px;
+  height: 8px;
+  stroke-width: 1.7;
+}
+
 .ym-staff-row-action.is-edit {
-  border-color: color-mix(in srgb, var(--ym-admin-section-accent) 34%, var(--ym-admin-border));
-  color: color-mix(in srgb, var(--ym-admin-section-accent) 80%, var(--ym-admin-text));
+  --ym-staff-action-color: #0891b2;
 }
 
 .ym-staff-row-action.is-roles {
-  border-color: color-mix(in srgb, #8b5cf6 38%, var(--ym-admin-border));
-  color: color-mix(in srgb, #8b5cf6 82%, var(--ym-admin-text));
+  --ym-staff-action-color: #7c3aed;
 }
 
 .ym-staff-row-action.is-permissions {
-  border-color: color-mix(in srgb, #06b6d4 42%, var(--ym-admin-border));
-  color: color-mix(in srgb, #0891b2 84%, var(--ym-admin-text));
+  --ym-staff-action-color: #4338ca;
+}
+
+.ym-staff-row-action.is-activity {
+  --ym-staff-action-color: #64748b;
 }
 
 .ym-staff-row-action.is-disable {
-  border-color: color-mix(in srgb, #f59e0b 42%, var(--ym-admin-border));
-  color: color-mix(in srgb, #d97706 88%, var(--ym-admin-text));
+  --ym-staff-action-color: #d97706;
 }
 
 .ym-staff-row-action.is-restore {
-  border-color: color-mix(in srgb, #10b981 42%, var(--ym-admin-border));
-  color: color-mix(in srgb, #059669 88%, var(--ym-admin-text));
+  --ym-staff-action-color: #059669;
 }
 
 .ym-staff-row-action.is-delete {
-  border-color: color-mix(in srgb, #ef4444 42%, var(--ym-admin-border));
-  color: color-mix(in srgb, #dc2626 90%, var(--ym-admin-text));
+  --ym-staff-action-color: #dc2626;
 }
 
 .ym-staff-primary-button:hover:not(:disabled),
 .ym-staff-secondary-button:hover:not(:disabled),
 .ym-staff-row-action:hover:not(:disabled) {
-  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--ym-staff-action-color) 58%, var(--ym-admin-border));
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--ym-staff-action-color) 20%, var(--ym-admin-surface)),
+      color-mix(in srgb, var(--ym-staff-action-color) 9%, var(--ym-admin-surface-soft))
+    );
+  box-shadow:
+    0 9px 20px color-mix(in srgb, var(--ym-staff-action-color) 19%, transparent),
+    inset 0 1px rgba(255, 255, 255, .7);
+  transform: translateY(-2px);
 }
 
 .ym-staff-primary-button:disabled,
@@ -4503,7 +4741,10 @@ onBeforeUnmount(() => {
 }
 
 .ym-staff-table .is-actions {
-  width: 23%;
+  width: 148px;
+  min-width: 148px;
+  overflow: visible;
+  padding: 9px 10px;
 }
 
 .ym-staff-table th.is-id,
