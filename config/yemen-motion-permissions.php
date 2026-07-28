@@ -114,6 +114,11 @@ return [
             'label_ar' => 'تعديل بيانات الموظف الأساسية',
         ],
         [
+            'name' => 'admin.staff.assign_roles',
+            'group' => 'admin.staff',
+            'label_ar' => 'إدارة أدوار الموظف',
+        ],
+        [
             'name' => 'admin.staff.activity.view',
             'group' => 'admin.staff',
             'label_ar' => 'عرض سجل عمليات حساب الموظف',

@@ -133,6 +133,7 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
     Route::put('/users/{user}/roles', [AdminUserController::class, 'syncRoles']);
     Route::get('/staff', [AdminStaffController::class, 'index']);
     Route::patch('/staff/{staff}', [AdminStaffController::class, 'update'])->whereNumber('staff');
+    Route::put('/staff/{staff}/roles', [AdminStaffController::class, 'syncRoles'])->whereNumber('staff');
     Route::get('/staff/{staff}/activity', [AdminStaffController::class, 'activity'])->whereNumber('staff');
     Route::post('/staff', [AdminStaffController::class, 'store']);
 

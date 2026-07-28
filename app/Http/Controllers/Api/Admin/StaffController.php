@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ListStaffRequest;
 use App\Http\Requests\Admin\StaffActivityRequest;
 use App\Http\Requests\Admin\StoreStaffRequest;
+use App\Http\Requests\Admin\SyncStaffRolesRequest;
 use App\Http\Requests\Admin\UpdateStaffRequest;
 use App\Models\AuditEvent;
 use App\Models\User;
@@ -149,6 +150,55 @@ class StaffController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'تم تحديث بيانات الموظف بنجاح.',
+            'data' => [
+                'user' => $this->staffPayload($staff),
+            ],
+            'errors' => null,
+        ]);
+    }
+
+    public function syncRoles(SyncStaffRolesRequest $request, User $staff): JsonResponse
+    {
+        if (
+            $staff->isSuperAdmin()
+            || ! $staff->hasAnyRole(['staff', 'admin'])
+        ) {
+            abort(404);
+        }
+
+        $roles = array_values(array_unique(array_filter(
+            $request->validated('roles'),
+            fn (string $role): bool => in_array($role, ['staff', 'admin'], true),
+        )));
+        sort($roles);
+
+        $previousRoles = $staff->roles()
+            ->pluck('name')
+            ->sort()
+            ->values()
+            ->all();
+
+        DB::transaction(function () use ($staff, $roles): void {
+            $staff->syncRoles($roles);
+        });
+
+        $staff->load('roles:id,name');
+        $newRoles = $staff->roles
+            ->pluck('name')
+            ->sort()
+            ->values()
+            ->all();
+
+        $this->recordStaffRolesSyncedAuditEvent(
+            $request,
+            $staff,
+            $previousRoles,
+            $newRoles,
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'تم تحديث أدوار الموظف بنجاح.',
             'data' => [
                 'user' => $this->staffPayload($staff),
             ],
@@ -339,6 +389,52 @@ class StaffController extends Controller
                     'assigned_role' => $assignedRole,
                     'created_user_role' => $assignedRole,
                     'source' => 'admin_staff_create',
+                ],
+            ]);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            if (app()->environment('testing')) {
+                throw $exception;
+            }
+        }
+    }
+
+    /**
+     * @param list<string> $previousRoles
+     * @param list<string> $newRoles
+     */
+    private function recordStaffRolesSyncedAuditEvent(
+        SyncStaffRolesRequest $request,
+        User $updatedUser,
+        array $previousRoles,
+        array $newRoles,
+    ): void {
+        $actor = $request->user();
+
+        try {
+            $this->auditEventLogger->record([
+                'event_type' => 'staff.roles.synced',
+                'category' => 'staff',
+                'severity' => 'notice',
+                'actor_type' => 'user',
+                'actor_id' => $actor?->id,
+                'actor_role' => $actor?->roles->first()?->name,
+                'target_type' => 'user',
+                'target_id' => $updatedUser->id,
+                'action' => 'sync_roles',
+                'outcome' => 'success',
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'request_id' => $request->header('X-Request-ID'),
+                'correlation_id' => $request->header('X-Correlation-ID'),
+                'metadata' => [
+                    'previous_roles' => $previousRoles,
+                    'new_roles' => $newRoles,
+                    'added_roles' => array_values(array_diff($newRoles, $previousRoles)),
+                    'removed_roles' => array_values(array_diff($previousRoles, $newRoles)),
+                    'role_count' => count($newRoles),
+                    'source' => 'admin_staff_role_sync',
                 ],
             ]);
         } catch (Throwable $exception) {

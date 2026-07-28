@@ -159,7 +159,12 @@
               <th class="is-email">{{ copy.colEmail }}</th>
               <th class="is-roles">{{ copy.colRoles }}</th>
               <th class="is-date">{{ copy.colCreated }}</th>
-              <th v-if="canUpdateStaff || canViewActivity" class="is-actions">{{ copy.colActions }}</th>
+              <th
+                v-if="canUpdateStaff || canAssignStaffRoles || canViewActivity"
+                class="is-actions"
+              >
+                {{ copy.colActions }}
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -184,7 +189,10 @@
                 </div>
               </td>
               <td class="is-date">{{ formatDateTime(user.created_at) }}</td>
-              <td v-if="canUpdateStaff || canViewActivity" class="is-actions">
+              <td
+                v-if="canUpdateStaff || canAssignStaffRoles || canViewActivity"
+                class="is-actions"
+              >
                 <div class="ym-staff-row-actions">
                   <button
                     v-if="canUpdateStaff"
@@ -194,6 +202,15 @@
                   >
                     <span aria-hidden="true">✎</span>
                     {{ copy.editStaff }}
+                  </button>
+                  <button
+                    v-if="canAssignStaffRoles"
+                    type="button"
+                    class="ym-staff-row-action is-roles"
+                    @click="openRoleModal(user, $event)"
+                  >
+                    <span aria-hidden="true">⌘</span>
+                    {{ copy.manageRoles }}
                   </button>
                   <button
                     v-if="canViewActivity"
@@ -463,6 +480,119 @@
 
     <Teleport to="body">
       <div
+        v-if="roleModalOpen && roleStaff"
+        class="ym-staff-dialog-backdrop ym-admin-page"
+        :dir="currentLocale === 'en' ? 'ltr' : 'rtl'"
+        :style="{ '--ym-admin-section-accent': '#06b6d4', '--ym-admin-section-accent-secondary': '#8b5cf6' }"
+        role="presentation"
+        @mousedown.self="closeRoleModal"
+      >
+        <section
+          ref="roleDialog"
+          class="ym-staff-dialog"
+          role="dialog"
+          aria-modal="true"
+          :aria-labelledby="'ym-staff-roles-title'"
+          tabindex="-1"
+        >
+          <header>
+            <div>
+              <span>{{ copy.rolesEyebrow }}</span>
+              <h2 id="ym-staff-roles-title">{{ copy.rolesTitle }}</h2>
+              <p>{{ copy.rolesDescription }}</p>
+            </div>
+            <button
+              type="button"
+              class="ym-staff-icon-button"
+              :aria-label="copy.close"
+              :disabled="savingStaffRoles"
+              @click="closeRoleModal"
+            >
+              ×
+            </button>
+          </header>
+
+          <form class="ym-staff-create-form" @submit.prevent="submitStaffRoles">
+            <p v-if="roleError" class="ym-staff-inline-error" role="alert">
+              {{ roleError }}
+            </p>
+
+            <div class="ym-staff-role-modal-user">
+              <strong :dir="textDirection(roleStaff.name)">{{ roleStaff.name }}</strong>
+              <span dir="ltr">{{ roleStaff.email }}</span>
+              <small>#{{ roleStaff.id }}</small>
+            </div>
+
+            <fieldset class="ym-staff-role-fieldset">
+              <legend>{{ copy.availableInternalRoles }}</legend>
+              <div class="ym-staff-role-options">
+                <label
+                  v-for="role in ['staff', 'admin']"
+                  :key="role"
+                  class="ym-staff-role-option"
+                  :class="[`is-${role}`, { 'is-selected': selectedStaffRoles.includes(role) }]"
+                >
+                  <span class="ym-staff-role-option__check">
+                    <input
+                      v-model="selectedStaffRoles"
+                      type="checkbox"
+                      :value="role"
+                      :disabled="savingStaffRoles"
+                    >
+                    <span aria-hidden="true">
+                      {{ selectedStaffRoles.includes(role) ? '✓' : '' }}
+                    </span>
+                  </span>
+                  <span class="ym-staff-role-option__content">
+                    <strong>{{ role }}</strong>
+                    <small>
+                      {{
+                        role === 'staff'
+                          ? copy.staffRoleDescription
+                          : copy.adminRoleDescription
+                      }}
+                    </small>
+                  </span>
+                </label>
+              </div>
+            </fieldset>
+
+            <p class="ym-staff-edit-scope">
+              {{ copy.rolesScope }}
+            </p>
+            <small v-if="roleFieldError('roles')" class="ym-staff-role-field-error">
+              {{ roleFieldError('roles') }}
+            </small>
+
+            <footer>
+              <button
+                type="button"
+                class="ym-staff-secondary-button"
+                :disabled="savingStaffRoles"
+                @click="closeRoleModal"
+              >
+                {{ copy.cancel }}
+              </button>
+              <button
+                type="submit"
+                class="ym-staff-primary-button"
+                :disabled="savingStaffRoles"
+              >
+                <span
+                  v-if="savingStaffRoles"
+                  class="ym-staff-button-spinner"
+                  aria-hidden="true"
+                />
+                {{ savingStaffRoles ? copy.savingRoles : copy.saveRoles }}
+              </button>
+            </footer>
+          </form>
+        </section>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div
         v-if="activityOpen && selectedStaff"
         class="ym-staff-drawer-backdrop ym-admin-page"
         :class="{ 'is-ltr': currentLocale === 'en' }"
@@ -692,6 +822,15 @@ interface UpdateStaffResponse {
   errors: Record<string, string[]> | null
 }
 
+interface SyncStaffRolesResponse {
+  success: boolean
+  data: {
+    user: StaffUser
+  }
+  message: string
+  errors: Record<string, string[]> | null
+}
+
 interface StaffActivityEvent {
   id: number
   event_type: string
@@ -784,6 +923,19 @@ const copyMap = {
     colActions: 'الإجراءات',
     accountActivity: 'سجل الحساب',
     editStaff: 'تعديل البيانات',
+    manageRoles: 'إدارة الأدوار',
+    rolesEyebrow: 'الوصول الداخلي',
+    rolesTitle: 'إدارة أدوار الموظف',
+    rolesDescription: 'اختر الأدوار الداخلية المرتبطة بالحساب. لا يمكن إسناد أدوار خارجية أو دور المدير الأعلى.',
+    availableInternalRoles: 'الأدوار الداخلية المتاحة',
+    rolesScope: 'يجب أن يبقى الحساب مرتبطًا بدور داخلي واحد على الأقل.',
+    saveRoles: 'حفظ الأدوار',
+    savingRoles: 'جارٍ حفظ الأدوار...',
+    rolesSuccess: 'تم تحديث أدوار الموظف بنجاح.',
+    rolesError: 'تعذر تحديث أدوار الموظف. تحقق من الاختيارات وحاول مرة أخرى.',
+    rolesRequired: 'اختر دورًا داخليًا واحدًا على الأقل.',
+    staffRoleDescription: 'وصول تشغيلي داخلي وفق الصلاحيات الممنوحة.',
+    adminRoleDescription: 'وصول إداري داخلي وفق الصلاحيات الممنوحة.',
     editEyebrow: 'الملف الأساسي للحساب',
     editDescription: 'عدّل الاسم والبريد الإلكتروني فقط. تبقى الأدوار والصلاحيات وكلمة المرور خارج نطاق هذه العملية.',
     editScope: 'لن يؤدي الحفظ إلى تغيير الدور أو الصلاحيات أو كلمة المرور.',
@@ -877,6 +1029,19 @@ const copyMap = {
     colActions: 'Actions',
     accountActivity: 'Account activity',
     editStaff: 'Edit profile',
+    manageRoles: 'Manage roles',
+    rolesEyebrow: 'Internal access',
+    rolesTitle: 'Manage staff roles',
+    rolesDescription: 'Select the internal roles assigned to this account. External roles and the super-admin role cannot be assigned.',
+    availableInternalRoles: 'Available internal roles',
+    rolesScope: 'The account must retain at least one internal role.',
+    saveRoles: 'Save roles',
+    savingRoles: 'Saving roles...',
+    rolesSuccess: 'Staff roles updated successfully.',
+    rolesError: 'Could not update staff roles. Review the selection and try again.',
+    rolesRequired: 'Select at least one internal role.',
+    staffRoleDescription: 'Internal operational access through granted permissions.',
+    adminRoleDescription: 'Internal administrative access through granted permissions.',
     editEyebrow: 'Core account profile',
     editDescription: 'Update name and email only. Roles, permissions, and password stay outside this action.',
     editScope: 'Saving will not change roles, permissions, or password.',
@@ -934,6 +1099,7 @@ const copy = computed(() => copyMap[currentLocale.value])
 const canViewStaff = computed(() => auth.can('admin.staff.view'))
 const canCreateStaff = computed(() => auth.can('admin.staff.create'))
 const canUpdateStaff = computed(() => auth.can('admin.staff.update'))
+const canAssignStaffRoles = computed(() => auth.can('admin.staff.assign_roles'))
 const canViewActivity = computed(() => auth.can('admin.staff.activity.view'))
 
 const staffUsers = ref<StaffUser[]>([])
@@ -993,6 +1159,15 @@ const editForm = reactive({
   name: '',
   email: ''
 })
+
+const roleModalOpen = ref(false)
+const roleStaff = ref<StaffUser | null>(null)
+const selectedStaffRoles = ref<string[]>([])
+const savingStaffRoles = ref(false)
+const roleError = ref<string | null>(null)
+const roleFieldErrors = ref<Record<string, string[]>>({})
+const roleDialog = ref<HTMLElement | null>(null)
+const roleTrigger = ref<HTMLElement | null>(null)
 
 const activityOpen = ref(false)
 const selectedStaff = ref<StaffUser | null>(null)
@@ -1234,6 +1409,81 @@ async function submitEditStaff(): Promise<void> {
   }
 }
 
+async function openRoleModal(user: StaffUser, event: MouseEvent): Promise<void> {
+  if (!canAssignStaffRoles.value) return
+
+  roleTrigger.value = event.currentTarget as HTMLElement
+  roleStaff.value = user
+  selectedStaffRoles.value = [...new Set(
+    user.roles.filter(role => role === 'staff' || role === 'admin')
+  )]
+  roleError.value = null
+  roleFieldErrors.value = {}
+  successMessage.value = null
+  roleModalOpen.value = true
+
+  await nextTick()
+  roleDialog.value?.focus()
+}
+
+function closeRoleModal(): void {
+  if (savingStaffRoles.value) return
+
+  roleModalOpen.value = false
+  roleStaff.value = null
+  selectedStaffRoles.value = []
+  roleError.value = null
+  roleFieldErrors.value = {}
+  nextTick(() => roleTrigger.value?.focus())
+}
+
+function roleFieldError(field: string): string {
+  return roleFieldErrors.value[field]?.[0] ?? ''
+}
+
+async function submitStaffRoles(): Promise<void> {
+  if (!canAssignStaffRoles.value || !roleStaff.value) return
+
+  const roles = [...new Set(
+    selectedStaffRoles.value.filter(role => role === 'staff' || role === 'admin')
+  )].sort()
+
+  roleError.value = null
+  roleFieldErrors.value = {}
+  successMessage.value = null
+
+  if (roles.length === 0) {
+    roleError.value = copy.value.rolesRequired
+    roleFieldErrors.value = { roles: [copy.value.rolesRequired] }
+    return
+  }
+
+  savingStaffRoles.value = true
+
+  try {
+    const response = await apiFetch<SyncStaffRolesResponse>(
+      `/admin/staff/${roleStaff.value.id}/roles`,
+      {
+        method: 'PUT',
+        body: { roles }
+      }
+    )
+
+    savingStaffRoles.value = false
+    closeRoleModal()
+    successMessage.value = response.message || copy.value.rolesSuccess
+    await fetchStaff()
+  } catch (caughtError: unknown) {
+    const err = caughtError as any
+    roleFieldErrors.value = err?.data?.errors ?? err?.response?._data?.errors ?? {}
+    roleError.value = err?.data?.message
+      || err?.response?._data?.message
+      || copy.value.rolesError
+  } finally {
+    savingStaffRoles.value = false
+  }
+}
+
 async function fetchStaff(): Promise<void> {
   if (!canViewStaff.value) return
 
@@ -1376,6 +1626,10 @@ function eventLabel(event: StaffActivityEvent): string {
       ar: 'تم تحديث بيانات الحساب الأساسية',
       en: 'Core account profile updated'
     },
+    'staff.roles.synced': {
+      ar: 'تم تحديث أدوار الحساب الداخلي',
+      en: 'Internal account roles updated'
+    },
     'user.roles.synced': {
       ar: 'تم تحديث أدوار الحساب',
       en: 'Account roles updated'
@@ -1430,6 +1684,11 @@ function handleEscape(event: KeyboardEvent): void {
 
   if (editModalOpen.value) {
     closeEditStaffModal()
+    return
+  }
+
+  if (roleModalOpen.value) {
+    closeRoleModal()
     return
   }
 
@@ -1638,6 +1897,11 @@ onBeforeUnmount(() => {
 .ym-staff-row-action.is-edit {
   border-color: color-mix(in srgb, var(--ym-admin-section-accent) 34%, var(--ym-admin-border));
   color: color-mix(in srgb, var(--ym-admin-section-accent) 80%, var(--ym-admin-text));
+}
+
+.ym-staff-row-action.is-roles {
+  border-color: color-mix(in srgb, #8b5cf6 38%, var(--ym-admin-border));
+  color: color-mix(in srgb, #8b5cf6 82%, var(--ym-admin-text));
 }
 
 .ym-staff-primary-button:hover:not(:disabled),
@@ -1849,6 +2113,138 @@ onBeforeUnmount(() => {
   font-size: 12px;
   font-weight: 800;
   line-height: 1.65;
+}
+
+.ym-staff-role-modal-user {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 14px;
+  border: 1px solid color-mix(in srgb, var(--ym-admin-section-accent) 24%, var(--ym-admin-border));
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--ym-admin-section-accent) 6%, var(--ym-admin-surface-soft));
+}
+
+.ym-staff-role-modal-user strong,
+.ym-staff-role-modal-user span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ym-staff-role-modal-user span,
+.ym-staff-role-modal-user small {
+  color: var(--ym-admin-muted);
+  font-size: 12px;
+}
+
+.ym-staff-role-modal-user small {
+  grid-column: 2;
+  grid-row: 1;
+  font-weight: 900;
+}
+
+.ym-staff-role-fieldset {
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.ym-staff-role-fieldset legend {
+  margin-bottom: 9px;
+  color: var(--ym-admin-text);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.ym-staff-role-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ym-staff-role-option {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 11px;
+  border: 1px solid var(--ym-admin-border);
+  border-radius: 14px;
+  padding: 13px;
+  background: var(--ym-admin-surface-soft);
+  cursor: pointer;
+  transition: border-color .16s ease, background .16s ease, transform .16s ease;
+}
+
+.ym-staff-role-option:hover {
+  transform: translateY(-1px);
+}
+
+.ym-staff-role-option.is-staff.is-selected {
+  border-color: color-mix(in srgb, #06b6d4 55%, var(--ym-admin-border));
+  background: color-mix(in srgb, #06b6d4 9%, var(--ym-admin-surface-soft));
+}
+
+.ym-staff-role-option.is-admin.is-selected {
+  border-color: color-mix(in srgb, #8b5cf6 55%, var(--ym-admin-border));
+  background: color-mix(in srgb, #8b5cf6 9%, var(--ym-admin-surface-soft));
+}
+
+.ym-staff-role-option__check {
+  position: relative;
+  display: grid;
+  width: 23px;
+  height: 23px;
+  flex: 0 0 23px;
+  place-items: center;
+  border: 1px solid var(--ym-admin-border);
+  border-radius: 7px;
+  background: var(--ym-admin-control-bg);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.ym-staff-role-option__check input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.ym-staff-role-option.is-selected .ym-staff-role-option__check {
+  border-color: transparent;
+  background: #8b5cf6;
+}
+
+.ym-staff-role-option.is-staff.is-selected .ym-staff-role-option__check {
+  background: #0891b2;
+}
+
+.ym-staff-role-option__content {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.ym-staff-role-option__content strong {
+  color: var(--ym-admin-text);
+  font-size: 13px;
+}
+
+.ym-staff-role-option__content small {
+  color: var(--ym-admin-muted);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.ym-staff-role-field-error {
+  margin-top: -6px;
+  color: var(--ym-admin-danger, #ef4444);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .ym-staff-inline-error {
@@ -2122,6 +2518,7 @@ onBeforeUnmount(() => {
 
   .ym-staff-filters,
   .ym-staff-form-grid,
+  .ym-staff-role-options,
   .ym-staff-activity-summary {
     grid-template-columns: 1fr;
   }
