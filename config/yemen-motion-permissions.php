@@ -119,6 +119,11 @@ return [
             'label_ar' => 'إدارة أدوار الموظف',
         ],
         [
+            'name' => 'admin.staff.assign_permissions',
+            'group' => 'admin.staff',
+            'label_ar' => 'إدارة الصلاحيات المباشرة للموظف',
+        ],
+        [
             'name' => 'admin.staff.activity.view',
             'group' => 'admin.staff',
             'label_ar' => 'عرض سجل عمليات حساب الموظف',

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ListStaffRequest;
 use App\Http\Requests\Admin\StaffActivityRequest;
 use App\Http\Requests\Admin\StoreStaffRequest;
+use App\Http\Requests\Admin\SyncStaffPermissionsRequest;
 use App\Http\Requests\Admin\SyncStaffRolesRequest;
 use App\Http\Requests\Admin\UpdateStaffRequest;
 use App\Models\AuditEvent;
@@ -13,6 +14,7 @@ use App\Models\User;
 use App\Services\Audit\AuditEventLogger;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Throwable;
@@ -206,6 +208,84 @@ class StaffController extends Controller
         ]);
     }
 
+    public function permissions(Request $request, User $staff): JsonResponse
+    {
+        $actor = $request->user();
+
+        abort_unless(
+            $actor instanceof User
+            && ! $actor->hasAnyRole(['client', 'designer'])
+            && $actor->hasAnyRole(['super-admin', 'admin', 'staff'])
+            && $actor->can('admin.staff.assign_permissions'),
+            403,
+        );
+
+        $this->ensureManageableStaffTarget($staff);
+        $staff->loadMissing(['roles:id,name', 'permissions:id,name']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'تم جلب صلاحيات الموظف بنجاح.',
+            'data' => [
+                'user' => $this->staffPayload($staff),
+                'permissions' => [
+                    'available' => $this->availablePermissionCatalog($actor),
+                    ...$this->staffPermissionPayload($staff),
+                ],
+            ],
+            'errors' => null,
+        ]);
+    }
+
+    public function syncPermissions(
+        SyncStaffPermissionsRequest $request,
+        User $staff,
+    ): JsonResponse {
+        $this->ensureManageableStaffTarget($staff);
+
+        $requestedPermissions = array_values(array_unique($request->validated('permissions')));
+        sort($requestedPermissions);
+
+        $actor = $request->user();
+        $manageablePermissions = $this->manageablePermissionNames($actor);
+        $previousDirectPermissions = $this->directPermissionNames($staff);
+        $preservedPermissions = array_values(array_diff(
+            $previousDirectPermissions,
+            $manageablePermissions,
+        ));
+        $finalPermissions = array_values(array_unique([
+            ...$preservedPermissions,
+            ...$requestedPermissions,
+        ]));
+        sort($finalPermissions);
+
+        DB::transaction(function () use ($staff, $finalPermissions): void {
+            $staff->syncPermissions($finalPermissions);
+        });
+
+        $staff->load(['roles:id,name', 'permissions:id,name']);
+        $newDirectPermissions = $this->directPermissionNames($staff);
+
+        if ($previousDirectPermissions !== $newDirectPermissions) {
+            $this->recordStaffPermissionsSyncedAuditEvent(
+                $request,
+                $staff,
+                $previousDirectPermissions,
+                $newDirectPermissions,
+            );
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'تم تحديث الصلاحيات المباشرة للموظف بنجاح.',
+            'data' => [
+                'user' => $this->staffPayload($staff),
+                'permissions' => $this->staffPermissionPayload($staff),
+            ],
+            'errors' => null,
+        ]);
+    }
+
     public function activity(StaffActivityRequest $request, User $staff): JsonResponse
     {
         if (
@@ -284,6 +364,97 @@ class StaffController extends Controller
                 'roles',
                 fn (Builder $query) => $query->where('name', User::superAdminRoleName()),
             );
+    }
+
+    private function ensureManageableStaffTarget(User $staff): void
+    {
+        if (
+            $staff->isSuperAdmin()
+            || ! $staff->hasAnyRole(['staff', 'admin'])
+        ) {
+            abort(404);
+        }
+    }
+
+    /**
+     * @return list<array{name: string, group: string, label_ar: string}>
+     */
+    private function availablePermissionCatalog(User $actor): array
+    {
+        $manageableNames = $this->manageablePermissionNames($actor);
+
+        return collect(config('yemen-motion-permissions.permissions', []))
+            ->filter(fn (array $permission): bool => in_array(
+                $permission['name'] ?? null,
+                $manageableNames,
+                true,
+            ))
+            ->sortBy([
+                ['group', 'asc'],
+                ['name', 'asc'],
+            ])
+            ->map(fn (array $permission): array => [
+                'name' => $permission['name'],
+                'group' => $permission['group'],
+                'label_ar' => $permission['label_ar'],
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function manageablePermissionNames(User $actor): array
+    {
+        $registeredNames = collect(config('yemen-motion-permissions.permissions', []))
+            ->pluck('name')
+            ->filter(fn (mixed $name): bool => is_string($name))
+            ->unique()
+            ->sort()
+            ->values();
+
+        if ($actor->isSuperAdmin()) {
+            return $registeredNames->all();
+        }
+
+        return $registeredNames
+            ->intersect($actor->getAllPermissions()->pluck('name'))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function directPermissionNames(User $staff): array
+    {
+        return $staff->getDirectPermissions()
+            ->pluck('name')
+            ->sort()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array{direct: list<string>, inherited: list<string>, effective: list<string>}
+     */
+    private function staffPermissionPayload(User $staff): array
+    {
+        $direct = $this->directPermissionNames($staff);
+        $inherited = $staff->getPermissionsViaRoles()
+            ->pluck('name')
+            ->sort()
+            ->values()
+            ->all();
+        $effective = array_values(array_unique([...$direct, ...$inherited]));
+        sort($effective);
+
+        return [
+            'direct' => $direct,
+            'inherited' => $inherited,
+            'effective' => $effective,
+        ];
     }
 
     /**
@@ -435,6 +606,58 @@ class StaffController extends Controller
                     'removed_roles' => array_values(array_diff($previousRoles, $newRoles)),
                     'role_count' => count($newRoles),
                     'source' => 'admin_staff_role_sync',
+                ],
+            ]);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            if (app()->environment('testing')) {
+                throw $exception;
+            }
+        }
+    }
+
+    /**
+     * @param list<string> $previousDirectPermissions
+     * @param list<string> $newDirectPermissions
+     */
+    private function recordStaffPermissionsSyncedAuditEvent(
+        SyncStaffPermissionsRequest $request,
+        User $updatedUser,
+        array $previousDirectPermissions,
+        array $newDirectPermissions,
+    ): void {
+        $actor = $request->user();
+
+        try {
+            $this->auditEventLogger->record([
+                'event_type' => 'staff.permissions.synced',
+                'category' => 'staff',
+                'severity' => 'notice',
+                'actor_type' => 'user',
+                'actor_id' => $actor?->id,
+                'actor_role' => $actor?->roles->first()?->name,
+                'target_type' => 'user',
+                'target_id' => $updatedUser->id,
+                'action' => 'sync_permissions',
+                'outcome' => 'success',
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'request_id' => $request->header('X-Request-ID'),
+                'correlation_id' => $request->header('X-Correlation-ID'),
+                'metadata' => [
+                    'previous_direct_permissions' => $previousDirectPermissions,
+                    'new_direct_permissions' => $newDirectPermissions,
+                    'added_permissions' => array_values(array_diff(
+                        $newDirectPermissions,
+                        $previousDirectPermissions,
+                    )),
+                    'removed_permissions' => array_values(array_diff(
+                        $previousDirectPermissions,
+                        $newDirectPermissions,
+                    )),
+                    'direct_permission_count' => count($newDirectPermissions),
+                    'source' => 'admin_staff_permission_sync',
                 ],
             ]);
         } catch (Throwable $exception) {

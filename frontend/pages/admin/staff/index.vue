@@ -160,7 +160,12 @@
               <th class="is-roles">{{ copy.colRoles }}</th>
               <th class="is-date">{{ copy.colCreated }}</th>
               <th
-                v-if="canUpdateStaff || canAssignStaffRoles || canViewActivity"
+                v-if="
+                  canUpdateStaff
+                  || canAssignStaffRoles
+                  || canAssignStaffPermissions
+                  || canViewActivity
+                "
                 class="is-actions"
               >
                 {{ copy.colActions }}
@@ -190,7 +195,12 @@
               </td>
               <td class="is-date">{{ formatDateTime(user.created_at) }}</td>
               <td
-                v-if="canUpdateStaff || canAssignStaffRoles || canViewActivity"
+                v-if="
+                  canUpdateStaff
+                  || canAssignStaffRoles
+                  || canAssignStaffPermissions
+                  || canViewActivity
+                "
                 class="is-actions"
               >
                 <div class="ym-staff-row-actions">
@@ -211,6 +221,15 @@
                   >
                     <span aria-hidden="true">⌘</span>
                     {{ copy.manageRoles }}
+                  </button>
+                  <button
+                    v-if="canAssignStaffPermissions"
+                    type="button"
+                    class="ym-staff-row-action is-permissions"
+                    @click="openPermissionsModal(user, $event)"
+                  >
+                    <span aria-hidden="true">✓</span>
+                    {{ copy.managePermissions }}
                   </button>
                   <button
                     v-if="canViewActivity"
@@ -593,6 +612,262 @@
 
     <Teleport to="body">
       <div
+        v-if="permissionsModalOpen && permissionsStaff"
+        class="ym-staff-dialog-backdrop ym-admin-page"
+        :dir="currentLocale === 'en' ? 'ltr' : 'rtl'"
+        :style="{ '--ym-admin-section-accent': '#06b6d4', '--ym-admin-section-accent-secondary': '#8b5cf6' }"
+        role="presentation"
+        @mousedown.self="closePermissionsModal"
+      >
+        <section
+          ref="permissionsDialog"
+          class="ym-staff-dialog ym-staff-permissions-dialog"
+          role="dialog"
+          aria-modal="true"
+          :aria-labelledby="'ym-staff-permissions-title'"
+          tabindex="-1"
+        >
+          <header>
+            <div>
+              <span>{{ copy.permissionsEyebrow }}</span>
+              <h2 id="ym-staff-permissions-title">{{ copy.permissionsTitle }}</h2>
+              <p>{{ copy.permissionsDescription }}</p>
+            </div>
+            <button
+              type="button"
+              class="ym-staff-icon-button"
+              :aria-label="copy.close"
+              :disabled="savingStaffPermissions"
+              @click="closePermissionsModal"
+            >
+              ×
+            </button>
+          </header>
+
+          <form class="ym-staff-permissions-form" @submit.prevent="submitStaffPermissions">
+            <div class="ym-staff-permissions-body">
+              <div
+                v-if="permissionsLoading"
+                class="ym-staff-loading"
+                role="status"
+              >
+                <span aria-hidden="true" />
+                <strong>{{ copy.permissionsLoading }}</strong>
+              </div>
+
+              <div
+                v-else-if="permissionsError && !permissionsLoaded"
+                class="ym-staff-permissions-error"
+              >
+                <p class="ym-staff-inline-error" role="alert">
+                  {{ permissionsError }}
+                </p>
+                <button
+                  type="button"
+                  class="ym-staff-secondary-button"
+                  @click="loadStaffPermissions"
+                >
+                  {{ copy.retry }}
+                </button>
+              </div>
+
+              <template v-else>
+                <div class="ym-staff-permissions-user">
+                  <div>
+                    <strong :dir="textDirection(permissionsStaff.name)">
+                      {{ permissionsStaff.name }}
+                    </strong>
+                    <span dir="ltr">{{ permissionsStaff.email }}</span>
+                  </div>
+                  <div class="ym-staff-permissions-user__meta">
+                    <small>#{{ permissionsStaff.id }}</small>
+                    <span>
+                      <small
+                        v-for="role in permissionsStaff.roles"
+                        :key="role"
+                        class="ym-staff-permissions-user__role"
+                      >
+                        {{ role }}
+                      </small>
+                    </span>
+                  </div>
+                </div>
+
+                <p v-if="permissionsError" class="ym-staff-inline-error" role="alert">
+                  {{ permissionsError }}
+                </p>
+
+                <div class="ym-staff-permissions-summary">
+                  <span>
+                    <small>{{ copy.availablePermissionCount }}</small>
+                    <strong>{{ availableStaffPermissions.length }}</strong>
+                  </span>
+                  <span>
+                    <small>{{ copy.directPermissionCount }}</small>
+                    <strong>{{ directStaffPermissions.length }}</strong>
+                  </span>
+                  <span>
+                    <small>{{ copy.inheritedPermissionCount }}</small>
+                    <strong>{{ inheritedStaffPermissions.length }}</strong>
+                  </span>
+                  <span v-if="protectedDirectPermissions.length" class="is-protected">
+                    <small>{{ copy.protectedPermissionCount }}</small>
+                    <strong>{{ protectedDirectPermissions.length }}</strong>
+                  </span>
+                </div>
+
+                <div class="ym-staff-permissions-toolbar">
+                  <label class="ym-staff-field">
+                    <span>{{ copy.permissionsSearch }}</span>
+                    <input
+                      v-model.trim="permissionsSearch"
+                      type="search"
+                      :placeholder="copy.permissionsSearchPlaceholder"
+                    >
+                  </label>
+                  <label class="ym-staff-field">
+                    <span>{{ copy.permissionsFilter }}</span>
+                    <select v-model="permissionsFilter">
+                      <option value="all">{{ copy.permissionsFilterAll }}</option>
+                      <option value="direct">{{ copy.permissionsFilterDirect }}</option>
+                      <option value="inherited">{{ copy.permissionsFilterInherited }}</option>
+                      <option value="effective">{{ copy.permissionsFilterEffective }}</option>
+                    </select>
+                  </label>
+                  <div class="ym-staff-permissions-legend" aria-label="Permission legend">
+                    <span class="is-direct">{{ copy.permissionsLegendDirect }}</span>
+                    <span class="is-inherited">{{ copy.permissionsLegendInherited }}</span>
+                    <span class="is-protected">{{ copy.permissionsLegendProtected }}</span>
+                  </div>
+                </div>
+
+                <p
+                  v-if="permissionFieldError('permissions')"
+                  class="ym-staff-inline-error"
+                  role="alert"
+                >
+                  {{ permissionFieldError('permissions') }}
+                </p>
+
+                <section
+                  v-if="protectedDirectPermissions.length"
+                  class="ym-staff-protected-permissions"
+                >
+                  <header>
+                    <strong>{{ copy.protectedPermissionsTitle }}</strong>
+                    <p>{{ copy.protectedPermissionsDescription }}</p>
+                  </header>
+                  <ul>
+                    <li v-for="permission in protectedDirectPermissions" :key="permission">
+                      <code>{{ permission }}</code>
+                    </li>
+                  </ul>
+                </section>
+
+                <section class="ym-staff-permissions-catalog">
+                  <header>
+                    <strong>{{ copy.manageablePermissions }}</strong>
+                    <small>{{ filteredPermissionGroups.length }}</small>
+                  </header>
+
+                  <div
+                    v-if="filteredPermissionGroups.length"
+                    class="ym-staff-permission-groups"
+                  >
+                    <details
+                      v-for="group in filteredPermissionGroups"
+                      :key="group.name"
+                      class="ym-staff-permission-group"
+                      open
+                    >
+                      <summary>
+                        <strong>{{ staffPermissionGroupLabel(group.name) }}</strong>
+                        <small>{{ group.permissions.length }}</small>
+                      </summary>
+                      <div class="ym-staff-permission-list">
+                        <label
+                          v-for="permission in group.permissions"
+                          :key="permission.name"
+                          class="ym-staff-permission-row"
+                          :class="{
+                            'is-selected': selectedDirectPermissions.includes(permission.name)
+                          }"
+                          :title="permission.name"
+                        >
+                          <input
+                            v-model="selectedDirectPermissions"
+                            type="checkbox"
+                            :value="permission.name"
+                            :disabled="savingStaffPermissions"
+                          >
+                          <span class="ym-staff-permission-row__meta">
+                            <strong>{{ staffPermissionLabel(permission) }}</strong>
+                          </span>
+                          <span class="ym-staff-permission-row__badges">
+                            <small
+                              v-if="selectedDirectPermissions.includes(permission.name)"
+                              class="is-direct"
+                            >
+                              {{ copy.directPermission }}
+                            </small>
+                            <small
+                              v-if="inheritedStaffPermissions.includes(permission.name)"
+                              class="is-inherited"
+                            >
+                              {{ copy.inheritedPermission }}
+                            </small>
+                            <small
+                              v-if="effectiveStaffPermissions.includes(permission.name)"
+                              class="is-effective"
+                            >
+                              {{ copy.effectivePermission }}
+                            </small>
+                          </span>
+                        </label>
+                      </div>
+                    </details>
+                  </div>
+
+                  <p v-else class="ym-staff-permissions-empty">
+                    {{ copy.noPermissions }}
+                  </p>
+                </section>
+              </template>
+            </div>
+
+            <footer class="ym-staff-permissions-footer">
+              <button
+                type="button"
+                class="ym-staff-secondary-button"
+                :disabled="savingStaffPermissions"
+                @click="closePermissionsModal"
+              >
+                {{ copy.cancel }}
+              </button>
+              <button
+                type="submit"
+                class="ym-staff-primary-button"
+                :disabled="permissionsLoading || savingStaffPermissions || !permissionsLoaded"
+              >
+                <span
+                  v-if="savingStaffPermissions"
+                  class="ym-staff-button-spinner"
+                  aria-hidden="true"
+                />
+                {{
+                  savingStaffPermissions
+                    ? copy.savingPermissions
+                    : copy.savePermissions
+                }}
+              </button>
+            </footer>
+          </form>
+        </section>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div
         v-if="activityOpen && selectedStaff"
         class="ym-staff-drawer-backdrop ym-admin-page"
         :class="{ 'is-ltr': currentLocale === 'en' }"
@@ -770,6 +1045,7 @@ type TeamRole = '' | 'staff' | 'admin'
 type StaffSortKey = 'id' | 'name' | 'email' | 'created_at'
 type SortDirection = 'asc' | 'desc'
 type StaffCreateRole = 'staff' | 'admin'
+type PermissionsFilter = 'all' | 'direct' | 'inherited' | 'effective'
 
 interface StaffUser {
   id: number
@@ -777,6 +1053,12 @@ interface StaffUser {
   email: string
   roles: string[]
   created_at: string | null
+}
+
+interface StaffPermissionOption {
+  name: string
+  group: string
+  label_ar: string
 }
 
 interface Pagination<T> {
@@ -826,6 +1108,35 @@ interface SyncStaffRolesResponse {
   success: boolean
   data: {
     user: StaffUser
+  }
+  message: string
+  errors: Record<string, string[]> | null
+}
+
+interface StaffPermissionsResponse {
+  success: boolean
+  data: {
+    user: StaffUser
+    permissions: {
+      available: StaffPermissionOption[]
+      direct: string[]
+      inherited: string[]
+      effective: string[]
+    }
+  }
+  message: string
+  errors: Record<string, string[]> | null
+}
+
+interface SyncStaffPermissionsResponse {
+  success: boolean
+  data: {
+    user: StaffUser
+    permissions: {
+      direct: string[]
+      inherited: string[]
+      effective: string[]
+    }
   }
   message: string
   errors: Record<string, string[]> | null
@@ -924,6 +1235,38 @@ const copyMap = {
     accountActivity: 'سجل الحساب',
     editStaff: 'تعديل البيانات',
     manageRoles: 'إدارة الأدوار',
+    managePermissions: 'إدارة الصلاحيات',
+    permissionsEyebrow: 'التفويض المباشر',
+    permissionsTitle: 'إدارة الصلاحيات المباشرة',
+    permissionsDescription: 'حدّد ما يمكن منحه مباشرة لهذا الحساب، بينما تبقى الصلاحيات الموروثة للقراءة فقط.',
+    permissionsLoading: 'يتم تحميل صلاحيات الموظف...',
+    permissionsLoadError: 'تعذر تحميل صلاحيات الموظف.',
+    permissionsSearch: 'البحث في الصلاحيات',
+    permissionsSearchPlaceholder: 'ابحث عن صلاحية',
+    permissionsFilter: 'نوع الصلاحية',
+    permissionsFilterAll: 'الكل',
+    permissionsFilterDirect: 'مباشرة',
+    permissionsFilterInherited: 'موروثة',
+    permissionsFilterEffective: 'فعالة',
+    directPermission: 'مباشرة',
+    inheritedPermission: 'موروثة',
+    effectivePermission: 'فعالة',
+    savePermissions: 'حفظ الصلاحيات',
+    savingPermissions: 'جارٍ حفظ الصلاحيات...',
+    permissionsSuccess: 'تم تحديث الصلاحيات المباشرة للموظف بنجاح.',
+    permissionsError: 'تعذر تحديث صلاحيات الموظف. تحقق من الاختيارات وحاول مرة أخرى.',
+    noPermissions: 'لا توجد صلاحيات مطابقة.',
+    protectedPermissionsTitle: 'صلاحيات مباشرة محفوظة خارج نطاق إدارتك',
+    protectedPermissionsDescription: 'سيحافظ النظام على هذه الصلاحيات، ولا يمكنك تعديلها من هذا الحساب.',
+    permissionsLegendDirect: 'مباشرة',
+    permissionsLegendInherited: 'موروثة',
+    permissionsLegendProtected: 'محفوظة',
+    manageablePermissions: 'الصلاحيات المتاحة للإدارة',
+    protectedPermissionCount: 'المحفوظة',
+    permissionCount: 'عدد الصلاحيات',
+    availablePermissionCount: 'المتاح للإدارة',
+    directPermissionCount: 'المباشرة',
+    inheritedPermissionCount: 'الموروثة',
     rolesEyebrow: 'الوصول الداخلي',
     rolesTitle: 'إدارة أدوار الموظف',
     rolesDescription: 'اختر الأدوار الداخلية المرتبطة بالحساب. لا يمكن إسناد أدوار خارجية أو دور المدير الأعلى.',
@@ -1030,6 +1373,38 @@ const copyMap = {
     accountActivity: 'Account activity',
     editStaff: 'Edit profile',
     manageRoles: 'Manage roles',
+    managePermissions: 'Manage permissions',
+    permissionsEyebrow: 'Direct delegation',
+    permissionsTitle: 'Manage direct permissions',
+    permissionsDescription: 'Choose what can be granted directly to this account. Inherited permissions remain read-only.',
+    permissionsLoading: 'Loading staff permissions...',
+    permissionsLoadError: 'Could not load staff permissions.',
+    permissionsSearch: 'Search permissions',
+    permissionsSearchPlaceholder: 'Search for a permission',
+    permissionsFilter: 'Permission type',
+    permissionsFilterAll: 'All',
+    permissionsFilterDirect: 'Direct',
+    permissionsFilterInherited: 'Inherited',
+    permissionsFilterEffective: 'Effective',
+    directPermission: 'Direct',
+    inheritedPermission: 'Inherited',
+    effectivePermission: 'Effective',
+    savePermissions: 'Save permissions',
+    savingPermissions: 'Saving permissions...',
+    permissionsSuccess: 'Staff direct permissions updated successfully.',
+    permissionsError: 'Could not update staff permissions. Review the selection and try again.',
+    noPermissions: 'No matching permissions.',
+    protectedPermissionsTitle: 'Protected direct permissions outside your management scope',
+    protectedPermissionsDescription: 'These permissions will be preserved and cannot be modified by this account.',
+    permissionsLegendDirect: 'Direct',
+    permissionsLegendInherited: 'Inherited',
+    permissionsLegendProtected: 'Protected',
+    manageablePermissions: 'Manageable permissions',
+    protectedPermissionCount: 'Protected',
+    permissionCount: 'Permission count',
+    availablePermissionCount: 'Manageable',
+    directPermissionCount: 'Direct',
+    inheritedPermissionCount: 'Inherited',
     rolesEyebrow: 'Internal access',
     rolesTitle: 'Manage staff roles',
     rolesDescription: 'Select the internal roles assigned to this account. External roles and the super-admin role cannot be assigned.',
@@ -1096,10 +1471,67 @@ const copyMap = {
 }
 
 const copy = computed(() => copyMap[currentLocale.value])
+
+const staffPermissionGroupLabels: Record<Locale, Record<string, string>> = {
+  ar: {
+    'admin.access': 'الوصول الإداري',
+    'admin.permissions': 'الصلاحيات',
+    'admin.roles': 'الأدوار',
+    'admin.staff': 'الموظفون',
+    'admin.users': 'المستخدمون',
+    'admin.works': 'الأعمال',
+    'dashboard.overview': 'لوحة التحكم',
+    'dashboard.stats': 'إحصاءات اللوحة',
+    'dashboard.chart': 'الرسوم البيانية',
+    'dashboard.activity': 'نشاط المنصة',
+    orders: 'الطلبات',
+    works: 'الأعمال',
+    default: 'صلاحيات أخرى'
+  },
+  en: {
+    'admin.access': 'Administrative access',
+    'admin.permissions': 'Permissions',
+    'admin.roles': 'Roles',
+    'admin.staff': 'Staff',
+    'admin.users': 'Users',
+    'admin.works': 'Works',
+    'dashboard.overview': 'Dashboard',
+    'dashboard.stats': 'Dashboard statistics',
+    'dashboard.chart': 'Charts',
+    'dashboard.activity': 'Platform activity',
+    orders: 'Orders',
+    works: 'Works',
+    default: 'Other permissions'
+  }
+}
+
+function staffPermissionGroupLabel(group: string): string {
+  const labels = staffPermissionGroupLabels[currentLocale.value]
+
+  return labels[group]
+    || (group.startsWith('admin.works') ? labels['admin.works'] : '')
+    || (group.startsWith('works') ? labels.works : '')
+    || labels.default
+}
+
+function staffPermissionLabel(permission: StaffPermissionOption): string {
+  if (currentLocale.value === 'ar') return permission.label_ar
+
+  return permission.name
+    .split('.')
+    .slice(-2)
+    .join(' ')
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, letter => letter.toUpperCase())
+}
+
 const canViewStaff = computed(() => auth.can('admin.staff.view'))
 const canCreateStaff = computed(() => auth.can('admin.staff.create'))
 const canUpdateStaff = computed(() => auth.can('admin.staff.update'))
 const canAssignStaffRoles = computed(() => auth.can('admin.staff.assign_roles'))
+const canAssignStaffPermissions = computed(
+  () => auth.can('admin.staff.assign_permissions')
+)
 const canViewActivity = computed(() => auth.can('admin.staff.activity.view'))
 
 const staffUsers = ref<StaffUser[]>([])
@@ -1169,6 +1601,23 @@ const roleFieldErrors = ref<Record<string, string[]>>({})
 const roleDialog = ref<HTMLElement | null>(null)
 const roleTrigger = ref<HTMLElement | null>(null)
 
+const permissionsModalOpen = ref(false)
+const permissionsStaff = ref<StaffUser | null>(null)
+const permissionsLoading = ref(false)
+const permissionsLoaded = ref(false)
+const savingStaffPermissions = ref(false)
+const permissionsError = ref<string | null>(null)
+const permissionFieldErrors = ref<Record<string, string[]>>({})
+const permissionsDialog = ref<HTMLElement | null>(null)
+const permissionsTrigger = ref<HTMLElement | null>(null)
+const availableStaffPermissions = ref<StaffPermissionOption[]>([])
+const directStaffPermissions = ref<string[]>([])
+const inheritedStaffPermissions = ref<string[]>([])
+const effectiveStaffPermissions = ref<string[]>([])
+const selectedDirectPermissions = ref<string[]>([])
+const permissionsSearch = ref('')
+const permissionsFilter = ref<PermissionsFilter>('all')
+
 const activityOpen = ref(false)
 const selectedStaff = ref<StaffUser | null>(null)
 const activityEvents = ref<StaffActivityEvent[]>([])
@@ -1182,6 +1631,56 @@ const activityPagination = reactive({
   last_page: 1,
   per_page: 10,
   total: 0
+})
+
+const protectedDirectPermissions = computed(() => {
+  const availableNames = new Set(
+    availableStaffPermissions.value.map(permission => permission.name)
+  )
+
+  return directStaffPermissions.value
+    .filter(permission => !availableNames.has(permission))
+    .sort()
+})
+
+const filteredPermissionGroups = computed(() => {
+  const search = permissionsSearch.value.trim().toLocaleLowerCase()
+  const groups = new Map<string, StaffPermissionOption[]>()
+
+  availableStaffPermissions.value
+    .filter((permission) => {
+      const matchesSearch = search === ''
+        || permission.name.toLocaleLowerCase().includes(search)
+        || permission.group.toLocaleLowerCase().includes(search)
+        || permission.label_ar.toLocaleLowerCase().includes(search)
+
+      if (!matchesSearch) return false
+      if (permissionsFilter.value === 'direct') {
+        return selectedDirectPermissions.value.includes(permission.name)
+      }
+      if (permissionsFilter.value === 'inherited') {
+        return inheritedStaffPermissions.value.includes(permission.name)
+      }
+      if (permissionsFilter.value === 'effective') {
+        return effectiveStaffPermissions.value.includes(permission.name)
+      }
+
+      return true
+    })
+    .sort((left, right) => (
+      left.group.localeCompare(right.group)
+      || left.name.localeCompare(right.name)
+    ))
+    .forEach((permission) => {
+      const group = groups.get(permission.group) ?? []
+      group.push(permission)
+      groups.set(permission.group, group)
+    })
+
+  return [...groups.entries()].map(([name, permissions]) => ({
+    name,
+    permissions
+  }))
 })
 
 const metricItems = computed<MetricItem[]>(() => [
@@ -1484,6 +1983,132 @@ async function submitStaffRoles(): Promise<void> {
   }
 }
 
+function resetStaffPermissionsState(): void {
+  availableStaffPermissions.value = []
+  directStaffPermissions.value = []
+  inheritedStaffPermissions.value = []
+  effectiveStaffPermissions.value = []
+  selectedDirectPermissions.value = []
+  permissionsSearch.value = ''
+  permissionsFilter.value = 'all'
+  permissionsLoaded.value = false
+  permissionsError.value = null
+  permissionFieldErrors.value = {}
+}
+
+async function openPermissionsModal(user: StaffUser, event: MouseEvent): Promise<void> {
+  if (!canAssignStaffPermissions.value) return
+
+  permissionsTrigger.value = event.currentTarget as HTMLElement
+  permissionsStaff.value = user
+  resetStaffPermissionsState()
+  successMessage.value = null
+  permissionsModalOpen.value = true
+
+  await nextTick()
+  permissionsDialog.value?.focus()
+  await loadStaffPermissions()
+}
+
+function closePermissionsModal(): void {
+  if (savingStaffPermissions.value) return
+
+  permissionsModalOpen.value = false
+  permissionsStaff.value = null
+  permissionsLoading.value = false
+  resetStaffPermissionsState()
+  nextTick(() => permissionsTrigger.value?.focus())
+}
+
+function permissionFieldError(field: string): string {
+  return permissionFieldErrors.value[field]?.[0] ?? ''
+}
+
+async function loadStaffPermissions(): Promise<void> {
+  if (!canAssignStaffPermissions.value || !permissionsStaff.value) return
+
+  permissionsLoading.value = true
+  permissionsError.value = null
+  permissionFieldErrors.value = {}
+  availableStaffPermissions.value = []
+  directStaffPermissions.value = []
+  inheritedStaffPermissions.value = []
+  effectiveStaffPermissions.value = []
+  selectedDirectPermissions.value = []
+
+  try {
+    const response = await apiFetch<StaffPermissionsResponse>(
+      `/admin/staff/${permissionsStaff.value.id}/permissions`
+    )
+    const permissions = response.data.permissions
+    const availableNames = new Set(
+      permissions.available.map(permission => permission.name)
+    )
+
+    availableStaffPermissions.value = [...permissions.available].sort((left, right) => (
+      left.group.localeCompare(right.group)
+      || left.name.localeCompare(right.name)
+    ))
+    directStaffPermissions.value = [...new Set(permissions.direct)].sort()
+    inheritedStaffPermissions.value = [...new Set(permissions.inherited)].sort()
+    effectiveStaffPermissions.value = [...new Set(permissions.effective)].sort()
+    selectedDirectPermissions.value = directStaffPermissions.value
+      .filter(permission => availableNames.has(permission))
+      .sort()
+    permissionsLoaded.value = true
+  } catch (caughtError: unknown) {
+    const err = caughtError as any
+    permissionsError.value = err?.data?.message
+      || err?.response?._data?.message
+      || copy.value.permissionsLoadError
+  } finally {
+    permissionsLoading.value = false
+  }
+}
+
+async function submitStaffPermissions(): Promise<void> {
+  if (!canAssignStaffPermissions.value || !permissionsStaff.value) return
+
+  const availableNames = new Set(
+    availableStaffPermissions.value.map(permission => permission.name)
+  )
+  const permissions = [...new Set(
+    selectedDirectPermissions.value.filter(permission => availableNames.has(permission))
+  )].sort()
+
+  savingStaffPermissions.value = true
+  permissionsError.value = null
+  permissionFieldErrors.value = {}
+  successMessage.value = null
+
+  try {
+    const response = await apiFetch<SyncStaffPermissionsResponse>(
+      `/admin/staff/${permissionsStaff.value.id}/permissions`,
+      {
+        method: 'PUT',
+        body: { permissions }
+      }
+    )
+
+    savingStaffPermissions.value = false
+    closePermissionsModal()
+    successMessage.value = response.message || copy.value.permissionsSuccess
+    await fetchStaff()
+    await nextTick()
+    permissionsTrigger.value?.focus()
+  } catch (caughtError: unknown) {
+    const err = caughtError as any
+    permissionFieldErrors.value = err?.data?.errors
+      ?? err?.response?._data?.errors
+      ?? {}
+    permissionsError.value = err?.data?.message
+      || err?.response?._data?.message
+      || copy.value.permissionsError
+  } finally {
+    savingStaffPermissions.value = false
+  }
+}
+
 async function fetchStaff(): Promise<void> {
   if (!canViewStaff.value) return
 
@@ -1630,6 +2255,10 @@ function eventLabel(event: StaffActivityEvent): string {
       ar: 'تم تحديث أدوار الحساب الداخلي',
       en: 'Internal account roles updated'
     },
+    'staff.permissions.synced': {
+      ar: 'تم تحديث الصلاحيات المباشرة للحساب',
+      en: 'Direct account permissions updated'
+    },
     'user.roles.synced': {
       ar: 'تم تحديث أدوار الحساب',
       en: 'Account roles updated'
@@ -1689,6 +2318,11 @@ function handleEscape(event: KeyboardEvent): void {
 
   if (roleModalOpen.value) {
     closeRoleModal()
+    return
+  }
+
+  if (permissionsModalOpen.value) {
+    closePermissionsModal()
     return
   }
 
@@ -1902,6 +2536,11 @@ onBeforeUnmount(() => {
 .ym-staff-row-action.is-roles {
   border-color: color-mix(in srgb, #8b5cf6 38%, var(--ym-admin-border));
   color: color-mix(in srgb, #8b5cf6 82%, var(--ym-admin-text));
+}
+
+.ym-staff-row-action.is-permissions {
+  border-color: color-mix(in srgb, #06b6d4 42%, var(--ym-admin-border));
+  color: color-mix(in srgb, #0891b2 84%, var(--ym-admin-text));
 }
 
 .ym-staff-primary-button:hover:not(:disabled),
@@ -2247,6 +2886,442 @@ onBeforeUnmount(() => {
   font-weight: 800;
 }
 
+.ym-staff-permissions-dialog {
+  display: flex;
+  width: min(100%, 1020px);
+  height: min(88dvh, 860px);
+  max-height: 88dvh;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+
+.ym-staff-permissions-dialog > header {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--ym-admin-border);
+  padding: 16px 18px 14px;
+  background: color-mix(in srgb, var(--ym-admin-surface) 96%, transparent);
+}
+
+.ym-staff-permissions-dialog > header p {
+  max-width: 680px;
+  margin-top: 4px;
+  line-height: 1.45;
+}
+
+.ym-staff-permissions-form {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ym-staff-permissions-body {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 11px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 18px 18px;
+  scrollbar-color: color-mix(in srgb, var(--ym-admin-section-accent) 62%, #94a3b8) var(--ym-admin-surface-soft);
+  scrollbar-width: thin;
+}
+
+.ym-staff-permissions-body::-webkit-scrollbar {
+  width: 10px;
+}
+
+.ym-staff-permissions-body::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: var(--ym-admin-surface-soft);
+}
+
+.ym-staff-permissions-body::-webkit-scrollbar-thumb {
+  border: 2px solid var(--ym-admin-surface-soft);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ym-admin-section-accent) 62%, #94a3b8);
+}
+
+.ym-staff-permissions-form > footer {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid var(--ym-admin-border);
+  padding: 12px 18px;
+  background: var(--ym-admin-surface);
+}
+
+.ym-staff-permissions-error {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 10px;
+}
+
+.ym-staff-permissions-user {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--ym-admin-border);
+  border-radius: 11px;
+  padding: 9px 11px;
+  background: var(--ym-admin-surface-soft);
+}
+
+.ym-staff-permissions-user > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.ym-staff-permissions-user strong,
+.ym-staff-permissions-user span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ym-staff-permissions-user span,
+.ym-staff-permissions-user small {
+  color: var(--ym-admin-muted);
+  font-size: 11px;
+}
+
+.ym-staff-permissions-user__meta {
+  align-items: end;
+  justify-items: end;
+}
+
+.ym-staff-permissions-user__meta > span {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.ym-staff-permissions-user__role {
+  border: 1px solid var(--ym-admin-border);
+  border-radius: 999px;
+  padding: 2px 6px;
+  background: var(--ym-admin-surface);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 800;
+}
+
+.ym-staff-permissions-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ym-staff-permissions-summary > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--ym-admin-border);
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: var(--ym-admin-surface-soft);
+}
+
+.ym-staff-permissions-summary > span.is-protected {
+  border-color: color-mix(in srgb, #f59e0b 34%, var(--ym-admin-border));
+  background: color-mix(in srgb, #f59e0b 7%, var(--ym-admin-surface-soft));
+}
+
+.ym-staff-permissions-summary small {
+  color: var(--ym-admin-muted);
+  font-size: 10.5px;
+  font-weight: 800;
+}
+
+.ym-staff-permissions-summary strong {
+  color: var(--ym-admin-text);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ym-staff-permissions-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(170px, 1fr);
+  gap: 8px;
+  border: 1px solid var(--ym-admin-border);
+  border-radius: 12px;
+  padding: 9px;
+  background: var(--ym-admin-surface-soft);
+}
+
+.ym-staff-permissions-toolbar .ym-staff-field {
+  gap: 4px;
+}
+
+.ym-staff-permissions-toolbar .ym-staff-field > span {
+  font-size: 10.5px;
+}
+
+.ym-staff-permissions-toolbar input,
+.ym-staff-permissions-toolbar select {
+  min-height: 37px;
+}
+
+.ym-staff-permissions-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.ym-staff-permissions-legend > span {
+  border-radius: 999px;
+  padding: 3px 7px;
+  background: var(--ym-admin-surface-soft);
+  color: var(--ym-admin-muted);
+  font-size: 9.5px;
+  font-weight: 850;
+}
+
+.ym-staff-permissions-legend .is-direct {
+  color: #0891b2;
+}
+
+.ym-staff-permissions-legend .is-inherited {
+  color: #7c3aed;
+}
+
+.ym-staff-permissions-legend .is-protected {
+  color: #d97706;
+}
+
+.ym-staff-permissions-catalog {
+  display: grid;
+  gap: 8px;
+}
+
+.ym-staff-permissions-catalog > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ym-staff-permissions-catalog > header strong {
+  color: var(--ym-admin-text);
+  font-size: 12.5px;
+}
+
+.ym-staff-permissions-catalog > header small {
+  min-width: 24px;
+  border-radius: 999px;
+  padding: 3px 7px;
+  background: var(--ym-admin-surface-soft);
+  color: var(--ym-admin-muted);
+  text-align: center;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.ym-staff-permission-groups {
+  display: grid;
+  gap: 7px;
+}
+
+.ym-staff-permission-group {
+  overflow: hidden;
+  border: 1px solid var(--ym-admin-border);
+  border-radius: 10px;
+  background: var(--ym-admin-surface);
+}
+
+.ym-staff-permission-group > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--ym-admin-surface-soft);
+  cursor: pointer;
+  list-style: none;
+}
+
+.ym-staff-permission-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ym-staff-permission-group > summary::before {
+  content: '▾';
+  color: var(--ym-admin-muted);
+  font-size: 10px;
+  transition: transform .16s ease;
+}
+
+.ym-staff-permission-group:not([open]) > summary::before {
+  transform: rotate(-90deg);
+}
+
+.ym-staff-permission-group > summary strong {
+  flex: 1;
+  color: var(--ym-admin-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
+.ym-staff-permission-group > summary small {
+  min-width: 22px;
+  border-radius: 999px;
+  padding: 2px 6px;
+  background: var(--ym-admin-surface);
+  color: var(--ym-admin-muted);
+  text-align: center;
+  font-size: 9.5px;
+  font-weight: 900;
+}
+
+.ym-staff-permission-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid var(--ym-admin-border);
+}
+
+.ym-staff-permission-row {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 5px 9px;
+  border-bottom: 1px solid var(--ym-admin-border);
+  padding: 7px 9px;
+  background: var(--ym-admin-surface);
+  cursor: pointer;
+}
+
+.ym-staff-permission-row:nth-child(odd) {
+  border-inline-end: 1px solid var(--ym-admin-border);
+}
+
+.ym-staff-permission-row.is-selected {
+  background: color-mix(in srgb, var(--ym-admin-section-accent) 5%, var(--ym-admin-surface));
+}
+
+.ym-staff-permission-row > input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--ym-admin-section-accent);
+}
+
+.ym-staff-permission-row__meta {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.ym-staff-permission-row__meta strong {
+  overflow: hidden;
+  color: var(--ym-admin-text);
+  font-size: 11.5px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ym-staff-permission-row__meta code,
+.ym-staff-protected-permissions code {
+  overflow-wrap: anywhere;
+  color: color-mix(in srgb, var(--ym-admin-section-accent-secondary) 82%, var(--ym-admin-text));
+  font-size: 9.5px;
+}
+
+.ym-staff-permission-row__meta small {
+  color: var(--ym-admin-muted);
+  font-size: 9px;
+}
+
+.ym-staff-permission-row__badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.ym-staff-permission-row__badges small {
+  border: 1px solid var(--ym-admin-border);
+  border-radius: 999px;
+  padding: 1px 5px;
+  color: var(--ym-admin-muted);
+  font-size: 8.5px;
+  font-weight: 900;
+}
+
+.ym-staff-permission-row__badges .is-direct {
+  border-color: color-mix(in srgb, #06b6d4 38%, var(--ym-admin-border));
+  color: #0891b2;
+}
+
+.ym-staff-permission-row__badges .is-inherited {
+  border-color: color-mix(in srgb, #8b5cf6 38%, var(--ym-admin-border));
+  color: #7c3aed;
+}
+
+.ym-staff-permission-row__badges .is-effective {
+  border-color: color-mix(in srgb, #10b981 38%, var(--ym-admin-border));
+  color: #059669;
+}
+
+.ym-staff-permissions-empty {
+  margin: 0;
+  border: 1px dashed var(--ym-admin-border);
+  border-radius: 13px;
+  padding: 22px;
+  color: var(--ym-admin-muted);
+  text-align: center;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.ym-staff-protected-permissions {
+  border: 1px solid color-mix(in srgb, #f59e0b 34%, var(--ym-admin-border));
+  border-radius: 10px;
+  padding: 9px 10px;
+  background: color-mix(in srgb, #f59e0b 7%, var(--ym-admin-surface-soft));
+}
+
+.ym-staff-protected-permissions header strong {
+  color: var(--ym-admin-text);
+  font-size: 11.5px;
+}
+
+.ym-staff-protected-permissions header p {
+  margin: 2px 0 0;
+  color: var(--ym-admin-muted);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.ym-staff-protected-permissions ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 7px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ym-staff-protected-permissions li {
+  max-width: 100%;
+  border: 1px solid var(--ym-admin-border);
+  border-radius: 7px;
+  padding: 3px 6px;
+  background: var(--ym-admin-surface);
+}
+
 .ym-staff-inline-error {
   margin: 0;
   border: 1px solid color-mix(in srgb, #ef4444 35%, transparent);
@@ -2519,8 +3594,26 @@ onBeforeUnmount(() => {
   .ym-staff-filters,
   .ym-staff-form-grid,
   .ym-staff-role-options,
+  .ym-staff-permissions-toolbar,
   .ym-staff-activity-summary {
     grid-template-columns: 1fr;
+  }
+
+  .ym-staff-permission-list {
+    grid-template-columns: 1fr;
+  }
+
+  .ym-staff-permission-row:nth-child(odd) {
+    border-inline-end: 0;
+  }
+
+  .ym-staff-permission-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .ym-staff-permission-row__badges {
+    grid-column: 2;
+    justify-content: flex-start;
   }
 
   .ym-staff-filter-actions,
@@ -2530,6 +3623,20 @@ onBeforeUnmount(() => {
 
   .ym-staff-dialog {
     padding: 14px;
+  }
+
+  .ym-staff-permissions-dialog {
+    height: 88dvh;
+    padding: 0;
+  }
+
+  .ym-staff-permissions-dialog > header,
+  .ym-staff-permissions-form > footer {
+    padding-inline: 13px;
+  }
+
+  .ym-staff-permissions-body {
+    padding-inline: 13px;
   }
 
   .ym-staff-activity-drawer {
@@ -2716,6 +3823,222 @@ onBeforeUnmount(() => {
   border-top: 1px solid var(--ym-admin-border);
   padding: 12px 18px 16px;
   background: #ffffff;
+}
+
+/* Final compact permissions presentation */
+.ym-staff-dialog.ym-staff-permissions-dialog {
+  border-color: color-mix(in srgb, var(--ym-admin-section-accent) 24%, var(--ym-admin-border));
+  background:
+    radial-gradient(circle at 88% -8%, rgba(6, 182, 212, .12), transparent 300px),
+    radial-gradient(circle at 4% 105%, rgba(139, 92, 246, .07), transparent 320px),
+    rgba(255, 255, 255, .98);
+  box-shadow:
+    0 34px 100px rgba(2, 6, 23, .42),
+    0 0 0 1px rgba(255, 255, 255, .7) inset;
+}
+
+.ym-staff-permissions-dialog > header {
+  position: relative;
+  background: rgba(255, 255, 255, .86);
+  backdrop-filter: blur(16px);
+}
+
+.ym-staff-permissions-dialog > header::after {
+  position: absolute;
+  inset-inline: 18px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #06b6d4, #8b5cf6, transparent 82%);
+  content: '';
+  opacity: .7;
+}
+
+.ym-staff-permissions-dialog > header h2 {
+  font-size: clamp(19px, 2.2vw, 24px);
+  letter-spacing: -.025em;
+  text-shadow: 0 8px 26px rgba(6, 182, 212, .12);
+}
+
+.ym-staff-permissions-dialog > header p {
+  font-size: 12px;
+}
+
+.ym-staff-permissions-dialog .ym-staff-icon-button {
+  border-color: color-mix(in srgb, var(--ym-admin-section-accent) 18%, var(--ym-admin-border));
+  background: rgba(248, 250, 252, .86);
+}
+
+.ym-staff-permissions-dialog .ym-staff-icon-button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--ym-admin-section-accent) 46%, var(--ym-admin-border));
+  background: #ffffff;
+  transform: rotate(3deg);
+}
+
+.ym-staff-permissions-user {
+  border-color: color-mix(in srgb, var(--ym-admin-section-accent) 18%, var(--ym-admin-border));
+  background:
+    linear-gradient(135deg, rgba(6, 182, 212, .055), rgba(139, 92, 246, .035)),
+    #ffffff;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, .035);
+}
+
+.ym-staff-permissions-user strong {
+  color: var(--ym-admin-text);
+  font-size: 13.5px;
+  font-weight: 950;
+}
+
+.ym-staff-permissions-summary > span {
+  box-shadow: 0 3px 10px rgba(15, 23, 42, .025);
+}
+
+.ym-staff-permissions-summary > span:first-child {
+  border-color: color-mix(in srgb, #06b6d4 25%, var(--ym-admin-border));
+}
+
+.ym-staff-permissions-summary strong {
+  min-width: 18px;
+  border-radius: 999px;
+  padding: 1px 5px;
+  background: #ffffff;
+  text-align: center;
+  font-size: 12.5px;
+}
+
+.ym-staff-permissions-toolbar {
+  border-color: color-mix(in srgb, var(--ym-admin-section-accent) 16%, var(--ym-admin-border));
+  background: rgba(248, 250, 252, .9);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, .03);
+}
+
+.ym-staff-permissions-toolbar .ym-staff-permissions-legend {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--ym-admin-border);
+  padding-top: 7px;
+}
+
+.ym-staff-permissions-legend > span {
+  position: relative;
+  padding-inline-start: 17px;
+  background: transparent;
+  font-size: 10px;
+}
+
+.ym-staff-permissions-legend > span::before {
+  position: absolute;
+  inset-inline-start: 5px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  content: '';
+  transform: translateY(-50%);
+}
+
+.ym-staff-permissions-catalog > header {
+  padding-inline: 2px;
+}
+
+.ym-staff-permissions-catalog > header strong {
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.ym-staff-permission-group {
+  border-color: color-mix(in srgb, #64748b 18%, var(--ym-admin-border));
+  border-radius: 13px;
+  background: rgba(255, 255, 255, .92);
+  box-shadow: 0 7px 20px rgba(15, 23, 42, .035);
+}
+
+.ym-staff-permission-group > summary {
+  min-height: 39px;
+  padding: 8px 11px;
+  background:
+    linear-gradient(90deg, rgba(6, 182, 212, .055), rgba(139, 92, 246, .025)),
+    #f8fafc;
+}
+
+.ym-staff-permission-group > summary strong {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.ym-staff-permission-list {
+  gap: 7px;
+  border-top-color: color-mix(in srgb, var(--ym-admin-section-accent) 13%, var(--ym-admin-border));
+  padding: 8px;
+  background: rgba(248, 250, 252, .62);
+}
+
+.ym-staff-permission-row {
+  min-height: 56px;
+  border: 1px solid rgba(148, 163, 184, .2);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, .94);
+  box-shadow: 0 3px 10px rgba(15, 23, 42, .025);
+  transition:
+    transform .16s ease,
+    border-color .16s ease,
+    background .16s ease,
+    box-shadow .16s ease;
+}
+
+.ym-staff-permission-row:nth-child(odd) {
+  border-inline-end: 1px solid rgba(148, 163, 184, .2);
+}
+
+.ym-staff-permission-row:hover {
+  z-index: 1;
+  border-color: color-mix(in srgb, var(--ym-admin-section-accent) 36%, var(--ym-admin-border));
+  box-shadow: 0 8px 20px rgba(6, 182, 212, .07);
+  transform: translateY(-1px);
+}
+
+.ym-staff-permission-row.is-selected {
+  border-color: color-mix(in srgb, var(--ym-admin-section-accent) 48%, var(--ym-admin-border));
+  background:
+    linear-gradient(135deg, rgba(6, 182, 212, .085), rgba(139, 92, 246, .035)),
+    #ffffff;
+  box-shadow: 0 8px 20px rgba(6, 182, 212, .075);
+}
+
+.ym-staff-permission-row > input {
+  width: 18px;
+  height: 18px;
+}
+
+.ym-staff-permission-row__meta strong {
+  color: #172033;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.45;
+  white-space: normal;
+}
+
+.ym-staff-permission-row__badges small {
+  padding: 2px 6px;
+  background: #ffffff;
+  font-size: 9px;
+}
+
+.ym-staff-protected-permissions {
+  box-shadow: 0 6px 18px rgba(245, 158, 11, .045);
+}
+
+.ym-staff-permissions-form > footer {
+  background: rgba(255, 255, 255, .9);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 -10px 28px rgba(15, 23, 42, .035);
+}
+
+.ym-staff-permissions-footer .ym-staff-primary-button {
+  min-width: 142px;
+  box-shadow: 0 10px 24px rgba(6, 182, 212, .2);
 }
 
 @media (max-width: 700px) {

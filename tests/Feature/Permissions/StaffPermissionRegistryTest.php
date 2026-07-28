@@ -22,6 +22,7 @@ class StaffPermissionRegistryTest extends TestCase
             'admin.staff.create',
             'admin.staff.update',
             'admin.staff.assign_roles',
+            'admin.staff.assign_permissions',
             'admin.staff.activity.view',
         ];
 
@@ -59,6 +60,7 @@ class StaffPermissionRegistryTest extends TestCase
             'admin.staff.create',
             'admin.staff.update',
             'admin.staff.assign_roles',
+            'admin.staff.assign_permissions',
             'admin.staff.activity.view',
         ] as $permission) {
             $this->assertTrue(Gate::forUser($user)->allows($permission));
