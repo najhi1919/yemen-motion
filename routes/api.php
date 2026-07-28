@@ -34,6 +34,8 @@ use App\Http\Controllers\Api\AuthApiController;
 use App\Http\Controllers\Api\DashboardSearchController;
 use App\Http\Controllers\Api\DesignerProfileController;
 use App\Http\Controllers\Api\DesignerProfileMediaController;
+use App\Http\Controllers\Api\DesignerWorksIndexController;
+use App\Http\Controllers\Api\DesignerWorksMediaController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -48,6 +50,14 @@ Route::prefix('auth')->group(function () {
 Route::middleware(['auth:sanctum', 'account.active'])->get('/user', [AuthApiController::class, 'user']);
 
 Route::middleware(['auth:sanctum', 'account.active'])->prefix('designer')->group(function () {
+    Route::get('/works', [DesignerWorksIndexController::class, 'index'])
+        ->name('designer.works.index');
+    Route::get('/works/{work}/media/{media}/content', [DesignerWorksMediaController::class, 'content'])
+        ->whereNumber('work')->whereNumber('media')
+        ->name('designer.works.media.content');
+    Route::get('/works/{work}/media/{media}/poster', [DesignerWorksMediaController::class, 'poster'])
+        ->whereNumber('work')->whereNumber('media')
+        ->name('designer.works.media.poster');
     Route::get('/profile/username-availability', [DesignerProfileController::class, 'usernameAvailability'])
         ->middleware('throttle:30,1');
         Route::get('/profile', [DesignerProfileController::class, 'show']);

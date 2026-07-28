@@ -34,6 +34,28 @@
       </div>
     </header>
 
+    <nav
+      aria-label="تنقل مساحة المصمم"
+      class="border-b border-[rgba(17,17,17,0.09)] bg-white px-4 sm:px-6"
+    >
+      <div class="mx-auto grid min-h-11 max-w-7xl grid-cols-2 sm:flex sm:w-fit sm:gap-1">
+        <NuxtLink
+          to="/designer"
+          exact-active-class="!border-[#E21D1D] !text-[#C91414]"
+          class="inline-flex min-h-11 items-center justify-center border-b-2 border-transparent px-5 text-sm font-bold text-[#666666] transition hover:text-[#151515] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-red-200 motion-reduce:transition-none"
+        >
+          الملف
+        </NuxtLink>
+        <NuxtLink
+          to="/designer/works"
+          active-class="!border-[#E21D1D] !text-[#C91414]"
+          class="inline-flex min-h-11 items-center justify-center border-b-2 border-transparent px-5 text-sm font-bold text-[#666666] transition hover:text-[#151515] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-red-200 motion-reduce:transition-none"
+        >
+          الأعمال
+        </NuxtLink>
+      </div>
+    </nav>
+
     <main class="min-h-[calc(100vh-4rem)]">
       <slot />
     </main>
