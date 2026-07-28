@@ -20,6 +20,7 @@ class StaffPermissionRegistryTest extends TestCase
         $permissions = [
             'admin.staff.view',
             'admin.staff.create',
+            'admin.staff.update',
             'admin.staff.activity.view',
         ];
 
@@ -55,6 +56,7 @@ class StaffPermissionRegistryTest extends TestCase
         foreach ([
             'admin.staff.view',
             'admin.staff.create',
+            'admin.staff.update',
             'admin.staff.activity.view',
         ] as $permission) {
             $this->assertTrue(Gate::forUser($user)->allows($permission));

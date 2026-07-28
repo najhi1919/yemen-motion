@@ -159,7 +159,7 @@
               <th class="is-email">{{ copy.colEmail }}</th>
               <th class="is-roles">{{ copy.colRoles }}</th>
               <th class="is-date">{{ copy.colCreated }}</th>
-              <th v-if="canViewActivity" class="is-actions">{{ copy.colActions }}</th>
+              <th v-if="canUpdateStaff || canViewActivity" class="is-actions">{{ copy.colActions }}</th>
             </tr>
           </thead>
           <tbody>
@@ -184,15 +184,27 @@
                 </div>
               </td>
               <td class="is-date">{{ formatDateTime(user.created_at) }}</td>
-              <td v-if="canViewActivity" class="is-actions">
-                <button
-                  type="button"
-                  class="ym-staff-row-action"
-                  @click="openActivity(user, $event)"
-                >
-                  <span aria-hidden="true">◷</span>
-                  {{ copy.accountActivity }}
-                </button>
+              <td v-if="canUpdateStaff || canViewActivity" class="is-actions">
+                <div class="ym-staff-row-actions">
+                  <button
+                    v-if="canUpdateStaff"
+                    type="button"
+                    class="ym-staff-row-action is-edit"
+                    @click="openEditStaffModal(user, $event)"
+                  >
+                    <span aria-hidden="true">✎</span>
+                    {{ copy.editStaff }}
+                  </button>
+                  <button
+                    v-if="canViewActivity"
+                    type="button"
+                    class="ym-staff-row-action"
+                    @click="openActivity(user, $event)"
+                  >
+                    <span aria-hidden="true">◷</span>
+                    {{ copy.accountActivity }}
+                  </button>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -352,6 +364,96 @@
               >
                 <span v-if="savingStaff" class="ym-staff-button-spinner" aria-hidden="true" />
                 {{ savingStaff ? copy.saving : copy.save }}
+              </button>
+            </footer>
+          </form>
+        </section>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div
+        v-if="editModalOpen && editingStaff"
+        class="ym-staff-dialog-backdrop ym-admin-page"
+        :dir="currentLocale === 'en' ? 'ltr' : 'rtl'"
+        :style="{ '--ym-admin-section-accent': '#06b6d4', '--ym-admin-section-accent-secondary': '#8b5cf6' }"
+        role="presentation"
+        @mousedown.self="closeEditStaffModal"
+      >
+        <section
+          ref="editDialog"
+          class="ym-staff-dialog"
+          role="dialog"
+          aria-modal="true"
+          :aria-labelledby="'ym-edit-staff-title'"
+          tabindex="-1"
+        >
+          <header>
+            <div>
+              <span>{{ copy.editEyebrow }}</span>
+              <h2 id="ym-edit-staff-title">{{ copy.editStaff }}</h2>
+              <p>{{ copy.editDescription }}</p>
+            </div>
+            <button
+              type="button"
+              class="ym-staff-icon-button"
+              :aria-label="copy.close"
+              :disabled="updatingStaff"
+              @click="closeEditStaffModal"
+            >
+              ×
+            </button>
+          </header>
+
+          <form class="ym-staff-create-form" @submit.prevent="submitEditStaff">
+            <p v-if="editError" class="ym-staff-inline-error" role="alert">
+              {{ editError }}
+            </p>
+
+            <label class="ym-staff-field">
+              <span>{{ copy.formName }}</span>
+              <input
+                ref="firstEditInput"
+                v-model.trim="editForm.name"
+                type="text"
+                autocomplete="name"
+                :aria-invalid="Boolean(editFieldError('name'))"
+              >
+              <small v-if="editFieldError('name')">{{ editFieldError('name') }}</small>
+            </label>
+
+            <label class="ym-staff-field">
+              <span>{{ copy.formEmail }}</span>
+              <input
+                v-model.trim="editForm.email"
+                type="email"
+                dir="ltr"
+                autocomplete="email"
+                :aria-invalid="Boolean(editFieldError('email'))"
+              >
+              <small v-if="editFieldError('email')">{{ editFieldError('email') }}</small>
+            </label>
+
+            <p class="ym-staff-edit-scope">
+              {{ copy.editScope }}
+            </p>
+
+            <footer>
+              <button
+                type="button"
+                class="ym-staff-secondary-button"
+                :disabled="updatingStaff"
+                @click="closeEditStaffModal"
+              >
+                {{ copy.cancel }}
+              </button>
+              <button
+                type="submit"
+                class="ym-staff-primary-button"
+                :disabled="updatingStaff"
+              >
+                <span v-if="updatingStaff" class="ym-staff-button-spinner" aria-hidden="true" />
+                {{ updatingStaff ? copy.updating : copy.saveChanges }}
               </button>
             </footer>
           </form>
@@ -581,6 +683,15 @@ interface StoreStaffResponse {
   errors: Record<string, string[]> | null
 }
 
+interface UpdateStaffResponse {
+  success: boolean
+  data: {
+    user: StaffUser
+  }
+  message: string
+  errors: Record<string, string[]> | null
+}
+
 interface StaffActivityEvent {
   id: number
   event_type: string
@@ -672,6 +783,14 @@ const copyMap = {
     colCreated: 'تاريخ الإنشاء',
     colActions: 'الإجراءات',
     accountActivity: 'سجل الحساب',
+    editStaff: 'تعديل البيانات',
+    editEyebrow: 'الملف الأساسي للحساب',
+    editDescription: 'عدّل الاسم والبريد الإلكتروني فقط. تبقى الأدوار والصلاحيات وكلمة المرور خارج نطاق هذه العملية.',
+    editScope: 'لن يؤدي الحفظ إلى تغيير الدور أو الصلاحيات أو كلمة المرور.',
+    saveChanges: 'حفظ التغييرات',
+    updating: 'جارٍ التحديث...',
+    updateSuccess: 'تم تحديث بيانات الموظف بنجاح.',
+    updateError: 'تعذر تحديث بيانات الموظف. راجع الحقول وحاول مرة أخرى.',
     previous: 'السابق',
     next: 'التالي',
     createStaff: 'إنشاء موظف',
@@ -708,8 +827,8 @@ const copyMap = {
     superAdminState: 'كل الصلاحيات تلقائيًا',
     superAdminDescription: 'يتجاوز Super Admin كل الصلاحيات المسجلة بواسطة Gate::before دون الاعتماد على روابط المنح.',
     delegatedPolicy: 'التفويض الدقيق',
-    delegatedState: 'عرض وإنشاء وسجل منفصل',
-    delegatedDescription: 'يستطيع الدور الداخلي تنفيذ العمليات التي مُنحت له فقط.',
+    delegatedState: 'عرض وإنشاء وتعديل وسجل منفصل',
+    delegatedDescription: 'يستطيع الدور الداخلي تنفيذ العمليات التي مُنحت له فقط، مع فصل تعديل البيانات عن إدارة الوصول.',
     externalPolicy: 'الحسابات الخارجية',
     externalState: 'ممنوعة من الإدارة',
     externalDescription: 'يبقى client وdesigner ممنوعين حتى عند منح صلاحية إدارية لهما بالخطأ.',
@@ -757,6 +876,14 @@ const copyMap = {
     colCreated: 'Created',
     colActions: 'Actions',
     accountActivity: 'Account activity',
+    editStaff: 'Edit profile',
+    editEyebrow: 'Core account profile',
+    editDescription: 'Update name and email only. Roles, permissions, and password stay outside this action.',
+    editScope: 'Saving will not change roles, permissions, or password.',
+    saveChanges: 'Save changes',
+    updating: 'Updating...',
+    updateSuccess: 'Staff profile updated successfully.',
+    updateError: 'Could not update the staff profile. Review the fields and try again.',
     previous: 'Previous',
     next: 'Next',
     createStaff: 'Create staff',
@@ -793,8 +920,8 @@ const copyMap = {
     superAdminState: 'All permissions automatically',
     superAdminDescription: 'Super Admin bypasses all registered abilities through Gate::before.',
     delegatedPolicy: 'Granular delegation',
-    delegatedState: 'Separate view, create, and activity',
-    delegatedDescription: 'Internal roles can perform only the operations explicitly granted to them.',
+    delegatedState: 'Separate view, create, update, and activity',
+    delegatedDescription: 'Internal roles can perform only explicitly granted actions, with profile editing separated from access management.',
     externalPolicy: 'External accounts',
     externalState: 'Blocked from administration',
     externalDescription: 'Client and designer accounts remain blocked even if an admin permission is accidentally granted.',
@@ -806,6 +933,7 @@ const copyMap = {
 const copy = computed(() => copyMap[currentLocale.value])
 const canViewStaff = computed(() => auth.can('admin.staff.view'))
 const canCreateStaff = computed(() => auth.can('admin.staff.create'))
+const canUpdateStaff = computed(() => auth.can('admin.staff.update'))
 const canViewActivity = computed(() => auth.can('admin.staff.activity.view'))
 
 const staffUsers = ref<StaffUser[]>([])
@@ -850,6 +978,20 @@ const createForm = reactive({
   password: '',
   password_confirmation: '',
   role: 'staff' as StaffCreateRole
+})
+
+const editModalOpen = ref(false)
+const updatingStaff = ref(false)
+const editingStaff = ref<StaffUser | null>(null)
+const editError = ref<string | null>(null)
+const editFieldErrors = ref<Record<string, string[]>>({})
+const editDialog = ref<HTMLElement | null>(null)
+const firstEditInput = ref<HTMLInputElement | null>(null)
+const editTrigger = ref<HTMLElement | null>(null)
+
+const editForm = reactive({
+  name: '',
+  email: ''
 })
 
 const activityOpen = ref(false)
@@ -1023,6 +1165,75 @@ async function submitCreateStaff(): Promise<void> {
   }
 }
 
+async function openEditStaffModal(user: StaffUser, event: MouseEvent): Promise<void> {
+  if (!canUpdateStaff.value) return
+
+  editTrigger.value = event.currentTarget as HTMLElement
+  editingStaff.value = user
+  editForm.name = user.name
+  editForm.email = user.email
+  editError.value = null
+  editFieldErrors.value = {}
+  successMessage.value = null
+  editModalOpen.value = true
+
+  await nextTick()
+  editDialog.value?.focus()
+  firstEditInput.value?.focus()
+}
+
+function closeEditStaffModal(): void {
+  if (updatingStaff.value) return
+
+  editModalOpen.value = false
+  editingStaff.value = null
+  editError.value = null
+  editFieldErrors.value = {}
+  nextTick(() => editTrigger.value?.focus())
+}
+
+function editFieldError(field: string): string {
+  return editFieldErrors.value[field]?.[0] ?? ''
+}
+
+async function submitEditStaff(): Promise<void> {
+  if (!canUpdateStaff.value || !editingStaff.value) return
+
+  updatingStaff.value = true
+  editError.value = null
+  editFieldErrors.value = {}
+  successMessage.value = null
+
+  try {
+    const response = await apiFetch<UpdateStaffResponse>(
+      `/admin/staff/${editingStaff.value.id}`,
+      {
+        method: 'PATCH',
+        body: {
+          name: editForm.name,
+          email: editForm.email
+        }
+      }
+    )
+
+    editModalOpen.value = false
+    editingStaff.value = null
+    editError.value = null
+    editFieldErrors.value = {}
+    successMessage.value = response.message || copy.value.updateSuccess
+    await fetchStaff()
+    nextTick(() => editTrigger.value?.focus())
+  } catch (caughtError: unknown) {
+    const err = caughtError as any
+    editFieldErrors.value = err?.data?.errors ?? err?.response?._data?.errors ?? {}
+    editError.value = err?.data?.message
+      || err?.response?._data?.message
+      || copy.value.updateError
+  } finally {
+    updatingStaff.value = false
+  }
+}
+
 async function fetchStaff(): Promise<void> {
   if (!canViewStaff.value) return
 
@@ -1161,6 +1372,10 @@ function eventLabel(event: StaffActivityEvent): string {
       ar: 'تم إنشاء الحساب الداخلي',
       en: 'Internal account created'
     },
+    'staff.updated': {
+      ar: 'تم تحديث بيانات الحساب الأساسية',
+      en: 'Core account profile updated'
+    },
     'user.roles.synced': {
       ar: 'تم تحديث أدوار الحساب',
       en: 'Account roles updated'
@@ -1210,6 +1425,11 @@ function handleEscape(event: KeyboardEvent): void {
 
   if (createModalOpen.value) {
     closeCreateStaffModal()
+    return
+  }
+
+  if (editModalOpen.value) {
+    closeEditStaffModal()
     return
   }
 
@@ -1402,11 +1622,22 @@ onBeforeUnmount(() => {
   color: var(--ym-admin-text);
 }
 
+.ym-staff-row-actions {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+
 .ym-staff-row-action {
   min-height: 34px;
   border-color: color-mix(in srgb, var(--ym-admin-section-accent-secondary) 28%, var(--ym-admin-border));
   color: color-mix(in srgb, var(--ym-admin-section-accent-secondary) 76%, var(--ym-admin-text));
   white-space: nowrap;
+}
+
+.ym-staff-row-action.is-edit {
+  border-color: color-mix(in srgb, var(--ym-admin-section-accent) 34%, var(--ym-admin-border));
+  color: color-mix(in srgb, var(--ym-admin-section-accent) 80%, var(--ym-admin-text));
 }
 
 .ym-staff-primary-button:hover:not(:disabled),
@@ -1606,6 +1837,18 @@ onBeforeUnmount(() => {
 .ym-staff-create-form footer {
   justify-content: flex-end;
   margin-top: 5px;
+}
+
+.ym-staff-edit-scope {
+  margin: 0;
+  border: 1px solid color-mix(in srgb, var(--ym-admin-section-accent) 22%, var(--ym-admin-border));
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--ym-admin-section-accent) 6%, var(--ym-admin-surface-soft));
+  color: var(--ym-admin-muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.65;
 }
 
 .ym-staff-inline-error {

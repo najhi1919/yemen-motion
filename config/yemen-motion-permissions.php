@@ -109,6 +109,11 @@ return [
             'label_ar' => 'إنشاء حساب موظف',
         ],
         [
+            'name' => 'admin.staff.update',
+            'group' => 'admin.staff',
+            'label_ar' => 'تعديل بيانات الموظف الأساسية',
+        ],
+        [
             'name' => 'admin.staff.activity.view',
             'group' => 'admin.staff',
             'label_ar' => 'عرض سجل عمليات حساب الموظف',

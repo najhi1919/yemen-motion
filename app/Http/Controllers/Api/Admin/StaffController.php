@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ListStaffRequest;
 use App\Http\Requests\Admin\StaffActivityRequest;
 use App\Http\Requests\Admin\StoreStaffRequest;
+use App\Http\Requests\Admin\UpdateStaffRequest;
 use App\Models\AuditEvent;
 use App\Models\User;
 use App\Services\Audit\AuditEventLogger;
@@ -111,6 +112,48 @@ class StaffController extends Controller
             ],
             'errors' => null,
         ], 201);
+    }
+
+    public function update(UpdateStaffRequest $request, User $staff): JsonResponse
+    {
+        if (
+            $staff->isSuperAdmin()
+            || ! $staff->hasAnyRole(['staff', 'admin'])
+        ) {
+            abort(404);
+        }
+
+        $validated = $request->validated();
+        $changedFields = [];
+
+        foreach (['name', 'email'] as $field) {
+            if ((string) $staff->{$field} !== (string) $validated[$field]) {
+                $changedFields[] = $field;
+            }
+        }
+
+        if ($changedFields !== []) {
+            DB::transaction(function () use ($staff, $validated): void {
+                $staff->update([
+                    'name' => $validated['name'],
+                    'email' => $validated['email'],
+                ]);
+            });
+
+            $staff->refresh()->load('roles:id,name');
+            $this->recordStaffUpdatedAuditEvent($request, $staff, $changedFields);
+        } else {
+            $staff->loadMissing('roles:id,name');
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'تم تحديث بيانات الموظف بنجاح.',
+            'data' => [
+                'user' => $this->staffPayload($staff),
+            ],
+            'errors' => null,
+        ]);
     }
 
     public function activity(StaffActivityRequest $request, User $staff): JsonResponse
@@ -227,6 +270,46 @@ class StaffController extends Controller
             'metadata' => $event->metadata,
             'occurred_at' => $event->occurred_at?->toJSON(),
         ];
+    }
+
+    /**
+     * @param list<string> $changedFields
+     */
+    private function recordStaffUpdatedAuditEvent(
+        UpdateStaffRequest $request,
+        User $updatedUser,
+        array $changedFields,
+    ): void {
+        $actor = $request->user();
+
+        try {
+            $this->auditEventLogger->record([
+                'event_type' => 'staff.updated',
+                'category' => 'staff',
+                'severity' => 'notice',
+                'actor_type' => 'user',
+                'actor_id' => $actor?->id,
+                'actor_role' => $actor?->roles->first()?->name,
+                'target_type' => 'user',
+                'target_id' => $updatedUser->id,
+                'action' => 'update',
+                'outcome' => 'success',
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'request_id' => $request->header('X-Request-ID'),
+                'correlation_id' => $request->header('X-Correlation-ID'),
+                'metadata' => [
+                    'changed_fields' => array_values($changedFields),
+                    'source' => 'admin_staff_update',
+                ],
+            ]);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            if (app()->environment('testing')) {
+                throw $exception;
+            }
+        }
     }
 
     private function recordStaffCreatedAuditEvent(
