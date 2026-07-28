@@ -8,6 +8,7 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Casts\Attribute;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -50,6 +51,11 @@ class User extends Authenticatable
     public function scopeDisabled(Builder $query): Builder
     {
         return $query->whereNotNull('disabled_at');
+    }
+
+    public function designerProfile(): HasOne
+    {
+        return $this->hasOne(DesignerProfile::class);
     }
 
     protected function username(): Attribute

@@ -19,16 +19,16 @@ export default defineNuxtRouteMiddleware(async (to) => {
   const routeRoleMap: Record<string, string[]> = {
     '/admin': internalDashboardRoles,
     '/staff': internalDashboardRoles,
-    '/designer': ['designer', ...adminRoles],
+    '/designer': ['designer'],
     '/client': ['client', ...adminRoles]
   }
 
   const roleHomeMap: Record<string, string> = {
     'super-admin': '/admin',
     admin: '/admin',
-    staff: '/admin',
+    staff: '/staff',
     designer: '/designer',
-    client: '/'
+    client: '/client'
   }
 
   if (authStore.isAuthenticated && isPublicRoute) {
@@ -48,6 +48,26 @@ export default defineNuxtRouteMiddleware(async (to) => {
   if (matchedProtectedPrefix) {
     if (!authStore.isAuthenticated) {
       return navigateTo(`/auth/login?redirect=${encodeURIComponent(to.path)}`)
+    }
+
+    if (matchedProtectedPrefix === '/designer') {
+      if (authStore.hasRole('designer')) {
+        return
+      }
+
+      const fallback = authStore.isSuperAdmin || authStore.hasRole('admin')
+        ? '/admin'
+        : authStore.hasRole('staff')
+          ? '/staff'
+          : authStore.hasRole('client')
+            ? '/client'
+            : roleHomeMap[authStore.role || ''] || '/'
+
+      if (to.path !== fallback) {
+        return navigateTo(fallback)
+      }
+
+      return
     }
 
     const allowedRoles = routeRoleMap[matchedProtectedPrefix]

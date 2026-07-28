@@ -32,6 +32,7 @@ use App\Http\Controllers\Api\Admin\WorksVisibilityController as AdminWorksVisibi
 use App\Http\Controllers\Api\Audit\PageViewAuditController;
 use App\Http\Controllers\Api\AuthApiController;
 use App\Http\Controllers\Api\DashboardSearchController;
+use App\Http\Controllers\Api\DesignerProfileController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -44,6 +45,13 @@ Route::prefix('auth')->group(function () {
 });
 
 Route::middleware(['auth:sanctum', 'account.active'])->get('/user', [AuthApiController::class, 'user']);
+
+Route::middleware(['auth:sanctum', 'account.active'])->prefix('designer')->group(function () {
+    Route::get('/profile/username-availability', [DesignerProfileController::class, 'usernameAvailability'])
+        ->middleware('throttle:30,1');
+    Route::get('/profile', [DesignerProfileController::class, 'show']);
+    Route::put('/profile', [DesignerProfileController::class, 'upsert']);
+});
 
 Route::middleware(['auth:sanctum', 'account.active'])->post('/audit/page-view', PageViewAuditController::class);
 
