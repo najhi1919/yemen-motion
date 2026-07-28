@@ -10,9 +10,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable([
     'display_name',
     'professional_title',
-    'primary_specialty',
-    'bio',
-    'availability',
+        'primary_specialty',
+        'bio',
+        'avatar_path',
+        'cover_path',
+        'cover_focal_x',
+        'cover_focal_y',
+        'availability',
 ])]
 class DesignerProfile extends Model
 {
@@ -40,6 +44,8 @@ class DesignerProfile extends Model
     protected function casts(): array
     {
         return [
+            'cover_focal_x' => 'integer',
+            'cover_focal_y' => 'integer',
             'published_at' => 'datetime',
         ];
     }

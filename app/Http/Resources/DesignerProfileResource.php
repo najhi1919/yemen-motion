@@ -15,6 +15,18 @@ class DesignerProfileResource extends JsonResource
             'professional_title' => $this->professional_title,
             'primary_specialty' => $this->primary_specialty,
             'bio' => $this->bio,
+            'identity_media' => [
+                'avatar_url' => $this->avatar_path
+                    ? url('/api/designer/profile/avatar/content').'?v='.$this->updated_at?->timestamp
+                    : null,
+                'cover_url' => $this->cover_path
+                    ? url('/api/designer/profile/cover/content').'?v='.$this->updated_at?->timestamp
+                    : null,
+                'cover_focal_point' => [
+                    'x' => (int) $this->cover_focal_x,
+                    'y' => (int) $this->cover_focal_y,
+                ],
+            ],
             'availability' => $this->availability,
             'publication_status' => $this->publication_status,
             'published_at' => $this->published_at?->toISOString(),

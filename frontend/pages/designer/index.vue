@@ -61,16 +61,8 @@ onMounted(async () => {
 </script>
 
 <template>
-  <main class="min-h-screen bg-[#FCFCFC] px-4 py-8 text-[#151515] sm:px-6 lg:px-8" dir="rtl">
+  <main class="min-h-screen bg-[#FCFCFC] px-4 pb-8 pt-6 text-[#151515] sm:px-6 sm:pb-10 sm:pt-8 lg:px-8" dir="rtl">
     <div class="mx-auto max-w-7xl">
-      <header class="mb-8">
-        <p class="text-sm font-bold text-[#C91414]">مساحة المصمم</p>
-        <h1 class="mt-2 text-3xl font-extrabold tracking-tight sm:text-4xl">ملفك المهني</h1>
-        <p class="mt-3 max-w-2xl text-base leading-7 text-neutral-600">
-          أنشئ هويتك المهنية الأساسية وحدّثها من مكان واحد دون مغادرة الصفحة.
-        </p>
-      </header>
-
       <div
         v-if="successMessage"
         class="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-bold text-emerald-800"

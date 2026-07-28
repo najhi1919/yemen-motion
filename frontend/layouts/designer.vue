@@ -24,7 +24,7 @@
           </span>
           <button
             type="button"
-            class="min-h-11 shrink-0 rounded-xl border border-neutral-300 bg-white px-3 text-sm font-bold text-neutral-800 transition hover:border-[#E21D1D] hover:text-[#C91414] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-red-200 sm:px-4"
+            class="min-h-11 shrink-0 rounded-xl border border-[#E21D1D]/35 bg-transparent px-3 text-sm font-bold text-[#B81414] transition hover:border-[#E21D1D] hover:bg-[#E21D1D] hover:text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-red-200 motion-reduce:transition-none sm:px-4"
             :disabled="authStore.isLoading"
             @click="logout"
           >

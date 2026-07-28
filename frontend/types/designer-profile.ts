@@ -1,11 +1,21 @@
 export type DesignerAvailability = 'available' | 'partially_available' | 'unavailable'
 
+export interface DesignerIdentityMedia {
+  avatar_url: string | null
+  cover_url: string | null
+  cover_focal_point: {
+    x: number
+    y: number
+  }
+}
+
 export interface DesignerProfile {
   id: number
   display_name: string
   professional_title: string | null
   primary_specialty: string | null
   bio: string | null
+  identity_media: DesignerIdentityMedia
   availability: DesignerAvailability
   publication_status: 'draft'
   published_at: string | null
