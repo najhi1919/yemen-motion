@@ -10,6 +10,7 @@ use App\Http\Requests\Auth\ResetPasswordRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Services\Audit\AuditEventLogger;
+use App\Support\UsernamePolicy;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
@@ -61,11 +62,15 @@ class AuthApiController extends Controller
 
     public function login(LoginRequest $request): JsonResponse
     {
-        // Validate request using LoginRequest rules
         $credentials = $request->validated();
+        $identifier = $request->identifier();
+        $usesEmail = str_contains($identifier, '@');
+        $normalizedIdentifier = $usesEmail
+            ? $identifier
+            : UsernamePolicy::normalize($identifier);
 
-        // Build rate limiter key based on lowercased email and IP address
-        $key = 'login:' . strtolower($credentials['email']) . ':' . $request->ip();
+        // Keep rate limiting generic across email and username identifiers.
+        $key = 'login:' . strtolower((string) $normalizedIdentifier) . ':' . $request->ip();
 
         // Check if the key has exceeded the allowed attempts (5 attempts per 60 seconds)
         if (RateLimiter::tooManyAttempts($key, 5)) {
@@ -80,7 +85,7 @@ class AuthApiController extends Controller
                 'metadata' => [
                     'auth_context' => 'sanctum',
                     'reason' => 'rate_limited',
-                    'has_identifier' => filled($credentials['email'] ?? null),
+                    'has_identifier' => filled($normalizedIdentifier),
                 ],
             ]);
 
@@ -92,7 +97,9 @@ class AuthApiController extends Controller
             ], 429);
         }
 
-        $user = User::where('email', $credentials['email'])->first();
+        $user = User::query()
+            ->where($usesEmail ? 'email' : 'username', $normalizedIdentifier)
+            ->first();
 
         if (! $user || ! Hash::check($credentials['password'], $user->password)) {
             // Record a failed attempt
@@ -109,7 +116,7 @@ class AuthApiController extends Controller
                 'metadata' => [
                     'auth_context' => 'sanctum',
                     'reason' => 'invalid_credentials',
-                    'has_identifier' => filled($credentials['email'] ?? null),
+                    'has_identifier' => filled($normalizedIdentifier),
                 ],
             ]);
 

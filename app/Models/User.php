@@ -3,9 +3,11 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Support\UsernamePolicy;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -13,7 +15,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['name', 'email', 'password', 'disabled_at'])]
+#[Fillable(['name', 'username', 'email', 'password', 'disabled_at'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -48,6 +50,13 @@ class User extends Authenticatable
     public function scopeDisabled(Builder $query): Builder
     {
         return $query->whereNotNull('disabled_at');
+    }
+
+    protected function username(): Attribute
+    {
+        return Attribute::make(
+            set: static fn (?string $value): ?string => UsernamePolicy::normalize($value),
+        );
     }
 
     /**
