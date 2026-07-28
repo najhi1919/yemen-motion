@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ListStaffRequest;
 use App\Http\Requests\Admin\StaffActivityRequest;
+use App\Http\Requests\Admin\StaffLifecycleRequest;
 use App\Http\Requests\Admin\StoreStaffRequest;
 use App\Http\Requests\Admin\SyncStaffPermissionsRequest;
 use App\Http\Requests\Admin\SyncStaffRolesRequest;
@@ -31,6 +32,7 @@ class StaffController extends Controller
         $perPage = (int) ($validated['per_page'] ?? 15);
         $search = trim((string) ($validated['search'] ?? ''));
         $role = trim((string) ($validated['role'] ?? ''));
+        $status = (string) ($validated['status'] ?? 'all');
         $sortBy = (string) ($validated['sort_by'] ?? 'id');
         $sortDirection = (string) ($validated['sort_direction'] ?? 'asc');
 
@@ -49,6 +51,14 @@ class StaffController extends Controller
                     fn (Builder $roleQuery) => $roleQuery->where('name', $role),
                 );
             })
+            ->when(
+                $status === 'active',
+                fn (Builder $query) => $query->whereNull('disabled_at'),
+            )
+            ->when(
+                $status === 'disabled',
+                fn (Builder $query) => $query->whereNotNull('disabled_at'),
+            )
             ->when(
                 filled($validated['created_from'] ?? null),
                 fn (Builder $query) => $query->whereDate('created_at', '>=', $validated['created_from']),
@@ -72,6 +82,8 @@ class StaffController extends Controller
             'meta' => [
                 'summary' => [
                     'total' => $this->internalTeamQuery()->count(),
+                    'active' => $this->internalTeamQuery()->active()->count(),
+                    'disabled' => $this->internalTeamQuery()->disabled()->count(),
                     'staff_role' => $this->internalTeamQuery()
                         ->whereHas('roles', fn (Builder $query) => $query->where('name', 'staff'))
                         ->count(),
@@ -286,6 +298,168 @@ class StaffController extends Controller
         ]);
     }
 
+    public function disable(StaffLifecycleRequest $request, User $staff): JsonResponse
+    {
+        $this->ensureLifecycleTarget($request, $staff);
+
+        $result = DB::transaction(function () use ($staff): array {
+            $lockedStaff = User::query()
+                ->with('roles:id,name')
+                ->lockForUpdate()
+                ->findOrFail($staff->id);
+            $changed = $lockedStaff->isActive();
+
+            if ($changed) {
+                $lockedStaff->update(['disabled_at' => now()]);
+            }
+
+            $revokedTokens = $lockedStaff->tokens()->delete();
+            $revokedSessions = DB::table('sessions')
+                ->where('user_id', $lockedStaff->id)
+                ->delete();
+
+            return [
+                'user' => $lockedStaff->fresh()->load('roles:id,name'),
+                'changed' => $changed,
+                'revoked_tokens' => $revokedTokens,
+                'revoked_sessions' => $revokedSessions,
+            ];
+        });
+
+        if ($result['changed']) {
+            $this->recordStaffDisabledAuditEvent(
+                $request,
+                $result['user'],
+                $result['revoked_tokens'],
+                $result['revoked_sessions'],
+            );
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $result['changed']
+                ? 'تم تعطيل حساب الموظف بنجاح.'
+                : 'حساب الموظف معطل بالفعل.',
+            'data' => [
+                'changed' => $result['changed'],
+                'user' => $this->staffPayload($result['user']),
+                'revoked_tokens' => $result['revoked_tokens'],
+                'revoked_sessions' => $result['revoked_sessions'],
+            ],
+            'errors' => null,
+        ]);
+    }
+
+    public function restore(StaffLifecycleRequest $request, User $staff): JsonResponse
+    {
+        $this->ensureLifecycleTarget($request, $staff);
+
+        $result = DB::transaction(function () use ($staff): array {
+            $lockedStaff = User::query()
+                ->with('roles:id,name')
+                ->lockForUpdate()
+                ->findOrFail($staff->id);
+            $changed = $lockedStaff->isDisabled();
+
+            if ($changed) {
+                $lockedStaff->update(['disabled_at' => null]);
+            }
+
+            return [
+                'user' => $lockedStaff->fresh()->load('roles:id,name'),
+                'changed' => $changed,
+            ];
+        });
+
+        if ($result['changed']) {
+            $this->recordStaffRestoredAuditEvent($request, $result['user']);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $result['changed']
+                ? 'تمت استعادة حساب الموظف بنجاح.'
+                : 'حساب الموظف نشط بالفعل.',
+            'data' => [
+                'changed' => $result['changed'],
+                'user' => $this->staffPayload($result['user']),
+            ],
+            'errors' => null,
+        ]);
+    }
+
+    public function destroy(StaffLifecycleRequest $request, User $staff): JsonResponse
+    {
+        $this->ensureLifecycleTarget($request, $staff);
+
+        $result = DB::transaction(function () use ($request, $staff): array {
+            $lockedStaff = User::query()
+                ->with('roles:id,name')
+                ->lockForUpdate()
+                ->findOrFail($staff->id);
+
+            if ($lockedStaff->isActive()) {
+                abort(422, 'يجب تعطيل حساب الموظف قبل حذفه.');
+            }
+
+            $blockers = $this->staffDeletionBlockers($lockedStaff);
+
+            if (array_sum($blockers) > 0) {
+                return [
+                    'deleted' => false,
+                    'deletion_blockers' => $blockers,
+                ];
+            }
+
+            $deletedUserId = $lockedStaff->id;
+            $revokedTokens = $lockedStaff->tokens()->delete();
+            $revokedSessions = DB::table('sessions')
+                ->where('user_id', $lockedStaff->id)
+                ->delete();
+
+            DB::table('password_reset_tokens')
+                ->where('email', $lockedStaff->email)
+                ->delete();
+
+            $lockedStaff->syncPermissions([]);
+            $lockedStaff->syncRoles([]);
+
+            $this->recordStaffDeletedAuditEvent(
+                $request,
+                $lockedStaff,
+                $revokedTokens,
+                $revokedSessions,
+            );
+
+            $lockedStaff->delete();
+
+            return [
+                'deleted' => true,
+                'deleted_user_id' => $deletedUserId,
+            ];
+        });
+
+        if (! $result['deleted']) {
+            return response()->json([
+                'success' => false,
+                'message' => 'لا يمكن حذف الحساب لارتباطه بسجلات تشغيلية. عطّل الحساب واتركه محفوظًا للحفاظ على السجل.',
+                'data' => [
+                    'deletion_blockers' => $result['deletion_blockers'],
+                ],
+                'errors' => null,
+            ], 409);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'تم حذف حساب الموظف نهائيًا.',
+            'data' => [
+                'deleted_user_id' => $result['deleted_user_id'],
+            ],
+            'errors' => null,
+        ]);
+    }
+
     public function activity(StaffActivityRequest $request, User $staff): JsonResponse
     {
         if (
@@ -374,6 +548,42 @@ class StaffController extends Controller
         ) {
             abort(404);
         }
+    }
+
+    private function ensureLifecycleTarget(StaffLifecycleRequest $request, User $staff): void
+    {
+        if (
+            $staff->isSuperAdmin()
+            || ! $staff->hasAnyRole(['staff', 'admin'])
+        ) {
+            abort(404);
+        }
+
+        if ($request->user()?->is($staff)) {
+            abort(422, 'لا يمكن تنفيذ عملية دورة الحياة على حسابك الشخصي.');
+        }
+    }
+
+    /**
+     * @return array{
+     *     assigned_works: int,
+     *     reviewed_works: int,
+     *     submitted_reports: int,
+     *     reviewed_reports: int,
+     *     uploaded_media: int,
+     *     settings_updates: int
+     * }
+     */
+    private function staffDeletionBlockers(User $staff): array
+    {
+        return [
+            'assigned_works' => DB::table('works')->where('designer_id', $staff->id)->count(),
+            'reviewed_works' => DB::table('works')->where('reviewer_id', $staff->id)->count(),
+            'submitted_reports' => DB::table('work_reports')->where('reporter_id', $staff->id)->count(),
+            'reviewed_reports' => DB::table('work_reports')->where('reviewed_by', $staff->id)->count(),
+            'uploaded_media' => DB::table('work_media')->where('uploaded_by', $staff->id)->count(),
+            'settings_updates' => DB::table('work_settings')->where('updated_by', $staff->id)->count(),
+        ];
     }
 
     /**
@@ -467,6 +677,9 @@ class StaffController extends Controller
             'name' => $user->name,
             'email' => $user->email,
             'roles' => $user->roles->pluck('name')->sort()->values(),
+            'disabled_at' => $user->disabled_at?->toJSON(),
+            'is_disabled' => $user->isDisabled(),
+            'status' => $user->isDisabled() ? 'disabled' : 'active',
             'created_at' => $user->created_at?->toJSON(),
         ];
     }
@@ -659,6 +872,104 @@ class StaffController extends Controller
                     'direct_permission_count' => count($newDirectPermissions),
                     'source' => 'admin_staff_permission_sync',
                 ],
+            ]);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            if (app()->environment('testing')) {
+                throw $exception;
+            }
+        }
+    }
+
+    private function recordStaffDisabledAuditEvent(
+        StaffLifecycleRequest $request,
+        User $updatedUser,
+        int $revokedTokens,
+        int $revokedSessions,
+    ): void {
+        $this->recordStaffLifecycleAuditEvent($request, $updatedUser, [
+            'event_type' => 'staff.disabled',
+            'severity' => 'warning',
+            'action' => 'disable',
+            'metadata' => [
+                'previous_status' => 'active',
+                'current_status' => 'disabled',
+                'revoked_access_count' => $revokedTokens,
+                'revoked_session_count' => $revokedSessions,
+                'source' => 'admin_staff_disable',
+            ],
+        ]);
+    }
+
+    private function recordStaffRestoredAuditEvent(
+        StaffLifecycleRequest $request,
+        User $updatedUser,
+    ): void {
+        $this->recordStaffLifecycleAuditEvent($request, $updatedUser, [
+            'event_type' => 'staff.restored',
+            'severity' => 'notice',
+            'action' => 'restore',
+            'metadata' => [
+                'previous_status' => 'disabled',
+                'current_status' => 'active',
+                'source' => 'admin_staff_restore',
+            ],
+        ]);
+    }
+
+    private function recordStaffDeletedAuditEvent(
+        StaffLifecycleRequest $request,
+        User $deletedUser,
+        int $revokedTokens,
+        int $revokedSessions,
+    ): void {
+        $this->recordStaffLifecycleAuditEvent($request, $deletedUser, [
+            'event_type' => 'staff.deleted',
+            'severity' => 'warning',
+            'action' => 'delete',
+            'metadata' => [
+                'was_disabled' => true,
+                'revoked_access_count' => $revokedTokens,
+                'revoked_session_count' => $revokedSessions,
+                'deletion_guard_passed' => true,
+                'source' => 'admin_staff_delete',
+            ],
+        ]);
+    }
+
+    /**
+     * @param array{
+     *     event_type: string,
+     *     severity: string,
+     *     action: string,
+     *     metadata: array<string, mixed>
+     * } $event
+     */
+    private function recordStaffLifecycleAuditEvent(
+        StaffLifecycleRequest $request,
+        User $target,
+        array $event,
+    ): void {
+        $actor = $request->user();
+
+        try {
+            $this->auditEventLogger->record([
+                'event_type' => $event['event_type'],
+                'category' => 'staff',
+                'severity' => $event['severity'],
+                'actor_type' => 'user',
+                'actor_id' => $actor?->id,
+                'actor_role' => $actor?->roles->first()?->name,
+                'target_type' => 'user',
+                'target_id' => $target->id,
+                'action' => $event['action'],
+                'outcome' => 'success',
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'request_id' => $request->header('X-Request-ID'),
+                'correlation_id' => $request->header('X-Correlation-ID'),
+                'metadata' => $event['metadata'],
             ]);
         } catch (Throwable $exception) {
             report($exception);

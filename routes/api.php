@@ -43,11 +43,11 @@ Route::prefix('auth')->group(function () {
     Route::middleware('auth:sanctum')->post('/logout', [AuthApiController::class, 'logout']);
 });
 
-Route::middleware(['auth:sanctum'])->get('/user', [AuthApiController::class, 'user']);
+Route::middleware(['auth:sanctum', 'account.active'])->get('/user', [AuthApiController::class, 'user']);
 
-Route::middleware(['auth:sanctum'])->post('/audit/page-view', PageViewAuditController::class);
+Route::middleware(['auth:sanctum', 'account.active'])->post('/audit/page-view', PageViewAuditController::class);
 
-Route::middleware(['auth:sanctum'])->prefix('dashboard')->group(function () {
+Route::middleware(['auth:sanctum', 'account.active'])->prefix('dashboard')->group(function () {
     Route::get('/stats', [\App\Http\Controllers\Api\DashboardController::class, 'stats']);
     Route::get('/activity', [\App\Http\Controllers\Api\DashboardController::class, 'activity']);
     Route::get('/chart', [\App\Http\Controllers\Api\DashboardController::class, 'chart']);
@@ -55,7 +55,7 @@ Route::middleware(['auth:sanctum'])->prefix('dashboard')->group(function () {
     Route::get('/search', DashboardSearchController::class);
 });
 
-Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
+Route::middleware(['auth:sanctum', 'account.active'])->prefix('admin')->group(function () {
     Route::get('/audit-events', [AdminAuditEventController::class, 'index']);
     Route::get('/analytics/users', AdminUserAnalyticsController::class);
     Route::get('/reports/users', AdminUserReportController::class);
@@ -137,6 +137,9 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
     Route::get('/staff/{staff}/permissions', [AdminStaffController::class, 'permissions'])->whereNumber('staff');
     Route::put('/staff/{staff}/permissions', [AdminStaffController::class, 'syncPermissions'])->whereNumber('staff');
     Route::get('/staff/{staff}/activity', [AdminStaffController::class, 'activity'])->whereNumber('staff');
+    Route::patch('/staff/{staff}/disable', [AdminStaffController::class, 'disable'])->whereNumber('staff');
+    Route::patch('/staff/{staff}/restore', [AdminStaffController::class, 'restore'])->whereNumber('staff');
+    Route::delete('/staff/{staff}', [AdminStaffController::class, 'destroy'])->whereNumber('staff');
     Route::post('/staff', [AdminStaffController::class, 'store']);
 
     Route::get('/permissions', [AdminPermissionController::class, 'index']);

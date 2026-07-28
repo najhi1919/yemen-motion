@@ -7,6 +7,7 @@ use Illuminate\Auth\AuthenticationException;
 use Illuminate\Http\Exceptions\PostTooLargeException;
 use Illuminate\Http\Request;
 use App\Http\Middleware\RecordAccessDeniedAuditEvent;
+use App\Http\Middleware\EnsureAccountIsActive;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -19,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(RecordAccessDeniedAuditEvent::class);
 
         $middleware->alias([
+            'account.active' => EnsureAccountIsActive::class,
             'verified' => \App\Http\Middleware\EnsureEmailIsVerified::class,
         ]);
 

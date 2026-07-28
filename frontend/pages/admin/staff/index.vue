@@ -87,6 +87,15 @@
         </label>
 
         <label class="ym-staff-field">
+          <span>{{ copy.accountStatus }}</span>
+          <select v-model="filters.status" @change="applyFilters">
+            <option value="all">{{ copy.allAccountStatuses }}</option>
+            <option value="active">{{ copy.activeAccounts }}</option>
+            <option value="disabled">{{ copy.disabledAccounts }}</option>
+          </select>
+        </label>
+
+        <label class="ym-staff-field">
           <span>{{ copy.sortLabel }}</span>
           <select v-model="filters.sortBy">
             <option value="id">{{ copy.sortId }}</option>
@@ -158,6 +167,7 @@
               <th class="is-name">{{ copy.colName }}</th>
               <th class="is-email">{{ copy.colEmail }}</th>
               <th class="is-roles">{{ copy.colRoles }}</th>
+              <th class="is-status">{{ copy.accountStatus }}</th>
               <th class="is-date">{{ copy.colCreated }}</th>
               <th
                 v-if="
@@ -165,6 +175,9 @@
                   || canAssignStaffRoles
                   || canAssignStaffPermissions
                   || canViewActivity
+                  || canDisableStaff
+                  || canRestoreStaff
+                  || canDeleteStaff
                 "
                 class="is-actions"
               >
@@ -173,7 +186,12 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="user in staffUsers" :key="user.id">
+            <tr
+              v-for="user in staffUsers"
+              :key="user.id"
+              class="ym-staff-row"
+              :class="{ 'is-disabled': user.is_disabled }"
+            >
               <td class="is-id">{{ user.id }}</td>
               <td class="is-name">
                 <strong :dir="textDirection(user.name)">{{ user.name }}</strong>
@@ -193,6 +211,14 @@
                   </span>
                 </div>
               </td>
+              <td class="is-status">
+                <span
+                  class="ym-staff-status"
+                  :class="user.is_disabled ? 'is-disabled' : 'is-active'"
+                >
+                  {{ user.is_disabled ? copy.disabledStatus : copy.activeStatus }}
+                </span>
+              </td>
               <td class="is-date">{{ formatDateTime(user.created_at) }}</td>
               <td
                 v-if="
@@ -200,6 +226,9 @@
                   || canAssignStaffRoles
                   || canAssignStaffPermissions
                   || canViewActivity
+                  || canDisableStaff
+                  || canRestoreStaff
+                  || canDeleteStaff
                 "
                 class="is-actions"
               >
@@ -239,6 +268,33 @@
                   >
                     <span aria-hidden="true">◷</span>
                     {{ copy.accountActivity }}
+                  </button>
+                  <button
+                    v-if="!user.is_disabled && canDisableStaff"
+                    type="button"
+                    class="ym-staff-row-action is-disable"
+                    @click="openLifecycleModal(user, 'disable', $event)"
+                  >
+                    <span aria-hidden="true">⊘</span>
+                    {{ copy.disableAccount }}
+                  </button>
+                  <button
+                    v-if="user.is_disabled && canRestoreStaff"
+                    type="button"
+                    class="ym-staff-row-action is-restore"
+                    @click="openLifecycleModal(user, 'restore', $event)"
+                  >
+                    <span aria-hidden="true">↺</span>
+                    {{ copy.restoreAccount }}
+                  </button>
+                  <button
+                    v-if="user.is_disabled && canDeleteStaff"
+                    type="button"
+                    class="ym-staff-row-action is-delete"
+                    @click="openLifecycleModal(user, 'delete', $event)"
+                  >
+                    <span aria-hidden="true">×</span>
+                    {{ copy.deleteAccount }}
                   </button>
                 </div>
               </td>
@@ -868,6 +924,169 @@
 
     <Teleport to="body">
       <div
+        v-if="lifecycleModalOpen && lifecycleStaff && lifecycleAction"
+        class="ym-staff-dialog-backdrop ym-admin-page"
+        :class="{ 'is-ltr': currentLocale === 'en' }"
+        :dir="currentLocale === 'en' ? 'ltr' : 'rtl'"
+        :style="{
+          '--ym-admin-section-accent': lifecycleAction === 'restore' ? '#10b981' : lifecycleAction === 'delete' ? '#ef4444' : '#f59e0b',
+          '--ym-admin-section-accent-secondary': lifecycleAction === 'restore' ? '#06b6d4' : '#f97316'
+        }"
+        role="presentation"
+        @mousedown.self="closeLifecycleModal"
+      >
+        <section
+          ref="lifecycleDialog"
+          class="ym-staff-dialog ym-staff-lifecycle-dialog"
+          :class="`is-${lifecycleAction}`"
+          role="dialog"
+          aria-modal="true"
+          :aria-labelledby="'ym-staff-lifecycle-title'"
+          tabindex="-1"
+        >
+          <header>
+            <div>
+              <span>{{ copy.currentAccountState }}</span>
+              <h2 id="ym-staff-lifecycle-title">{{ lifecycleTitle }}</h2>
+              <p>{{ lifecycleDescription }}</p>
+            </div>
+            <button
+              type="button"
+              class="ym-staff-icon-button"
+              :aria-label="copy.close"
+              :disabled="lifecycleSubmitting"
+              @click="closeLifecycleModal"
+            >
+              ×
+            </button>
+          </header>
+
+          <form class="ym-staff-lifecycle-form" @submit.prevent="submitLifecycleAction">
+            <div class="ym-staff-lifecycle-body">
+              <section class="ym-staff-lifecycle-account">
+                <div>
+                  <strong :dir="textDirection(lifecycleStaff.name)">
+                    {{ lifecycleStaff.name }}
+                  </strong>
+                  <span dir="ltr">{{ lifecycleStaff.email }}</span>
+                </div>
+                <dl>
+                  <div>
+                    <dt>{{ copy.accountId }}</dt>
+                    <dd>#{{ lifecycleStaff.id }}</dd>
+                  </div>
+                  <div>
+                    <dt>{{ copy.roles }}</dt>
+                    <dd>{{ lifecycleStaff.roles.join('، ') }}</dd>
+                  </div>
+                  <div>
+                    <dt>{{ copy.currentAccountState }}</dt>
+                    <dd>
+                      <span
+                        class="ym-staff-status"
+                        :class="lifecycleStaff.is_disabled ? 'is-disabled' : 'is-active'"
+                      >
+                        {{ lifecycleStaff.is_disabled ? copy.disabledStatus : copy.activeStatus }}
+                      </span>
+                    </dd>
+                  </div>
+                </dl>
+              </section>
+
+              <section class="ym-staff-lifecycle-warning">
+                <span aria-hidden="true">{{ lifecycleAction === 'restore' ? '↺' : '!' }}</span>
+                <div>
+                  <strong>
+                    {{
+                      lifecycleAction === 'delete'
+                        ? copy.irreversibleAction
+                        : lifecycleTitle
+                    }}
+                  </strong>
+                  <p>{{ lifecycleDescription }}</p>
+                </div>
+              </section>
+
+              <label
+                v-if="lifecycleAction === 'delete'"
+                class="ym-staff-field ym-staff-lifecycle-confirmation"
+              >
+                <span>{{ copy.deleteConfirmationLabel }}</span>
+                <input
+                  v-model="deleteConfirmationText"
+                  type="text"
+                  :placeholder="copy.deleteConfirmationPlaceholder"
+                  autocomplete="off"
+                  :disabled="lifecycleSubmitting"
+                >
+                <small v-if="lifecycleFieldError('confirmation')">
+                  {{ lifecycleFieldError('confirmation') }}
+                </small>
+              </label>
+
+              <div
+                v-if="lifecycleError"
+                class="ym-staff-form-error"
+                role="alert"
+              >
+                <strong>{{ lifecycleError }}</strong>
+              </div>
+
+              <section
+                v-if="visibleDeletionBlockers.length"
+                class="ym-staff-deletion-blockers"
+              >
+                <header>
+                  <span aria-hidden="true">!</span>
+                  <div>
+                    <strong>{{ copy.deletionBlockedTitle }}</strong>
+                    <p>{{ copy.deletionBlockedDescription }}</p>
+                  </div>
+                </header>
+                <ul>
+                  <li
+                    v-for="blocker in visibleDeletionBlockers"
+                    :key="blocker.key"
+                    class="ym-staff-deletion-blocker"
+                  >
+                    <span aria-hidden="true">⚠</span>
+                    <strong>{{ blocker.label }}</strong>
+                    <b>{{ blocker.count }}</b>
+                  </li>
+                </ul>
+              </section>
+            </div>
+
+            <footer>
+              <button
+                type="button"
+                class="ym-staff-secondary-button"
+                :disabled="lifecycleSubmitting"
+                @click="closeLifecycleModal"
+              >
+                {{ copy.cancel }}
+              </button>
+              <button
+                type="submit"
+                class="ym-staff-primary-button ym-staff-lifecycle-submit"
+                :class="`is-${lifecycleAction}`"
+                :disabled="lifecycleSubmitDisabled"
+              >
+                <span
+                  v-if="lifecycleSubmitting"
+                  class="ym-staff-button-spinner"
+                  aria-hidden="true"
+                />
+                {{ lifecycleSubmitLabel }}
+              </button>
+            </footer>
+          </form>
+        </section>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div
         v-if="activityOpen && selectedStaff"
         class="ym-staff-drawer-backdrop ym-admin-page"
         :class="{ 'is-ltr': currentLocale === 'en' }"
@@ -1046,6 +1265,9 @@ type StaffSortKey = 'id' | 'name' | 'email' | 'created_at'
 type SortDirection = 'asc' | 'desc'
 type StaffCreateRole = 'staff' | 'admin'
 type PermissionsFilter = 'all' | 'direct' | 'inherited' | 'effective'
+type StaffStatus = 'active' | 'disabled'
+type StaffStatusFilter = 'all' | StaffStatus
+type StaffLifecycleAction = 'disable' | 'restore' | 'delete'
 
 interface StaffUser {
   id: number
@@ -1053,6 +1275,9 @@ interface StaffUser {
   email: string
   roles: string[]
   created_at: string | null
+  disabled_at: string | null
+  is_disabled: boolean
+  status: StaffStatus
 }
 
 interface StaffPermissionOption {
@@ -1071,6 +1296,8 @@ interface Pagination<T> {
 
 interface StaffSummary {
   total: number
+  active: number
+  disabled: number
   staff_role: number
   admin_role: number
 }
@@ -1137,6 +1364,20 @@ interface SyncStaffPermissionsResponse {
       inherited: string[]
       effective: string[]
     }
+  }
+  message: string
+  errors: Record<string, string[]> | null
+}
+
+interface StaffLifecycleResponse {
+  success: boolean
+  data: {
+    changed?: boolean
+    user?: StaffUser
+    revoked_tokens?: number
+    revoked_sessions?: number
+    deleted_user_id?: number
+    deletion_blockers?: Record<string, number>
   }
   message: string
   errors: Record<string, string[]> | null
@@ -1210,6 +1451,12 @@ const copyMap = {
     searchPlaceholder: 'ابحث بالاسم أو البريد الإلكتروني',
     roleFilter: 'الدور الداخلي',
     allInternalRoles: 'جميع الأدوار الداخلية',
+    accountStatus: 'حالة الحساب',
+    allAccountStatuses: 'كل الحالات',
+    activeAccounts: 'الحسابات النشطة',
+    disabledAccounts: 'الحسابات المعطلة',
+    activeStatus: 'نشط',
+    disabledStatus: 'معطل',
     sortLabel: 'الترتيب حسب',
     directionLabel: 'الاتجاه',
     sortId: 'المعرّف',
@@ -1236,6 +1483,30 @@ const copyMap = {
     editStaff: 'تعديل البيانات',
     manageRoles: 'إدارة الأدوار',
     managePermissions: 'إدارة الصلاحيات',
+    disableAccount: 'تعطيل الحساب',
+    disableAccountTitle: 'تعطيل حساب الموظف',
+    disableAccountDescription: 'سيتم منع الحساب من تسجيل الدخول فورًا، وإلغاء جلساته الحالية ووسائل الوصول الخاصة به.',
+    disableAccountConfirm: 'تعطيل الحساب',
+    disablingAccount: 'جارٍ تعطيل الحساب...',
+    restoreAccount: 'استعادة الحساب',
+    restoreAccountTitle: 'استعادة حساب الموظف',
+    restoreAccountDescription: 'سيتم السماح للحساب بتسجيل الدخول مجددًا. لن تُعاد الجلسات القديمة، وسيحتاج الموظف إلى تسجيل دخول جديد.',
+    restoreAccountConfirm: 'استعادة الحساب',
+    restoringAccount: 'جارٍ استعادة الحساب...',
+    deleteAccount: 'حذف الحساب',
+    deleteAccountTitle: 'حذف حساب الموظف نهائيًا',
+    deleteAccountDescription: 'هذا إجراء نهائي لا يمكن التراجع عنه. لا يسمح النظام بالحذف إذا كان الحساب مرتبطًا بسجلات تشغيلية.',
+    deleteConfirmationLabel: 'للتأكيد النهائي، اكتب كلمة "حذف"',
+    deleteConfirmationPlaceholder: 'اكتب حذف',
+    deleteAccountConfirm: 'حذف الحساب نهائيًا',
+    deletingAccount: 'جارٍ حذف الحساب...',
+    accountActionError: 'تعذر تنفيذ العملية على الحساب. تحقق من حالته وصلاحياتك ثم حاول مجددًا.',
+    deletionBlockedTitle: 'لا يمكن حذف الحساب',
+    deletionBlockedDescription: 'لا يمكن حذف هذا الحساب مع وجود هذه الارتباطات. استخدم التعطيل للحفاظ على السجل التشغيلي.',
+    sessionsRevoked: 'جلسات أُلغيت',
+    accessRevoked: 'وسائل وصول أُلغيت',
+    currentAccountState: 'الحالة الحالية',
+    irreversibleAction: 'إجراء نهائي لا يمكن التراجع عنه',
     permissionsEyebrow: 'التفويض المباشر',
     permissionsTitle: 'إدارة الصلاحيات المباشرة',
     permissionsDescription: 'حدّد ما يمكن منحه مباشرة لهذا الحساب، بينما تبقى الصلاحيات الموروثة للقراءة فقط.',
@@ -1348,6 +1619,12 @@ const copyMap = {
     searchPlaceholder: 'Search by name or email',
     roleFilter: 'Internal role',
     allInternalRoles: 'All internal roles',
+    accountStatus: 'Account status',
+    allAccountStatuses: 'All statuses',
+    activeAccounts: 'Active accounts',
+    disabledAccounts: 'Disabled accounts',
+    activeStatus: 'Active',
+    disabledStatus: 'Disabled',
     sortLabel: 'Sort by',
     directionLabel: 'Direction',
     sortId: 'ID',
@@ -1374,6 +1651,30 @@ const copyMap = {
     editStaff: 'Edit profile',
     manageRoles: 'Manage roles',
     managePermissions: 'Manage permissions',
+    disableAccount: 'Disable account',
+    disableAccountTitle: 'Disable staff account',
+    disableAccountDescription: 'The account will be blocked from signing in immediately, and its active sessions and access credentials will be revoked.',
+    disableAccountConfirm: 'Disable account',
+    disablingAccount: 'Disabling account...',
+    restoreAccount: 'Restore account',
+    restoreAccountTitle: 'Restore staff account',
+    restoreAccountDescription: 'The account will be allowed to sign in again. Previous sessions will not be restored, and the staff member must sign in again.',
+    restoreAccountConfirm: 'Restore account',
+    restoringAccount: 'Restoring account...',
+    deleteAccount: 'Delete account',
+    deleteAccountTitle: 'Permanently delete staff account',
+    deleteAccountDescription: 'This action is permanent and cannot be undone. Deletion is blocked when the account is linked to operational records.',
+    deleteConfirmationLabel: 'For final confirmation, type "DELETE"',
+    deleteConfirmationPlaceholder: 'Type DELETE',
+    deleteAccountConfirm: 'Permanently delete account',
+    deletingAccount: 'Deleting account...',
+    accountActionError: 'The account action could not be completed. Review the account state and your permissions, then try again.',
+    deletionBlockedTitle: 'Account cannot be deleted',
+    deletionBlockedDescription: 'This account cannot be deleted while these links exist. Keep it disabled to preserve the operational history.',
+    sessionsRevoked: 'Sessions revoked',
+    accessRevoked: 'Access credentials revoked',
+    currentAccountState: 'Current status',
+    irreversibleAction: 'Permanent action that cannot be undone',
     permissionsEyebrow: 'Direct delegation',
     permissionsTitle: 'Manage direct permissions',
     permissionsDescription: 'Choose what can be granted directly to this account. Inherited permissions remain read-only.',
@@ -1533,6 +1834,9 @@ const canAssignStaffPermissions = computed(
   () => auth.can('admin.staff.assign_permissions')
 )
 const canViewActivity = computed(() => auth.can('admin.staff.activity.view'))
+const canDisableStaff = computed(() => auth.can('admin.staff.disable'))
+const canRestoreStaff = computed(() => auth.can('admin.staff.restore'))
+const canDeleteStaff = computed(() => auth.can('admin.staff.delete'))
 
 const staffUsers = ref<StaffUser[]>([])
 const loading = ref(false)
@@ -1551,6 +1855,8 @@ const pagination = reactive({
 
 const summary = reactive<StaffSummary>({
   total: 0,
+  active: 0,
+  disabled: 0,
   staff_role: 0,
   admin_role: 0
 })
@@ -1558,6 +1864,7 @@ const summary = reactive<StaffSummary>({
 const filters = reactive({
   search: '',
   role: '' as TeamRole,
+  status: 'all' as StaffStatusFilter,
   sortBy: 'id' as StaffSortKey,
   sortDirection: 'asc' as SortDirection
 })
@@ -1618,6 +1925,17 @@ const selectedDirectPermissions = ref<string[]>([])
 const permissionsSearch = ref('')
 const permissionsFilter = ref<PermissionsFilter>('all')
 
+const lifecycleModalOpen = ref(false)
+const lifecycleStaff = ref<StaffUser | null>(null)
+const lifecycleAction = ref<StaffLifecycleAction | null>(null)
+const lifecycleSubmitting = ref(false)
+const lifecycleError = ref<string | null>(null)
+const lifecycleFieldErrors = ref<Record<string, string[]>>({})
+const lifecycleTrigger = ref<HTMLElement | null>(null)
+const lifecycleDialog = ref<HTMLElement | null>(null)
+const deleteConfirmationText = ref('')
+const deletionBlockers = ref<Record<string, number>>({})
+
 const activityOpen = ref(false)
 const selectedStaff = ref<StaffUser | null>(null)
 const activityEvents = ref<StaffActivityEvent[]>([])
@@ -1642,6 +1960,70 @@ const protectedDirectPermissions = computed(() => {
     .filter(permission => !availableNames.has(permission))
     .sort()
 })
+
+const lifecycleTitle = computed(() => {
+  if (lifecycleAction.value === 'disable') return copy.value.disableAccountTitle
+  if (lifecycleAction.value === 'restore') return copy.value.restoreAccountTitle
+  return copy.value.deleteAccountTitle
+})
+
+const lifecycleDescription = computed(() => {
+  if (lifecycleAction.value === 'disable') return copy.value.disableAccountDescription
+  if (lifecycleAction.value === 'restore') return copy.value.restoreAccountDescription
+  return copy.value.deleteAccountDescription
+})
+
+const lifecycleSubmitLabel = computed(() => {
+  if (lifecycleSubmitting.value) {
+    if (lifecycleAction.value === 'disable') return copy.value.disablingAccount
+    if (lifecycleAction.value === 'restore') return copy.value.restoringAccount
+    return copy.value.deletingAccount
+  }
+
+  if (lifecycleAction.value === 'disable') return copy.value.disableAccountConfirm
+  if (lifecycleAction.value === 'restore') return copy.value.restoreAccountConfirm
+  return copy.value.deleteAccountConfirm
+})
+
+const deleteConfirmationMatches = computed(() => (
+  deleteConfirmationText.value.trim()
+  === (currentLocale.value === 'ar' ? 'حذف' : 'DELETE')
+))
+
+const lifecycleSubmitDisabled = computed(() => (
+  lifecycleSubmitting.value
+  || (lifecycleAction.value === 'delete' && !deleteConfirmationMatches.value)
+))
+
+const deletionBlockerLabels = computed<Record<string, string>>(() => (
+  currentLocale.value === 'ar'
+    ? {
+        assigned_works: 'أعمال مسندة إلى الحساب',
+        reviewed_works: 'أعمال راجعها الحساب',
+        submitted_reports: 'بلاغات قدمها الحساب',
+        reviewed_reports: 'بلاغات راجعها الحساب',
+        uploaded_media: 'وسائط رفعها الحساب',
+        settings_updates: 'إعدادات حدّثها الحساب'
+      }
+    : {
+        assigned_works: 'Assigned works',
+        reviewed_works: 'Reviewed works',
+        submitted_reports: 'Submitted reports',
+        reviewed_reports: 'Reviewed reports',
+        uploaded_media: 'Uploaded media',
+        settings_updates: 'Settings updates'
+      }
+))
+
+const visibleDeletionBlockers = computed(() => (
+  Object.entries(deletionBlockers.value)
+    .filter(([key, count]) => key in deletionBlockerLabels.value && count > 0)
+    .map(([key, count]) => ({
+      key,
+      count,
+      label: deletionBlockerLabels.value[key]
+    }))
+))
 
 const filteredPermissionGroups = computed(() => {
   const search = permissionsSearch.value.trim().toLocaleLowerCase()
@@ -1693,6 +2075,22 @@ const metricItems = computed<MetricItem[]>(() => [
     icon: '◎'
   },
   {
+    key: 'active',
+    label: copy.value.activeAccounts,
+    description: copy.value.activeStatus,
+    value: summary.active,
+    tone: 'emerald',
+    icon: '●'
+  },
+  {
+    key: 'disabled',
+    label: copy.value.disabledAccounts,
+    description: copy.value.disabledStatus,
+    value: summary.disabled,
+    tone: 'amber',
+    icon: '!'
+  },
+  {
     key: 'staff',
     label: copy.value.staffAccounts,
     description: 'staff',
@@ -1707,18 +2105,6 @@ const metricItems = computed<MetricItem[]>(() => [
     value: summary.admin_role,
     tone: 'violet',
     icon: 'A'
-  },
-  {
-    key: 'visible',
-    label: copy.value.visibleRows,
-    description: copy.value.pageInfo(
-      pagination.current_page,
-      pagination.last_page,
-      pagination.total
-    ),
-    value: staffUsers.value.length,
-    tone: 'amber',
-    icon: '≡'
   }
 ])
 
@@ -1755,6 +2141,7 @@ const policyItems = computed<PolicyItem[]>(() => [
 const hasActiveFilters = computed(() => (
   filters.search !== ''
   || filters.role !== ''
+  || filters.status !== 'all'
   || filters.sortBy !== 'id'
   || filters.sortDirection !== 'asc'
 ))
@@ -2109,6 +2496,111 @@ async function submitStaffPermissions(): Promise<void> {
   }
 }
 
+function canRunLifecycleAction(action: StaffLifecycleAction): boolean {
+  if (action === 'disable') return canDisableStaff.value
+  if (action === 'restore') return canRestoreStaff.value
+  return canDeleteStaff.value
+}
+
+async function openLifecycleModal(
+  user: StaffUser,
+  action: StaffLifecycleAction,
+  event: MouseEvent
+): Promise<void> {
+  if (!canRunLifecycleAction(action)) return
+  if (action === 'disable' && user.is_disabled) return
+  if ((action === 'restore' || action === 'delete') && !user.is_disabled) return
+
+  lifecycleTrigger.value = event.currentTarget as HTMLElement
+  lifecycleStaff.value = user
+  lifecycleAction.value = action
+  lifecycleError.value = null
+  lifecycleFieldErrors.value = {}
+  deleteConfirmationText.value = ''
+  deletionBlockers.value = {}
+  successMessage.value = null
+  lifecycleModalOpen.value = true
+
+  await nextTick()
+  lifecycleDialog.value?.focus()
+}
+
+function closeLifecycleModal(): void {
+  if (lifecycleSubmitting.value) return
+
+  lifecycleModalOpen.value = false
+  lifecycleStaff.value = null
+  lifecycleAction.value = null
+  lifecycleError.value = null
+  lifecycleFieldErrors.value = {}
+  deleteConfirmationText.value = ''
+  deletionBlockers.value = {}
+  nextTick(() => lifecycleTrigger.value?.focus())
+}
+
+function lifecycleFieldError(field: string): string {
+  return lifecycleFieldErrors.value[field]?.[0] ?? ''
+}
+
+async function submitLifecycleAction(): Promise<void> {
+  const staff = lifecycleStaff.value
+  const action = lifecycleAction.value
+
+  if (!staff || !action || !canRunLifecycleAction(action)) return
+  if (action === 'delete' && !deleteConfirmationMatches.value) return
+
+  lifecycleSubmitting.value = true
+  lifecycleError.value = null
+  lifecycleFieldErrors.value = {}
+  deletionBlockers.value = {}
+  successMessage.value = null
+
+  try {
+    let response: StaffLifecycleResponse
+
+    if (action === 'delete') {
+      response = await apiFetch<StaffLifecycleResponse>(
+        `/admin/staff/${staff.id}`,
+        {
+          method: 'DELETE',
+          body: { confirmation: 'DELETE' }
+        }
+      )
+    } else {
+      response = await apiFetch<StaffLifecycleResponse>(
+        `/admin/staff/${staff.id}/${action}`,
+        { method: 'PATCH' }
+      )
+    }
+
+    lifecycleSubmitting.value = false
+    closeLifecycleModal()
+    successMessage.value = response.message
+    await fetchStaff()
+
+    if (action === 'delete' && staffUsers.value.length === 0 && page.value > 1) {
+      page.value -= 1
+      await fetchStaff()
+    }
+
+    await nextTick()
+    lifecycleTrigger.value?.focus()
+  } catch (caughtError: unknown) {
+    const err = caughtError as any
+    const responseData = err?.data ?? err?.response?._data ?? {}
+
+    lifecycleFieldErrors.value = responseData.errors ?? {}
+    lifecycleError.value = responseData.message || copy.value.accountActionError
+
+    const blockers = responseData.data?.deletion_blockers
+    if (blockers && typeof blockers === 'object') {
+      deletionBlockers.value = blockers
+    }
+  } finally {
+    lifecycleSubmitting.value = false
+  }
+}
+
 async function fetchStaff(): Promise<void> {
   if (!canViewStaff.value) return
 
@@ -2123,6 +2615,7 @@ async function fetchStaff(): Promise<void> {
         per_page: pagination.per_page,
         search: filters.search || undefined,
         role: filters.role || undefined,
+        status: filters.status,
         sort_by: filters.sortBy,
         sort_direction: filters.sortDirection
       }
@@ -2134,6 +2627,8 @@ async function fetchStaff(): Promise<void> {
     pagination.per_page = response.data.per_page
     pagination.total = response.data.total
     summary.total = response.meta.summary.total
+    summary.active = response.meta.summary.active
+    summary.disabled = response.meta.summary.disabled
     summary.staff_role = response.meta.summary.staff_role
     summary.admin_role = response.meta.summary.admin_role
     hasLoaded.value = true
@@ -2163,6 +2658,7 @@ function applyFilters(): void {
 function resetFilters(): void {
   filters.search = ''
   filters.role = ''
+  filters.status = 'all'
   filters.sortBy = 'id'
   filters.sortDirection = 'asc'
   page.value = 1
@@ -2259,6 +2755,18 @@ function eventLabel(event: StaffActivityEvent): string {
       ar: 'تم تحديث الصلاحيات المباشرة للحساب',
       en: 'Direct account permissions updated'
     },
+    'staff.disabled': {
+      ar: 'تم تعطيل حساب الموظف',
+      en: 'Staff account disabled'
+    },
+    'staff.restored': {
+      ar: 'تمت استعادة حساب الموظف',
+      en: 'Staff account restored'
+    },
+    'staff.deleted': {
+      ar: 'تم حذف حساب الموظف نهائيًا',
+      en: 'Staff account permanently deleted'
+    },
     'user.roles.synced': {
       ar: 'تم تحديث أدوار الحساب',
       en: 'Account roles updated'
@@ -2323,6 +2831,11 @@ function handleEscape(event: KeyboardEvent): void {
 
   if (permissionsModalOpen.value) {
     closePermissionsModal()
+    return
+  }
+
+  if (lifecycleModalOpen.value) {
+    closeLifecycleModal()
     return
   }
 
@@ -2407,7 +2920,7 @@ onBeforeUnmount(() => {
 
 .ym-staff-filters {
   display: grid;
-  grid-template-columns: minmax(230px, 1.7fr) repeat(3, minmax(145px, .7fr)) auto;
+  grid-template-columns: minmax(220px, 1.6fr) repeat(4, minmax(135px, .7fr)) auto;
   align-items: end;
   gap: 10px;
   border: 1px solid var(--ym-admin-border);
@@ -2543,6 +3056,21 @@ onBeforeUnmount(() => {
   color: color-mix(in srgb, #0891b2 84%, var(--ym-admin-text));
 }
 
+.ym-staff-row-action.is-disable {
+  border-color: color-mix(in srgb, #f59e0b 42%, var(--ym-admin-border));
+  color: color-mix(in srgb, #d97706 88%, var(--ym-admin-text));
+}
+
+.ym-staff-row-action.is-restore {
+  border-color: color-mix(in srgb, #10b981 42%, var(--ym-admin-border));
+  color: color-mix(in srgb, #059669 88%, var(--ym-admin-text));
+}
+
+.ym-staff-row-action.is-delete {
+  border-color: color-mix(in srgb, #ef4444 42%, var(--ym-admin-border));
+  color: color-mix(in srgb, #dc2626 90%, var(--ym-admin-text));
+}
+
 .ym-staff-primary-button:hover:not(:disabled),
 .ym-staff-secondary-button:hover:not(:disabled),
 .ym-staff-row-action:hover:not(:disabled) {
@@ -2615,6 +3143,14 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--ym-admin-section-accent) 5%, transparent);
 }
 
+.ym-staff-table tbody tr.is-disabled {
+  background: color-mix(in srgb, #f59e0b 4%, transparent);
+}
+
+.ym-staff-table tbody tr.is-disabled td {
+  color: color-mix(in srgb, var(--ym-admin-text) 78%, var(--ym-admin-muted));
+}
+
 .ym-staff-table tbody tr:last-child td {
   border-bottom: 0;
 }
@@ -2660,6 +3196,40 @@ onBeforeUnmount(() => {
   border-color: color-mix(in srgb, #10b981 35%, var(--ym-admin-border));
   background: color-mix(in srgb, #10b981 9%, transparent);
   color: #059669;
+}
+
+.ym-staff-status {
+  display: inline-flex;
+  min-width: 64px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid;
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 11px;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.ym-staff-status::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  content: '';
+}
+
+.ym-staff-status.is-active {
+  border-color: color-mix(in srgb, #10b981 34%, var(--ym-admin-border));
+  background: color-mix(in srgb, #10b981 9%, var(--ym-admin-surface-soft));
+  color: #059669;
+}
+
+.ym-staff-status.is-disabled {
+  border-color: color-mix(in srgb, #f59e0b 38%, var(--ym-admin-border));
+  background: color-mix(in srgb, #f59e0b 10%, var(--ym-admin-surface-soft));
+  color: #d97706;
 }
 
 .ym-staff-pagination {
@@ -2716,6 +3286,231 @@ onBeforeUnmount(() => {
   align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
+}
+
+.ym-staff-lifecycle-dialog {
+  width: min(100%, 680px);
+  overflow: hidden;
+  padding: 0;
+  background:
+    radial-gradient(circle at 90% 0%, color-mix(in srgb, var(--ym-admin-section-accent) 14%, transparent), transparent 260px),
+    var(--ym-admin-surface);
+}
+
+.ym-staff-lifecycle-dialog > header {
+  border-bottom: 1px solid var(--ym-admin-border);
+  padding: 19px 20px 16px;
+}
+
+.ym-staff-lifecycle-dialog > header h2 {
+  margin: 4px 0 5px;
+}
+
+.ym-staff-lifecycle-dialog > header p {
+  max-width: 560px;
+  margin: 0;
+  color: var(--ym-admin-muted);
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.65;
+}
+
+.ym-staff-lifecycle-form {
+  display: flex;
+  min-height: 0;
+  max-height: calc(100dvh - 170px);
+  flex-direction: column;
+}
+
+.ym-staff-lifecycle-body {
+  display: grid;
+  min-height: 0;
+  gap: 12px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 16px 20px;
+}
+
+.ym-staff-lifecycle-account {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--ym-admin-border);
+  border-radius: 15px;
+  padding: 13px 14px;
+  background: var(--ym-admin-surface-soft);
+}
+
+.ym-staff-lifecycle-account > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.ym-staff-lifecycle-account > div strong,
+.ym-staff-lifecycle-account > div span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ym-staff-lifecycle-account > div span {
+  color: var(--ym-admin-muted);
+  font-size: 12px;
+}
+
+.ym-staff-lifecycle-account dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.ym-staff-lifecycle-account dl > div {
+  display: grid;
+  gap: 4px;
+}
+
+.ym-staff-lifecycle-account dt {
+  color: var(--ym-admin-muted);
+  font-size: 10.5px;
+  font-weight: 850;
+}
+
+.ym-staff-lifecycle-account dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--ym-admin-text);
+  font-size: 12px;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.ym-staff-lifecycle-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  border: 1px solid color-mix(in srgb, var(--ym-admin-section-accent) 34%, var(--ym-admin-border));
+  border-radius: 14px;
+  padding: 12px 13px;
+  background: color-mix(in srgb, var(--ym-admin-section-accent) 8%, var(--ym-admin-surface-soft));
+}
+
+.ym-staff-lifecycle-warning > span {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ym-admin-section-accent) 18%, transparent);
+  color: var(--ym-admin-section-accent);
+  font-weight: 950;
+}
+
+.ym-staff-lifecycle-warning p {
+  margin: 4px 0 0;
+  color: var(--ym-admin-muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.ym-staff-lifecycle-confirmation {
+  border: 1px solid color-mix(in srgb, #ef4444 26%, var(--ym-admin-border));
+  border-radius: 14px;
+  padding: 12px;
+  background: color-mix(in srgb, #ef4444 5%, var(--ym-admin-surface-soft));
+}
+
+.ym-staff-form-error {
+  border: 1px solid color-mix(in srgb, #ef4444 35%, var(--ym-admin-border));
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, #ef4444 8%, var(--ym-admin-surface-soft));
+  color: #dc2626;
+  font-size: 12px;
+}
+
+.ym-staff-deletion-blockers {
+  border: 1px solid color-mix(in srgb, #ef4444 30%, var(--ym-admin-border));
+  border-radius: 14px;
+  padding: 12px;
+  background: color-mix(in srgb, #ef4444 6%, var(--ym-admin-surface-soft));
+}
+
+.ym-staff-deletion-blockers > header {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+
+.ym-staff-deletion-blockers > header > span {
+  color: #dc2626;
+  font-weight: 950;
+}
+
+.ym-staff-deletion-blockers p {
+  margin: 3px 0 0;
+  color: var(--ym-admin-muted);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.ym-staff-deletion-blockers ul {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ym-staff-deletion-blocker {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  border-radius: 10px;
+  padding: 7px 9px;
+  background: var(--ym-admin-surface);
+  font-size: 11.5px;
+}
+
+.ym-staff-deletion-blocker > span {
+  color: #f59e0b;
+}
+
+.ym-staff-deletion-blocker > b {
+  min-width: 27px;
+  border-radius: 999px;
+  padding: 2px 7px;
+  background: color-mix(in srgb, #ef4444 12%, transparent);
+  color: #dc2626;
+  text-align: center;
+}
+
+.ym-staff-lifecycle-form > footer {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid var(--ym-admin-border);
+  padding: 13px 20px;
+  background: color-mix(in srgb, var(--ym-admin-surface) 94%, transparent);
+}
+
+.ym-staff-lifecycle-submit.is-disable {
+  border-color: #d97706;
+  background: linear-gradient(135deg, #d97706, #f59e0b);
+}
+
+.ym-staff-lifecycle-submit.is-restore {
+  border-color: #059669;
+  background: linear-gradient(135deg, #059669, #10b981);
+}
+
+.ym-staff-lifecycle-submit.is-delete {
+  border-color: #dc2626;
+  background: linear-gradient(135deg, #b91c1c, #ef4444);
+  box-shadow: 0 10px 24px rgba(239, 68, 68, .18);
 }
 
 .ym-staff-icon-button {
@@ -3639,6 +4434,25 @@ onBeforeUnmount(() => {
     padding-inline: 13px;
   }
 
+  .ym-staff-lifecycle-dialog {
+    max-height: calc(100dvh - 20px);
+  }
+
+  .ym-staff-lifecycle-dialog > header,
+  .ym-staff-lifecycle-body,
+  .ym-staff-lifecycle-form > footer {
+    padding-inline: 13px;
+  }
+
+  .ym-staff-lifecycle-account dl {
+    grid-template-columns: 1fr;
+  }
+
+  .ym-staff-lifecycle-form > footer {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
   .ym-staff-activity-drawer {
     width: 100%;
     padding: 14px;
@@ -3655,7 +4469,7 @@ onBeforeUnmount(() => {
 
 /* YM-STAFF-001B visual verification patch */
 .ym-staff-table {
-  min-width: 920px;
+  min-width: 1080px;
   table-layout: fixed;
 }
 
@@ -3665,27 +4479,31 @@ onBeforeUnmount(() => {
 }
 
 .ym-staff-table .is-id {
-  width: 6%;
+  width: 5%;
 }
 
 .ym-staff-table .is-name {
-  width: 18%;
+  width: 15%;
 }
 
 .ym-staff-table .is-email {
-  width: 28%;
+  width: 21%;
 }
 
 .ym-staff-table .is-roles {
-  width: 14%;
+  width: 12%;
+}
+
+.ym-staff-table .is-status {
+  width: 9%;
 }
 
 .ym-staff-table .is-date {
-  width: 18%;
+  width: 15%;
 }
 
 .ym-staff-table .is-actions {
-  width: 16%;
+  width: 23%;
 }
 
 .ym-staff-table th.is-id,
@@ -3694,6 +4512,8 @@ onBeforeUnmount(() => {
 .ym-staff-table td.is-email,
 .ym-staff-table th.is-roles,
 .ym-staff-table td.is-roles,
+.ym-staff-table th.is-status,
+.ym-staff-table td.is-status,
 .ym-staff-table th.is-date,
 .ym-staff-table td.is-date,
 .ym-staff-table th.is-actions,

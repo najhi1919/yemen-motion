@@ -121,6 +121,28 @@ class AuthApiController extends Controller
             ], 401);
         }
 
+        if ($user->isDisabled()) {
+            $this->recordAuthAuditEvent($request, [
+                'event_type' => 'user.login.failed',
+                'category' => 'auth',
+                'severity' => 'warning',
+                'actor_type' => 'guest',
+                'action' => 'login',
+                'outcome' => 'failed',
+                'metadata' => [
+                    'auth_context' => 'sanctum',
+                    'reason' => 'account_disabled',
+                ],
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'هذا الحساب معطل. تواصل مع الإدارة.',
+                'data' => null,
+                'errors' => null,
+            ], 403);
+        }
+
         // Successful login – clear any existing attempts
         RateLimiter::clear($key);
 

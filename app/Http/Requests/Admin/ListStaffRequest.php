@@ -14,6 +14,7 @@ class ListStaffRequest extends FormRequest
     private const ALLOWED_QUERY_PARAMETERS = [
         'search',
         'role',
+        'status',
         'created_from',
         'created_to',
         'sort_by',
@@ -37,6 +38,7 @@ class ListStaffRequest extends FormRequest
         return [
             'search' => ['nullable', 'string', 'max:120'],
             'role' => ['nullable', 'string', Rule::in(['staff', 'admin'])],
+            'status' => ['nullable', 'string', Rule::in(['all', 'active', 'disabled'])],
             'created_from' => ['nullable', 'date'],
             'created_to' => ['nullable', 'date', 'after_or_equal:created_from'],
             'sort_by' => ['nullable', 'string', Rule::in(['id', 'name', 'email', 'created_at'])],

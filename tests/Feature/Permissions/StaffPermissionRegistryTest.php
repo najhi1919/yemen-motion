@@ -24,6 +24,9 @@ class StaffPermissionRegistryTest extends TestCase
             'admin.staff.assign_roles',
             'admin.staff.assign_permissions',
             'admin.staff.activity.view',
+            'admin.staff.disable',
+            'admin.staff.restore',
+            'admin.staff.delete',
         ];
 
         foreach ($permissions as $permission) {
@@ -62,6 +65,9 @@ class StaffPermissionRegistryTest extends TestCase
             'admin.staff.assign_roles',
             'admin.staff.assign_permissions',
             'admin.staff.activity.view',
+            'admin.staff.disable',
+            'admin.staff.restore',
+            'admin.staff.delete',
         ] as $permission) {
             $this->assertTrue(Gate::forUser($user)->allows($permission));
             $this->assertTrue($user->can($permission));

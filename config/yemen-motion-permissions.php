@@ -129,6 +129,21 @@ return [
             'label_ar' => 'عرض سجل عمليات حساب الموظف',
         ],
         [
+            'name' => 'admin.staff.disable',
+            'group' => 'admin.staff',
+            'label_ar' => 'تعطيل حساب الموظف',
+        ],
+        [
+            'name' => 'admin.staff.restore',
+            'group' => 'admin.staff',
+            'label_ar' => 'استعادة حساب الموظف',
+        ],
+        [
+            'name' => 'admin.staff.delete',
+            'group' => 'admin.staff',
+            'label_ar' => 'حذف حساب الموظف',
+        ],
+        [
             'name' => 'admin.works.access',
             'group' => 'admin.works',
             'label_ar' => 'دخول إدارة الأعمال',
