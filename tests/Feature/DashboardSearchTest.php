@@ -30,6 +30,7 @@ class DashboardSearchTest extends TestCase
         foreach ([
             'dashboard.overview.view',
             'admin.users.view',
+            'admin.staff.view',
             'admin.roles.view',
             'admin.permissions.view',
         ] as $permissionName) {
@@ -253,6 +254,36 @@ class DashboardSearchTest extends TestCase
 
         $this->assertTrue($roles->contains(fn (array $result) => $result['title'] === 'ali-reviewer'));
         $this->assertSame('/admin/roles', $roles->first()['route']);
+    }
+
+    public function test_staff_with_staff_view_can_find_matching_team_members(): void
+    {
+        $viewer = $this->userWithRole('staff');
+        $viewer->givePermissionTo('admin.staff.view');
+
+        $staff = User::factory()->create([
+            'name' => 'ali staff operator',
+            'email' => 'ali.staff.operator@example.com',
+        ]);
+        $staff->assignRole('staff');
+
+        $admin = User::factory()->create([
+            'name' => 'ali admin operator',
+            'email' => 'ali.admin.operator@example.com',
+        ]);
+        $admin->assignRole('admin');
+
+        Sanctum::actingAs($viewer, ['*']);
+
+        $response = $this->getJson('/api/dashboard/search?q=ali')
+            ->assertOk();
+
+        $results = collect($response->json('data.grouped.staff'));
+
+        $this->assertTrue($results->contains(fn (array $result) => $result['title'] === 'ali staff operator'));
+        $this->assertTrue($results->contains(fn (array $result) => $result['title'] === 'ali admin operator'));
+        $this->assertSame('admin.staff.view', $results->first()['permission']);
+        $this->assertSame('/admin/staff', $results->first()['route']);
     }
 
     public function test_super_admin_can_find_users_staff_roles_and_permissions(): void

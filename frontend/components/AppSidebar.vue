@@ -285,7 +285,7 @@ const allItems = computed(() => {
 
     addSection(c.admin, [
       ...(hasPermission('admin.users.view') ? [{ path: '/admin/users', label: c.users, icon: icons.users }] : []),
-      ...(isSuperAdmin.value ? [{ path: '/admin/staff', label: c.staff, icon: icons.briefcase }] : []),
+      ...(hasPermission('admin.staff.view') ? [{ path: '/admin/staff', label: c.staff, icon: icons.briefcase }] : []),
       ...(hasPermission('admin.roles.view') ? [{ path: '/admin/roles', label: c.roles, icon: icons.shield }] : []),
       ...(hasPermission('admin.permissions.view') ? [{ path: '/admin/permissions', label: c.permissions, icon: icons.shield }] : []),
       ...(isSuperAdmin.value ? [{ path: '/admin/audit-events', label: c.auditEvents, icon: icons.eye }] : [])

@@ -1,283 +1,545 @@
 <template>
-  <div class="ym-staff-page space-y-7">
-    <section class="ym-staff-hero ym-admin-hero">
-      <div class="ym-hero-orb ym-hero-orb-one" />
-      <div class="ym-hero-orb ym-hero-orb-two" />
-      <div class="ym-hero-orb ym-hero-orb-three" />
-      <div class="ym-hero-grid" aria-hidden="true" />
-      <div class="ym-hero-content">
-        <div class="ym-hero-copy-block">
-          <div class="ym-hero-chips">
-            <span class="ym-hero-chip ym-hero-chip--brand">
-              <i class="ym-hero-chip-dot" aria-hidden="true" />
-              {{ copy.brandChip }}
-            </span>
-            <span class="ym-hero-chip ym-hero-chip--status">
-              <i class="ym-hero-chip-dot ym-hero-chip-dot--live" aria-hidden="true" />
-              {{ copy.readonlyBadge }}
-            </span>
-          </div>
-          <p class="ym-hero-kicker">{{ copy.kicker }}</p>
-          <h1 class="ym-hero-title">{{ copy.title }}</h1>
-          <p class="ym-hero-copy">{{ copy.copy }}</p>
-        </div>
-        <div class="ym-hero-summary">
-          <span>{{ copy.fixedRole }}</span>
-          <strong>staff</strong>
-          <small>{{ copy.pageScope }}: {{ pagination.current_page }} / {{ pagination.last_page }}</small>
-        </div>
-      </div>
-    </section>
+  <div
+    class="ym-staff-page ym-admin-page"
+    :dir="currentLocale === 'en' ? 'ltr' : 'rtl'"
+  >
+    <AdminPageHero
+      :breadcrumbs="[copy.dashboard, copy.kicker]"
+      :breadcrumb-label="copy.breadcrumbLabel"
+      :eyebrow="copy.kicker"
+      :badge="copy.permissionDriven"
+      :title="copy.title"
+      :description="copy.description"
+    >
+      <template #icon>👥</template>
+      <template v-if="canCreateStaff" #actions>
+        <button
+          type="button"
+          class="ym-staff-primary-button"
+          @click="openCreateStaffModal"
+        >
+          <span aria-hidden="true">＋</span>
+          {{ copy.createStaff }}
+        </button>
+      </template>
+    </AdminPageHero>
 
-    <aside class="ym-readonly-notice" role="note">
-      <span class="ym-readonly-notice__badge">{{ copy.readonlyBadge }}</span>
-      <p>{{ copy.readonlyNotice }}</p>
-    </aside>
+    <AdminMetricStrip
+      :items="metricItems"
+      :locale="currentLocale"
+      :aria-label="copy.metricsLabel"
+      :loading="loading"
+      :updating="refreshing"
+    />
 
-    <aside v-if="successMessage" class="ym-staff-feedback is-success" role="status">
-      <p>{{ successMessage }}</p>
-    </aside>
+    <AdminPolicyBar
+      :items="policyItems"
+      :aria-label="copy.policyLabel"
+      :close-label="copy.close"
+    />
 
-    <section class="ym-summary-grid">
-      <article
-        v-for="card in summaryCards"
-        :key="card.label"
-        class="ym-summary-card"
-        :style="{ '--card-accent': card.color }"
-      >
-        <span>{{ card.label }}</span>
-        <strong>{{ card.value }}</strong>
-        <small>{{ card.subtitle }}</small>
-      </article>
-    </section>
-
-    <section class="ym-table-card">
-      <div class="ym-table-card__head">
+    <section class="ym-staff-workspace ym-admin-surface">
+      <header class="ym-staff-workspace__head">
         <div>
+          <span class="ym-staff-workspace__eyebrow">{{ copy.workspaceEyebrow }}</span>
           <h2>{{ copy.tableTitle }}</h2>
-          <p>{{ copy.tableCopy }}</p>
+          <p>{{ copy.tableDescription }}</p>
         </div>
-        <div class="ym-table-card__actions">
-          <span>{{ copy.pageInfo(pagination.current_page, pagination.last_page, pagination.total) }}</span>
+
+        <button
+          v-if="canViewStaff"
+          type="button"
+          class="ym-staff-secondary-button"
+          :disabled="loading || refreshing"
+          @click="refreshStaff"
+        >
+          <span aria-hidden="true">↻</span>
+          {{ copy.refresh }}
+        </button>
+      </header>
+
+      <form
+        v-if="canViewStaff"
+        class="ym-staff-filters"
+        role="search"
+        @submit.prevent="applyFilters"
+      >
+        <label class="ym-staff-field is-search">
+          <span>{{ copy.searchLabel }}</span>
+          <div>
+            <span aria-hidden="true">⌕</span>
+            <input
+              v-model.trim="filters.search"
+              type="search"
+              :placeholder="copy.searchPlaceholder"
+              autocomplete="off"
+            >
+          </div>
+        </label>
+
+        <label class="ym-staff-field">
+          <span>{{ copy.roleFilter }}</span>
+          <select v-model="filters.role">
+            <option value="">{{ copy.allInternalRoles }}</option>
+            <option value="staff">staff</option>
+            <option v-if="auth.isSuperAdmin" value="admin">admin</option>
+          </select>
+        </label>
+
+        <label class="ym-staff-field">
+          <span>{{ copy.sortLabel }}</span>
+          <select v-model="filters.sortBy">
+            <option value="id">{{ copy.sortId }}</option>
+            <option value="name">{{ copy.sortName }}</option>
+            <option value="email">{{ copy.sortEmail }}</option>
+            <option value="created_at">{{ copy.sortCreated }}</option>
+          </select>
+        </label>
+
+        <label class="ym-staff-field">
+          <span>{{ copy.directionLabel }}</span>
+          <select v-model="filters.sortDirection">
+            <option value="asc">{{ copy.ascending }}</option>
+            <option value="desc">{{ copy.descending }}</option>
+          </select>
+        </label>
+
+        <div class="ym-staff-filter-actions">
+          <button type="submit" class="ym-staff-primary-button">
+            {{ copy.apply }}
+          </button>
           <button
-            v-if="canCreateStaff"
             type="button"
-            class="ym-create-staff-button"
-            @click="openCreateStaffModal"
+            class="ym-staff-secondary-button"
+            @click="resetFilters"
           >
-            {{ copy.createStaff }}
+            {{ copy.reset }}
           </button>
         </div>
+      </form>
+
+      <AdminEmptyState
+        v-if="!canViewStaff"
+        icon="⛔"
+        :title="copy.forbiddenTitle"
+        :description="copy.forbiddenDescription"
+        tone="forbidden"
+      />
+
+      <AdminEmptyState
+        v-else-if="error"
+        icon="!"
+        :title="copy.errorTitle"
+        :description="error"
+        :action-label="copy.retry"
+        tone="error"
+        @action="fetchStaff"
+      />
+
+      <div v-else-if="loading" class="ym-staff-loading" role="status">
+        <span aria-hidden="true" />
+        <strong>{{ copy.loading }}</strong>
       </div>
 
-      <div v-if="loading" class="ym-staff-state">
-        <span class="ym-staff-state__spinner" aria-hidden="true" />
-        <p>{{ copy.loading }}</p>
-      </div>
-
-      <div v-else-if="error" class="ym-staff-state is-error">
-        <p>{{ error }}</p>
-      </div>
-
-      <div v-else-if="!staffUsers.length" class="ym-staff-state">
-        <p>{{ copy.empty }}</p>
-      </div>
+      <AdminEmptyState
+        v-else-if="staffUsers.length === 0"
+        icon="◇"
+        :title="copy.emptyTitle"
+        :description="copy.emptyDescription"
+        :action-label="hasActiveFilters ? copy.reset : ''"
+        @action="resetFilters"
+      />
 
       <div v-else class="ym-staff-table-wrap">
         <table class="ym-staff-table">
           <thead>
             <tr>
-              <th class="ym-staff-th-id">
-                <div class="ym-table-th-content">
-                  <button type="button" class="ym-sort-button" @click="toggleSort('id')">
-                    {{ copy.colId }}
-                    <span class="ym-sort-indicator" :class="sortBy === 'id' ? 'is-active' : ''">{{ sortIndicator('id') }}</span>
-                  </button>
-                </div>
-              </th>
-              <th class="ym-staff-th-name">
-                <div class="ym-table-th-content">
-                  <button type="button" class="ym-sort-button" @click="toggleSort('name')">
-                    {{ copy.colName }}
-                    <span class="ym-sort-indicator" :class="sortBy === 'name' ? 'is-active' : ''">{{ sortIndicator('name') }}</span>
-                  </button>
-                </div>
-              </th>
-              <th class="ym-staff-th-email">
-                <div class="ym-table-th-content">
-                  <button type="button" class="ym-sort-button" @click="toggleSort('email')">
-                    {{ copy.colEmail }}
-                    <span class="ym-sort-indicator" :class="sortBy === 'email' ? 'is-active' : ''">{{ sortIndicator('email') }}</span>
-                  </button>
-                </div>
-              </th>
-              <th class="ym-staff-th-roles">
-                <div class="ym-table-th-content">
-                  <span>{{ copy.colRoles }}</span>
-                </div>
-              </th>
-              <th class="ym-staff-th-created">
-                <div class="ym-table-th-content">
-                  <button type="button" class="ym-sort-button" @click="toggleSort('created_at')">
-                    {{ copy.colCreated }}
-                    <span class="ym-sort-indicator" :class="sortBy === 'created_at' ? 'is-active' : ''">{{ sortIndicator('created_at') }}</span>
-                  </button>
-                </div>
-              </th>
+              <th>#</th>
+              <th>{{ copy.colName }}</th>
+              <th>{{ copy.colEmail }}</th>
+              <th>{{ copy.colRoles }}</th>
+              <th>{{ copy.colCreated }}</th>
+              <th v-if="canViewActivity">{{ copy.colActions }}</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="user in staffUsers" :key="user.id">
-              <td class="ym-staff-cell-id">{{ user.id }}</td>
-              <td class="ym-staff-cell-name">
-                <span
-                  class="ym-name-preview"
-                  :title="user.name"
-                  :dir="textDirection(user.name)"
-                  v-text="truncateText(user.name, 15)"
-                />
+              <td class="is-id">{{ user.id }}</td>
+              <td>
+                <strong :dir="textDirection(user.name)">{{ user.name }}</strong>
               </td>
-              <td class="ym-staff-cell-email" dir="ltr">
-                <span
-                  class="ym-email-preview"
-                  :title="user.email"
-                  dir="ltr"
-                  v-text="truncateText(user.email, 15)"
-                />
+              <td dir="ltr">
+                <span class="ym-staff-email" :title="user.email">{{ user.email }}</span>
               </td>
-              <td class="ym-staff-cell-roles">
-                <span v-if="!user.roles.length" class="ym-staff-chip is-muted">—</span>
-                <span
-                  v-for="role in user.roles"
-                  :key="role"
-                  class="ym-staff-chip"
-                  :class="`is-${role}`"
-                  :title="role"
-                >{{ role }}</span>
+              <td>
+                <div class="ym-staff-role-list">
+                  <span
+                    v-for="role in user.roles"
+                    :key="role"
+                    class="ym-staff-role"
+                    :class="`is-${role}`"
+                  >
+                    {{ role }}
+                  </span>
+                </div>
               </td>
-              <td class="ym-staff-cell-created">{{ formatCreatedAt(user.created_at) }}</td>
+              <td class="is-date">{{ formatDateTime(user.created_at) }}</td>
+              <td v-if="canViewActivity">
+                <button
+                  type="button"
+                  class="ym-staff-row-action"
+                  @click="openActivity(user, $event)"
+                >
+                  <span aria-hidden="true">◷</span>
+                  {{ copy.accountActivity }}
+                </button>
+              </td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <footer v-if="!loading && !error && staffUsers.length" class="ym-staff-pagination">
-        <span class="ym-staff-pagination__info">
-          {{ copy.pageInfo(pagination.current_page, pagination.last_page, pagination.total) }}
+      <footer
+        v-if="canViewStaff && !loading && !error && pagination.total > 0"
+        class="ym-staff-pagination"
+      >
+        <span>
+          {{ copy.pageInfo(
+            pagination.current_page,
+            pagination.last_page,
+            pagination.total
+          ) }}
         </span>
-        <div class="ym-staff-pagination__actions">
+
+        <div>
           <button
             type="button"
-            class="ym-staff-page-btn"
+            class="ym-staff-secondary-button"
             :disabled="pagination.current_page <= 1"
             @click="changePage(pagination.current_page - 1)"
-          >{{ copy.prev }}</button>
-          <span class="ym-staff-pagination__current">{{ pagination.current_page }} / {{ pagination.last_page }}</span>
+          >
+            {{ copy.previous }}
+          </button>
+          <strong>{{ pagination.current_page }} / {{ pagination.last_page }}</strong>
           <button
             type="button"
-            class="ym-staff-page-btn"
+            class="ym-staff-secondary-button"
             :disabled="pagination.current_page >= pagination.last_page"
             @click="changePage(pagination.current_page + 1)"
-          >{{ copy.next }}</button>
+          >
+            {{ copy.next }}
+          </button>
         </div>
       </footer>
     </section>
 
-    <div
-      v-if="createModalOpen"
-      class="ym-staff-modal-backdrop"
-      role="presentation"
-      @click.self="closeCreateStaffModal"
+    <p
+      v-if="successMessage"
+      class="ym-staff-toast is-success"
+      role="status"
     >
-      <section
-        class="ym-staff-modal"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="copy.createStaff"
+      {{ successMessage }}
+    </p>
+
+    <Teleport to="body">
+      <div
+        v-if="createModalOpen"
+        class="ym-staff-dialog-backdrop"
+        :dir="currentLocale === 'en' ? 'ltr' : 'rtl'"
+        :style="{ '--ym-admin-section-accent': '#06b6d4', '--ym-admin-section-accent-secondary': '#8b5cf6' }"
+        role="presentation"
+        @mousedown.self="closeCreateStaffModal"
       >
-        <header class="ym-staff-modal__head">
-          <div>
-            <h2>{{ copy.createStaff }}</h2>
-            <p>{{ copy.createStaffCopy }}</p>
-          </div>
-          <button
-            type="button"
-            class="ym-staff-modal__close"
-            :aria-label="copy.cancel"
-            :disabled="savingStaff"
-            @click="closeCreateStaffModal"
-          >
-            ×
-          </button>
-        </header>
-
-        <form class="ym-staff-form" @submit.prevent="submitCreateStaff">
-          <div v-if="createError" class="ym-staff-feedback is-error" role="alert">
-            <p>{{ createError }}</p>
-          </div>
-
-          <label class="ym-staff-field">
-            <span>{{ copy.formName }}</span>
-            <input v-model.trim="createForm.name" type="text" autocomplete="name" />
-            <small v-if="fieldError('name')">{{ fieldError('name') }}</small>
-          </label>
-
-          <label class="ym-staff-field">
-            <span>{{ copy.formEmail }}</span>
-            <input v-model.trim="createForm.email" type="email" dir="ltr" autocomplete="email" />
-            <small v-if="fieldError('email')">{{ fieldError('email') }}</small>
-          </label>
-
-          <label class="ym-staff-field">
-            <span>{{ copy.formPassword }}</span>
-            <input v-model="createForm.password" type="password" autocomplete="new-password" />
-            <small v-if="fieldError('password')">{{ fieldError('password') }}</small>
-          </label>
-
-          <label class="ym-staff-field">
-            <span>{{ copy.formPasswordConfirmation }}</span>
-            <input v-model="createForm.password_confirmation" type="password" autocomplete="new-password" />
-            <small v-if="fieldError('password_confirmation')">{{ fieldError('password_confirmation') }}</small>
-          </label>
-
-          <label class="ym-staff-field">
-            <span>{{ copy.formRole }}</span>
-            <select v-model="createForm.role">
-              <option value="staff">staff</option>
-              <option value="admin">admin</option>
-            </select>
-            <small v-if="fieldError('role')">{{ fieldError('role') }}</small>
-          </label>
-
-          <footer class="ym-staff-form__actions">
+        <section
+          ref="createDialog"
+          class="ym-staff-dialog"
+          role="dialog"
+          aria-modal="true"
+          :aria-labelledby="'ym-create-staff-title'"
+          tabindex="-1"
+        >
+          <header>
+            <div>
+              <span>{{ copy.createEyebrow }}</span>
+              <h2 id="ym-create-staff-title">{{ copy.createStaff }}</h2>
+              <p>{{ copy.createDescription }}</p>
+            </div>
             <button
               type="button"
-              class="ym-staff-form__secondary"
+              class="ym-staff-icon-button"
+              :aria-label="copy.close"
               :disabled="savingStaff"
               @click="closeCreateStaffModal"
             >
-              {{ copy.cancel }}
+              ×
             </button>
-            <button type="submit" class="ym-staff-form__primary" :disabled="savingStaff">
-              {{ savingStaff ? copy.saving : copy.saveStaff }}
+          </header>
+
+          <form class="ym-staff-create-form" @submit.prevent="submitCreateStaff">
+            <p v-if="createError" class="ym-staff-inline-error" role="alert">
+              {{ createError }}
+            </p>
+
+            <label class="ym-staff-field">
+              <span>{{ copy.formName }}</span>
+              <input
+                ref="firstCreateInput"
+                v-model.trim="createForm.name"
+                type="text"
+                autocomplete="name"
+                :aria-invalid="Boolean(fieldError('name'))"
+              >
+              <small v-if="fieldError('name')">{{ fieldError('name') }}</small>
+            </label>
+
+            <label class="ym-staff-field">
+              <span>{{ copy.formEmail }}</span>
+              <input
+                v-model.trim="createForm.email"
+                type="email"
+                dir="ltr"
+                autocomplete="email"
+                :aria-invalid="Boolean(fieldError('email'))"
+              >
+              <small v-if="fieldError('email')">{{ fieldError('email') }}</small>
+            </label>
+
+            <div class="ym-staff-form-grid">
+              <label class="ym-staff-field">
+                <span>{{ copy.formPassword }}</span>
+                <input
+                  v-model="createForm.password"
+                  type="password"
+                  autocomplete="new-password"
+                  :aria-invalid="Boolean(fieldError('password'))"
+                >
+                <small v-if="fieldError('password')">{{ fieldError('password') }}</small>
+              </label>
+
+              <label class="ym-staff-field">
+                <span>{{ copy.formPasswordConfirmation }}</span>
+                <input
+                  v-model="createForm.password_confirmation"
+                  type="password"
+                  autocomplete="new-password"
+                >
+              </label>
+            </div>
+
+            <label class="ym-staff-field">
+              <span>{{ copy.formRole }}</span>
+              <select v-model="createForm.role">
+                <option value="staff">staff</option>
+                <option value="admin">admin</option>
+              </select>
+              <small>{{ copy.roleHelp }}</small>
+              <small v-if="fieldError('role')">{{ fieldError('role') }}</small>
+            </label>
+
+            <footer>
+              <button
+                type="button"
+                class="ym-staff-secondary-button"
+                :disabled="savingStaff"
+                @click="closeCreateStaffModal"
+              >
+                {{ copy.cancel }}
+              </button>
+              <button
+                type="submit"
+                class="ym-staff-primary-button"
+                :disabled="savingStaff"
+              >
+                <span v-if="savingStaff" class="ym-staff-button-spinner" aria-hidden="true" />
+                {{ savingStaff ? copy.saving : copy.save }}
+              </button>
+            </footer>
+          </form>
+        </section>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div
+        v-if="activityOpen && selectedStaff"
+        class="ym-staff-drawer-backdrop"
+        :class="{ 'is-ltr': currentLocale === 'en' }"
+        :dir="currentLocale === 'en' ? 'ltr' : 'rtl'"
+        :style="{ '--ym-admin-section-accent': '#06b6d4', '--ym-admin-section-accent-secondary': '#8b5cf6' }"
+        role="presentation"
+        @mousedown.self="closeActivity"
+      >
+        <aside
+          ref="activityDrawer"
+          class="ym-staff-activity-drawer"
+          role="dialog"
+          aria-modal="true"
+          :aria-labelledby="'ym-staff-activity-title'"
+          tabindex="-1"
+        >
+          <header>
+            <div>
+              <span>{{ copy.activityEyebrow }}</span>
+              <h2 id="ym-staff-activity-title">{{ copy.activityTitle }}</h2>
+              <p>
+                <strong :dir="textDirection(selectedStaff.name)">{{ selectedStaff.name }}</strong>
+                <small dir="ltr">{{ selectedStaff.email }}</small>
+              </p>
+            </div>
+            <button
+              type="button"
+              class="ym-staff-icon-button"
+              :aria-label="copy.close"
+              @click="closeActivity"
+            >
+              ×
             </button>
+          </header>
+
+          <div class="ym-staff-activity-summary">
+            <span>
+              <small>{{ copy.accountId }}</small>
+              <strong>#{{ selectedStaff.id }}</strong>
+            </span>
+            <span>
+              <small>{{ copy.roles }}</small>
+              <strong>{{ selectedStaff.roles.join(', ') }}</strong>
+            </span>
+            <span>
+              <small>{{ copy.eventsCount }}</small>
+              <strong>{{ activityPagination.total }}</strong>
+            </span>
+          </div>
+
+          <AdminEmptyState
+            v-if="activityError"
+            icon="!"
+            :title="copy.activityErrorTitle"
+            :description="activityError"
+            :action-label="copy.retry"
+            tone="error"
+            @action="fetchActivity"
+          />
+
+          <div v-else-if="activityLoading" class="ym-staff-loading" role="status">
+            <span aria-hidden="true" />
+            <strong>{{ copy.activityLoading }}</strong>
+          </div>
+
+          <AdminEmptyState
+            v-else-if="activityEvents.length === 0"
+            icon="◷"
+            :title="copy.activityEmptyTitle"
+            :description="copy.activityEmptyDescription"
+          />
+
+          <ol v-else class="ym-staff-timeline">
+            <li v-for="event in activityEvents" :key="event.id">
+              <span class="ym-staff-timeline__dot" :class="`is-${event.outcome}`" />
+              <article>
+                <header>
+                  <div>
+                    <strong>{{ eventLabel(event) }}</strong>
+                    <small>{{ formatDateTime(event.occurred_at) }}</small>
+                  </div>
+                  <span :class="`is-${event.outcome}`">{{ outcomeLabel(event.outcome) }}</span>
+                </header>
+                <dl>
+                  <div>
+                    <dt>{{ copy.actor }}</dt>
+                    <dd>{{ actorLabel(event) }}</dd>
+                  </div>
+                  <div>
+                    <dt>{{ copy.action }}</dt>
+                    <dd>{{ event.action || '—' }}</dd>
+                  </div>
+                  <div v-if="event.request_id">
+                    <dt>Request ID</dt>
+                    <dd dir="ltr">{{ event.request_id }}</dd>
+                  </div>
+                </dl>
+                <details v-if="metadataEntries(event).length">
+                  <summary>{{ copy.safeMetadata }}</summary>
+                  <ul>
+                    <li
+                      v-for="[key, value] in metadataEntries(event)"
+                      :key="key"
+                    >
+                      <span>{{ key }}</span>
+                      <code>{{ formatMetadataValue(value) }}</code>
+                    </li>
+                  </ul>
+                </details>
+              </article>
+            </li>
+          </ol>
+
+          <footer
+            v-if="!activityLoading && !activityError && activityPagination.total > 0"
+            class="ym-staff-pagination"
+          >
+            <span>
+              {{ copy.pageInfo(
+                activityPagination.current_page,
+                activityPagination.last_page,
+                activityPagination.total
+              ) }}
+            </span>
+            <div>
+              <button
+                type="button"
+                class="ym-staff-secondary-button"
+                :disabled="activityPagination.current_page <= 1"
+                @click="changeActivityPage(activityPagination.current_page - 1)"
+              >
+                {{ copy.previous }}
+              </button>
+              <strong>
+                {{ activityPagination.current_page }} / {{ activityPagination.last_page }}
+              </strong>
+              <button
+                type="button"
+                class="ym-staff-secondary-button"
+                :disabled="activityPagination.current_page >= activityPagination.last_page"
+                @click="changeActivityPage(activityPagination.current_page + 1)"
+              >
+                {{ copy.next }}
+              </button>
+            </div>
           </footer>
-        </form>
-      </section>
-    </div>
+        </aside>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  watch
+} from 'vue'
+import AdminEmptyState from '~/components/admin/visual/AdminEmptyState.vue'
+import AdminMetricStrip from '~/components/admin/visual/AdminMetricStrip.vue'
+import AdminPageHero from '~/components/admin/visual/AdminPageHero.vue'
+import AdminPolicyBar from '~/components/admin/visual/AdminPolicyBar.vue'
 import { useApiClient } from '~/composables/useApiClient'
 import { useAuthStore } from '~/stores/authStore'
+import { formatYmDateTime } from '~/utils/ymFormatting'
 
 definePageMeta({ layout: 'admin' })
 
 type Locale = 'ar' | 'en'
+type TeamRole = '' | 'staff' | 'admin'
+type StaffSortKey = 'id' | 'name' | 'email' | 'created_at'
+type SortDirection = 'asc' | 'desc'
+type StaffCreateRole = 'staff' | 'admin'
 
-type AdminStaffUser = {
+interface StaffUser {
   id: number
   name: string
   email: string
@@ -285,35 +547,84 @@ type AdminStaffUser = {
   created_at: string | null
 }
 
-type PaginatedStaffUsers = {
-  data: AdminStaffUser[]
+interface Pagination<T> {
+  data: T[]
   current_page: number
   last_page: number
   per_page: number
   total: number
 }
 
-type AdminStaffResponse = {
-  success: boolean
-  data: PaginatedStaffUsers
-  message?: string
-  errors?: Record<string, string[]> | null
+interface StaffSummary {
+  total: number
+  staff_role: number
+  admin_role: number
 }
 
-type StoreStaffResponse = {
+interface StaffListResponse {
   success: boolean
-  message?: string
-  data: {
-    user: AdminStaffUser & {
-      role: 'staff' | 'admin'
-    }
+  data: Pagination<StaffUser>
+  message: string
+  errors: Record<string, string[]> | null
+  meta: {
+    summary: StaffSummary
+    available_roles: string[]
   }
-  errors?: Record<string, string[]> | null
 }
 
-type StaffSortKey = 'id' | 'name' | 'email' | 'created_at'
-type SortDirection = 'asc' | 'desc'
-type StaffCreateRole = 'staff' | 'admin'
+interface StoreStaffResponse {
+  success: boolean
+  data: {
+    user: StaffUser & { role: StaffCreateRole }
+  }
+  message: string
+  errors: Record<string, string[]> | null
+}
+
+interface StaffActivityEvent {
+  id: number
+  event_type: string
+  category: string
+  severity: string
+  actor_id: number | null
+  actor_role: string | null
+  target_id: number | null
+  action: string | null
+  outcome: string
+  request_id: string | null
+  correlation_id: string | null
+  metadata: Record<string, unknown> | null
+  occurred_at: string | null
+}
+
+interface StaffActivityResponse {
+  success: boolean
+  data: Pagination<StaffActivityEvent>
+  message: string
+  errors: Record<string, string[]> | null
+  meta: {
+    staff: StaffUser
+  }
+}
+
+interface MetricItem {
+  key: string
+  label: string
+  description: string
+  value: number
+  tone: 'violet' | 'cyan' | 'indigo' | 'amber' | 'emerald' | 'neutral' | 'rose' | 'magenta'
+  icon: string
+}
+
+interface PolicyItem {
+  key: string
+  title: string
+  state: string
+  description: string
+  meta?: string
+  icon: string
+  tone: 'info' | 'success' | 'warning' | 'neutral'
+}
 
 const { apiFetch } = useApiClient()
 const auth = useAuthStore()
@@ -321,104 +632,218 @@ const currentLocale = useState<Locale>('ym-dashboard-locale', () => 'ar')
 
 const copyMap = {
   ar: {
-    brandChip: 'Yemen Motion',
-    readonlyBadge: 'إدارة محدودة',
+    dashboard: 'لوحة التحكم',
+    breadcrumbLabel: 'مسار صفحة الموظفين',
     kicker: 'إدارة الموظفين',
+    permissionDriven: 'وصول قائم على الصلاحيات',
     title: 'مركز فريق العمل',
-    copy: 'عرض تشغيلي لأعضاء الفريق مرتبط بفلتر الدور الثابت staff مع إنشاء محدود للحسابات الداخلية.',
-    readonlyNotice: 'إنشاء الموظفين متاح مؤقتًا للمدير الأعلى فقط، مع إبقاء التعديل والحذف مؤجلين لمرحلة إدارة الموظفين الكاملة.',
-    fixedRole: 'الدور الثابت',
-    pageScope: 'الصفحة',
-    tableTitle: 'سجل الموظفين',
-    tableCopy: 'جدول متابعة غني يعرض بيانات الفريق من endpoint المستخدمين الحالي مع role ثابت.',
-    createStaff: 'إنشاء موظف جديد',
-    createStaffCopy: 'أدخل بيانات الحساب واختر الدور الداخلي المسموح لهذه المرحلة.',
-    formName: 'الاسم',
-    formEmail: 'البريد الإلكتروني',
-    formPassword: 'كلمة المرور',
-    formPasswordConfirmation: 'تأكيد كلمة المرور',
-    formRole: 'الدور',
-    saveStaff: 'حفظ الموظف',
-    saving: 'جار الحفظ...',
-    cancel: 'إلغاء',
-    createSuccess: 'تم إنشاء الموظف بنجاح.',
-    createError: 'تعذر إنشاء الموظف. راجع الحقول وحاول مرة أخرى.',
-    totalStaff: 'إجمالي الموظفين',
-    currentPageStaff: 'في الصفحة الحالية',
-    roleLabel: 'الدور',
-    currentPage: 'الصفحة الحالية',
-    liveData: 'من بيانات API',
-    visibleRows: 'صفوف ظاهرة الآن',
-    fixedRoleScope: 'نطاق ثابت',
-    paginationScope: 'حالة التصفح',
-    loading: 'يتم تحميل الموظفين...',
-    empty: 'لا يوجد موظفون مطابقون.',
-    colId: '#',
+    description: 'مساحة موحدة لإدارة الحسابات الداخلية وعرض سجل عمليات كل حساب، مع إظهار الأدوات وفق الصلاحيات الممنوحة.',
+    metricsLabel: 'مؤشرات فريق العمل',
+    policyLabel: 'سياسات الوصول إلى إدارة الموظفين',
+    close: 'إغلاق',
+    workspaceEyebrow: 'سجل الفريق',
+    tableTitle: 'الحسابات الداخلية',
+    tableDescription: 'يعرض الحسابات المرتبطة بدور staff أو admin، ويستبعد المدير الأعلى والحسابات الخارجية.',
+    refresh: 'تحديث',
+    searchLabel: 'البحث',
+    searchPlaceholder: 'ابحث بالاسم أو البريد الإلكتروني',
+    roleFilter: 'الدور الداخلي',
+    allInternalRoles: 'جميع الأدوار الداخلية',
+    sortLabel: 'الترتيب حسب',
+    directionLabel: 'الاتجاه',
+    sortId: 'المعرّف',
+    sortName: 'الاسم',
+    sortEmail: 'البريد',
+    sortCreated: 'تاريخ الإنشاء',
+    ascending: 'تصاعدي',
+    descending: 'تنازلي',
+    apply: 'تطبيق',
+    reset: 'إعادة الضبط',
+    forbiddenTitle: 'لا تملك صلاحية عرض الموظفين',
+    forbiddenDescription: 'يتطلب فتح هذه المساحة صلاحية admin.staff.view ضمن دور داخلي.',
+    errorTitle: 'تعذر تحميل فريق العمل',
+    retry: 'إعادة المحاولة',
+    loading: 'يتم تحميل فريق العمل...',
+    emptyTitle: 'لا توجد نتائج مطابقة',
+    emptyDescription: 'غيّر البحث أو الفلاتر، أو أنشئ أول حساب داخلي عند امتلاك صلاحية الإنشاء.',
     colName: 'الاسم',
     colEmail: 'البريد الإلكتروني',
     colRoles: 'الأدوار',
     colCreated: 'تاريخ الإنشاء',
-    prev: 'السابق',
+    colActions: 'الإجراءات',
+    accountActivity: 'سجل الحساب',
+    previous: 'السابق',
     next: 'التالي',
+    createStaff: 'إنشاء موظف',
+    createEyebrow: 'حساب داخلي جديد',
+    createDescription: 'أنشئ حسابًا بدور staff أو admin. إدارة الأدوار والصلاحيات التفصيلية ستبقى داخل نفس الصفحة في المحطة التالية.',
+    formName: 'الاسم',
+    formEmail: 'البريد الإلكتروني',
+    formPassword: 'كلمة المرور',
+    formPasswordConfirmation: 'تأكيد كلمة المرور',
+    formRole: 'الدور الأولي',
+    roleHelp: 'المفوّض بصلاحية الإنشاء ينشئ staff فقط؛ إنشاء admin محصور بالمدير الأعلى حتى تفعيل إدارة الأدوار.',
+    cancel: 'إلغاء',
+    save: 'حفظ الموظف',
+    saving: 'جارٍ الحفظ...',
+    createSuccess: 'تم إنشاء الموظف بنجاح.',
+    createError: 'تعذر إنشاء الموظف. راجع الحقول وحاول مرة أخرى.',
+    activityEyebrow: 'تتبّع الحساب',
+    activityTitle: 'سجل عمليات الحساب',
+    accountId: 'معرّف الحساب',
+    roles: 'الأدوار الحالية',
+    eventsCount: 'إجمالي الأحداث',
+    activityErrorTitle: 'تعذر تحميل سجل الحساب',
+    activityLoading: 'يتم تحميل سجل الحساب...',
+    activityEmptyTitle: 'لا توجد عمليات مسجلة',
+    activityEmptyDescription: 'سيظهر هنا إنشاء الحساب وتغييرات الوصول ومحاولات الدخول والعمليات المرتبطة به.',
+    actor: 'المنفّذ',
+    action: 'الإجراء',
+    safeMetadata: 'البيانات الوصفية الآمنة',
+    totalAccounts: 'إجمالي الحسابات',
+    staffAccounts: 'دور staff',
+    adminAccounts: 'دور admin',
+    visibleRows: 'صفوف الصفحة',
+    superAdminPolicy: 'المدير الأعلى',
+    superAdminState: 'كل الصلاحيات تلقائيًا',
+    superAdminDescription: 'يتجاوز Super Admin كل الصلاحيات المسجلة بواسطة Gate::before دون الاعتماد على روابط المنح.',
+    delegatedPolicy: 'التفويض الدقيق',
+    delegatedState: 'عرض وإنشاء وسجل منفصل',
+    delegatedDescription: 'يستطيع الدور الداخلي تنفيذ العمليات التي مُنحت له فقط.',
+    externalPolicy: 'الحسابات الخارجية',
+    externalState: 'ممنوعة من الإدارة',
+    externalDescription: 'يبقى client وdesigner ممنوعين حتى عند منح صلاحية إدارية لهما بالخطأ.',
     pageInfo: (page: number, last: number, total: number) =>
-      `الصفحة ${page} من ${last} - ${total} موظف`
+      `الصفحة ${page} من ${last} — ${total} سجل`
   },
   en: {
-    brandChip: 'Yemen Motion',
-    readonlyBadge: 'Limited management',
+    dashboard: 'Dashboard',
+    breadcrumbLabel: 'Staff page breadcrumb',
     kicker: 'Staff management',
-    title: 'Staff Command Center',
-    copy: 'An operational view of team members using the fixed staff role filter with limited internal account creation.',
-    readonlyNotice: 'Staff creation is temporarily limited to the super admin, while edit and delete actions remain deferred.',
-    fixedRole: 'Fixed role',
-    pageScope: 'Page',
-    tableTitle: 'Staff register',
-    tableCopy: 'A rich monitoring table served by the current users endpoint with a fixed role.',
-    createStaff: 'Create new staff',
-    createStaffCopy: 'Enter account details and choose the internal role allowed in this step.',
+    permissionDriven: 'Permission-driven access',
+    title: 'Team Command Center',
+    description: 'A unified workspace for internal accounts and account activity, with tools revealed by granted permissions.',
+    metricsLabel: 'Team metrics',
+    policyLabel: 'Staff access policies',
+    close: 'Close',
+    workspaceEyebrow: 'Team register',
+    tableTitle: 'Internal accounts',
+    tableDescription: 'Lists staff or admin accounts while excluding the super admin and external accounts.',
+    refresh: 'Refresh',
+    searchLabel: 'Search',
+    searchPlaceholder: 'Search by name or email',
+    roleFilter: 'Internal role',
+    allInternalRoles: 'All internal roles',
+    sortLabel: 'Sort by',
+    directionLabel: 'Direction',
+    sortId: 'ID',
+    sortName: 'Name',
+    sortEmail: 'Email',
+    sortCreated: 'Created at',
+    ascending: 'Ascending',
+    descending: 'Descending',
+    apply: 'Apply',
+    reset: 'Reset',
+    forbiddenTitle: 'Staff view permission required',
+    forbiddenDescription: 'This workspace requires admin.staff.view on an internal role.',
+    errorTitle: 'Could not load the team',
+    retry: 'Retry',
+    loading: 'Loading team members...',
+    emptyTitle: 'No matching accounts',
+    emptyDescription: 'Change the filters or create the first internal account when creation is allowed.',
+    colName: 'Name',
+    colEmail: 'Email',
+    colRoles: 'Roles',
+    colCreated: 'Created',
+    colActions: 'Actions',
+    accountActivity: 'Account activity',
+    previous: 'Previous',
+    next: 'Next',
+    createStaff: 'Create staff',
+    createEyebrow: 'New internal account',
+    createDescription: 'Create a staff or admin account. Detailed role and permission management remains in this page for the next station.',
     formName: 'Name',
     formEmail: 'Email',
     formPassword: 'Password',
     formPasswordConfirmation: 'Confirm password',
-    formRole: 'Role',
-    saveStaff: 'Save staff',
-    saving: 'Saving...',
+    formRole: 'Initial role',
+    roleHelp: 'Delegated creators can create staff only; admin creation remains limited to Super Admin until role management is enabled.',
     cancel: 'Cancel',
+    save: 'Save staff',
+    saving: 'Saving...',
     createSuccess: 'Staff member created successfully.',
-    createError: 'Could not create staff. Check the fields and try again.',
-    totalStaff: 'Total staff',
-    currentPageStaff: 'Current page staff',
-    roleLabel: 'Role',
-    currentPage: 'Current page',
-    liveData: 'From API data',
-    visibleRows: 'Visible rows now',
-    fixedRoleScope: 'Fixed scope',
-    paginationScope: 'Pagination state',
-    loading: 'Loading staff...',
-    empty: 'No matching staff.',
-    colId: '#',
-    colName: 'Name',
-    colEmail: 'Email',
-    colRoles: 'Roles',
-    colCreated: 'Created at',
-    prev: 'Prev',
-    next: 'Next',
+    createError: 'Could not create staff. Review the fields and try again.',
+    activityEyebrow: 'Account trace',
+    activityTitle: 'Account activity',
+    accountId: 'Account ID',
+    roles: 'Current roles',
+    eventsCount: 'Total events',
+    activityErrorTitle: 'Could not load account activity',
+    activityLoading: 'Loading account activity...',
+    activityEmptyTitle: 'No recorded activity',
+    activityEmptyDescription: 'Account creation, access changes, authentication events, and related actions will appear here.',
+    actor: 'Actor',
+    action: 'Action',
+    safeMetadata: 'Safe metadata',
+    totalAccounts: 'Total accounts',
+    staffAccounts: 'staff role',
+    adminAccounts: 'admin role',
+    visibleRows: 'Visible rows',
+    superAdminPolicy: 'Super Admin',
+    superAdminState: 'All permissions automatically',
+    superAdminDescription: 'Super Admin bypasses all registered abilities through Gate::before.',
+    delegatedPolicy: 'Granular delegation',
+    delegatedState: 'Separate view, create, and activity',
+    delegatedDescription: 'Internal roles can perform only the operations explicitly granted to them.',
+    externalPolicy: 'External accounts',
+    externalState: 'Blocked from administration',
+    externalDescription: 'Client and designer accounts remain blocked even if an admin permission is accidentally granted.',
     pageInfo: (page: number, last: number, total: number) =>
-      `Page ${page} of ${last} - ${total} staff`
+      `Page ${page} of ${last} — ${total} records`
   }
 }
 
 const copy = computed(() => copyMap[currentLocale.value])
-const canCreateStaff = computed(() => auth.role === 'super-admin')
+const canViewStaff = computed(() => auth.can('admin.staff.view'))
+const canCreateStaff = computed(() => auth.can('admin.staff.create'))
+const canViewActivity = computed(() => auth.can('admin.staff.activity.view'))
 
-const staffUsers = ref<AdminStaffUser[]>([])
+const staffUsers = ref<StaffUser[]>([])
 const loading = ref(false)
+const refreshing = ref(false)
 const error = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
+const hasLoaded = ref(false)
+const page = ref(1)
+
+const pagination = reactive({
+  current_page: 1,
+  last_page: 1,
+  per_page: 15,
+  total: 0
+})
+
+const summary = reactive<StaffSummary>({
+  total: 0,
+  staff_role: 0,
+  admin_role: 0
+})
+
+const filters = reactive({
+  search: '',
+  role: '' as TeamRole,
+  sortBy: 'id' as StaffSortKey,
+  sortDirection: 'asc' as SortDirection
+})
+
 const createModalOpen = ref(false)
 const savingStaff = ref(false)
 const createError = ref<string | null>(null)
 const createFieldErrors = ref<Record<string, string[]>>({})
+const createDialog = ref<HTMLElement | null>(null)
+const firstCreateInput = ref<HTMLInputElement | null>(null)
+const createTrigger = ref<HTMLElement | null>(null)
+
 const createForm = reactive({
   name: '',
   email: '',
@@ -426,72 +851,104 @@ const createForm = reactive({
   password_confirmation: '',
   role: 'staff' as StaffCreateRole
 })
-const page = ref(1)
-const sortBy = ref<StaffSortKey>('id')
-const sortDirection = ref<SortDirection>('asc')
-const pagination = reactive({
+
+const activityOpen = ref(false)
+const selectedStaff = ref<StaffUser | null>(null)
+const activityEvents = ref<StaffActivityEvent[]>([])
+const activityLoading = ref(false)
+const activityError = ref<string | null>(null)
+const activityDrawer = ref<HTMLElement | null>(null)
+const activityTrigger = ref<HTMLElement | null>(null)
+
+const activityPagination = reactive({
   current_page: 1,
   last_page: 1,
-  per_page: 15,
+  per_page: 10,
   total: 0
 })
-const summaryCards = computed(() => [
-  { label: copy.value.totalStaff, value: pagination.total, subtitle: copy.value.liveData, color: '#06b6d4' },
-  { label: copy.value.currentPageStaff, value: staffUsers.value.length, subtitle: copy.value.visibleRows, color: '#10b981' },
-  { label: copy.value.roleLabel, value: 'staff', subtitle: copy.value.fixedRoleScope, color: '#8b5cf6' },
-  { label: copy.value.currentPage, value: `${pagination.current_page} / ${pagination.last_page}`, subtitle: copy.value.paginationScope, color: '#f59e0b' }
+
+const metricItems = computed<MetricItem[]>(() => [
+  {
+    key: 'total',
+    label: copy.value.totalAccounts,
+    description: copy.value.tableDescription,
+    value: summary.total,
+    tone: 'cyan',
+    icon: '◎'
+  },
+  {
+    key: 'staff',
+    label: copy.value.staffAccounts,
+    description: 'staff',
+    value: summary.staff_role,
+    tone: 'emerald',
+    icon: 'S'
+  },
+  {
+    key: 'admin',
+    label: copy.value.adminAccounts,
+    description: 'admin',
+    value: summary.admin_role,
+    tone: 'violet',
+    icon: 'A'
+  },
+  {
+    key: 'visible',
+    label: copy.value.visibleRows,
+    description: copy.value.pageInfo(
+      pagination.current_page,
+      pagination.last_page,
+      pagination.total
+    ),
+    value: staffUsers.value.length,
+    tone: 'amber',
+    icon: '≡'
+  }
 ])
 
-function toggleSort(key: StaffSortKey): void {
-  if (sortBy.value === key) {
-    sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
-  } else {
-    sortBy.value = key
-    sortDirection.value = 'asc'
+const policyItems = computed<PolicyItem[]>(() => [
+  {
+    key: 'super-admin',
+    title: copy.value.superAdminPolicy,
+    state: copy.value.superAdminState,
+    description: copy.value.superAdminDescription,
+    meta: 'Gate::before',
+    icon: '◆',
+    tone: 'success'
+  },
+  {
+    key: 'delegated',
+    title: copy.value.delegatedPolicy,
+    state: copy.value.delegatedState,
+    description: copy.value.delegatedDescription,
+    meta: 'admin.staff.*',
+    icon: '⌘',
+    tone: 'info'
+  },
+  {
+    key: 'external',
+    title: copy.value.externalPolicy,
+    state: copy.value.externalState,
+    description: copy.value.externalDescription,
+    meta: 'client / designer',
+    icon: '⊘',
+    tone: 'warning'
   }
+])
 
-  page.value = 1
-  void fetchStaff()
+const hasActiveFilters = computed(() => (
+  filters.search !== ''
+  || filters.role !== ''
+  || filters.sortBy !== 'id'
+  || filters.sortDirection !== 'asc'
+))
+
+function textDirection(value: string): 'rtl' | 'ltr' {
+  return /[\u0600-\u06FF]/.test(value) ? 'rtl' : 'ltr'
 }
 
-function sortIndicator(key: StaffSortKey): string {
-  if (sortBy.value !== key) return '↕'
-  return sortDirection.value === 'asc' ? '↑' : '↓'
-}
-
-
-
-function truncateText(value: string | null | undefined, limit = 15): string {
-  const chars = Array.from(String(value ?? '').trim())
-
-  if (chars.length <= limit) {
-    return chars.join('')
-  }
-
-  return `${chars.slice(0, limit).join('')}…`
-}
-
-function textDirection(value: string | null | undefined): 'rtl' | 'ltr' {
-  const text = String(value ?? '').trim()
-
-  return /[\u0600-\u06FF]/.test(text) ? 'rtl' : 'ltr'
-}
-
-function formatCreatedAt(value: string | null): string {
-  if (!value) return '—'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  const year = date.getFullYear()
-  const month = padDatePart(date.getMonth() + 1)
-  const day = padDatePart(date.getDate())
-  const hours = padDatePart(date.getHours())
-  const minutes = padDatePart(date.getMinutes())
-
-  return `${year}-${month}-${day} ${hours}:${minutes}`
-}
-
-function padDatePart(value: number): string {
-  return String(value).padStart(2, '0')
+function formatDateTime(value: string | null): string {
+  return value ? formatYmDateTime(value, currentLocale.value) : '—'
 }
 
 function resetCreateForm(): void {
@@ -504,19 +961,26 @@ function resetCreateForm(): void {
   createFieldErrors.value = {}
 }
 
-function openCreateStaffModal(): void {
+async function openCreateStaffModal(event?: MouseEvent): Promise<void> {
   if (!canCreateStaff.value) return
 
+  createTrigger.value = event?.currentTarget as HTMLElement | null
   successMessage.value = null
   resetCreateForm()
   createModalOpen.value = true
+
+  await nextTick()
+  createDialog.value?.focus()
+  firstCreateInput.value?.focus()
 }
 
 function closeCreateStaffModal(): void {
   if (savingStaff.value) return
+
   createModalOpen.value = false
   createError.value = null
   createFieldErrors.value = {}
+  nextTick(() => createTrigger.value?.focus())
 }
 
 function fieldError(field: string): string {
@@ -524,6 +988,8 @@ function fieldError(field: string): string {
 }
 
 async function submitCreateStaff(): Promise<void> {
+  if (!canCreateStaff.value) return
+
   savingStaff.value = true
   createError.value = null
   createFieldErrors.value = {}
@@ -544,28 +1010,35 @@ async function submitCreateStaff(): Promise<void> {
     createModalOpen.value = false
     resetCreateForm()
     successMessage.value = response.message || copy.value.createSuccess
+    page.value = 1
     await fetchStaff()
   } catch (caughtError: unknown) {
     const err = caughtError as any
     createFieldErrors.value = err?.data?.errors ?? err?.response?._data?.errors ?? {}
-    createError.value = err?.data?.message || err?.response?._data?.message || copy.value.createError
+    createError.value = err?.data?.message
+      || err?.response?._data?.message
+      || copy.value.createError
   } finally {
     savingStaff.value = false
   }
 }
 
 async function fetchStaff(): Promise<void> {
-  loading.value = true
+  if (!canViewStaff.value) return
+
+  loading.value = !hasLoaded.value
+  refreshing.value = hasLoaded.value
   error.value = null
 
   try {
-    const response = await apiFetch<AdminStaffResponse>('/admin/users', {
+    const response = await apiFetch<StaffListResponse>('/admin/staff', {
       query: {
         page: page.value,
         per_page: pagination.per_page,
-        role: 'staff',
-        sort_by: sortBy.value,
-        sort_direction: sortDirection.value
+        search: filters.search || undefined,
+        role: filters.role || undefined,
+        sort_by: filters.sortBy,
+        sort_direction: filters.sortDirection
       }
     })
 
@@ -574,1085 +1047,862 @@ async function fetchStaff(): Promise<void> {
     pagination.last_page = response.data.last_page
     pagination.per_page = response.data.per_page
     pagination.total = response.data.total
-  } catch {
+    summary.total = response.meta.summary.total
+    summary.staff_role = response.meta.summary.staff_role
+    summary.admin_role = response.meta.summary.admin_role
+    hasLoaded.value = true
+  } catch (caughtError: unknown) {
+    const err = caughtError as any
     staffUsers.value = []
-    error.value = currentLocale.value === 'ar'
-      ? 'تعذر جلب الموظفين. تحقق من تسجيل الدخول وصلاحيات الأدمن.'
-      : 'Could not load staff. Check admin authentication and permissions.'
+    error.value = err?.data?.message
+      || err?.response?._data?.message
+      || (currentLocale.value === 'ar'
+        ? 'تعذر جلب فريق العمل. تحقق من الاتصال وصلاحية العرض.'
+        : 'Could not load the team. Check connectivity and view permission.')
   } finally {
     loading.value = false
+    refreshing.value = false
   }
 }
 
-function changePage(next: number): void {
-  if (next < 1 || next > pagination.last_page) return
-  page.value = next
+function refreshStaff(): void {
   void fetchStaff()
 }
 
-onMounted(() => {
+function applyFilters(): void {
+  page.value = 1
   void fetchStaff()
+}
+
+function resetFilters(): void {
+  filters.search = ''
+  filters.role = ''
+  filters.sortBy = 'id'
+  filters.sortDirection = 'asc'
+  page.value = 1
+  void fetchStaff()
+}
+
+function changePage(nextPage: number): void {
+  if (nextPage < 1 || nextPage > pagination.last_page) return
+
+  page.value = nextPage
+  void fetchStaff()
+}
+
+async function openActivity(user: StaffUser, event: MouseEvent): Promise<void> {
+  if (!canViewActivity.value) return
+
+  activityTrigger.value = event.currentTarget as HTMLElement
+  selectedStaff.value = user
+  activityEvents.value = []
+  activityError.value = null
+  activityPagination.current_page = 1
+  activityOpen.value = true
+
+  await nextTick()
+  activityDrawer.value?.focus()
+  await fetchActivity()
+}
+
+function closeActivity(): void {
+  activityOpen.value = false
+  selectedStaff.value = null
+  activityEvents.value = []
+  activityError.value = null
+  nextTick(() => activityTrigger.value?.focus())
+}
+
+async function fetchActivity(): Promise<void> {
+  if (!selectedStaff.value || !canViewActivity.value) return
+
+  activityLoading.value = true
+  activityError.value = null
+
+  try {
+    const response = await apiFetch<StaffActivityResponse>(
+      `/admin/staff/${selectedStaff.value.id}/activity`,
+      {
+        query: {
+          page: activityPagination.current_page,
+          per_page: activityPagination.per_page
+        }
+      }
+    )
+
+    activityEvents.value = response.data.data
+    activityPagination.current_page = response.data.current_page
+    activityPagination.last_page = response.data.last_page
+    activityPagination.per_page = response.data.per_page
+    activityPagination.total = response.data.total
+  } catch (caughtError: unknown) {
+    const err = caughtError as any
+    activityEvents.value = []
+    activityError.value = err?.data?.message
+      || err?.response?._data?.message
+      || (currentLocale.value === 'ar'
+        ? 'تعذر جلب سجل عمليات الحساب.'
+        : 'Could not load account activity.')
+  } finally {
+    activityLoading.value = false
+  }
+}
+
+function changeActivityPage(nextPage: number): void {
+  if (nextPage < 1 || nextPage > activityPagination.last_page) return
+
+  activityPagination.current_page = nextPage
+  void fetchActivity()
+}
+
+function eventLabel(event: StaffActivityEvent): string {
+  const labels: Record<string, { ar: string, en: string }> = {
+    'staff.created': {
+      ar: 'تم إنشاء الحساب الداخلي',
+      en: 'Internal account created'
+    },
+    'user.roles.synced': {
+      ar: 'تم تحديث أدوار الحساب',
+      en: 'Account roles updated'
+    },
+    'user.login': {
+      ar: 'تسجيل دخول إلى الحساب',
+      en: 'Account login'
+    },
+    'user.login.failed': {
+      ar: 'محاولة تسجيل دخول فاشلة',
+      en: 'Failed login attempt'
+    },
+    'user.logout': {
+      ar: 'تسجيل خروج من الحساب',
+      en: 'Account logout'
+    }
+  }
+
+  return labels[event.event_type]?.[currentLocale.value] || event.event_type
+}
+
+function outcomeLabel(outcome: string): string {
+  if (currentLocale.value === 'en') {
+    return outcome === 'success' ? 'Success' : outcome === 'failed' ? 'Failed' : outcome
+  }
+
+  return outcome === 'success' ? 'ناجح' : outcome === 'failed' ? 'فشل' : outcome
+}
+
+function actorLabel(event: StaffActivityEvent): string {
+  if (!event.actor_id) return '—'
+  return `${event.actor_role || 'user'} #${event.actor_id}`
+}
+
+function metadataEntries(event: StaffActivityEvent): [string, unknown][] {
+  return Object.entries(event.metadata || {}).slice(0, 12)
+}
+
+function formatMetadataValue(value: unknown): string {
+  if (value === null || value === undefined) return '—'
+  if (typeof value === 'string') return value
+  return JSON.stringify(value)
+}
+
+function handleEscape(event: KeyboardEvent): void {
+  if (event.key !== 'Escape') return
+
+  if (createModalOpen.value) {
+    closeCreateStaffModal()
+    return
+  }
+
+  if (activityOpen.value) {
+    closeActivity()
+  }
+}
+
+watch(
+  canViewStaff,
+  (allowed) => {
+    if (allowed && !hasLoaded.value) {
+      void fetchStaff()
+    }
+  }
+)
+
+onMounted(() => {
+  window.addEventListener('keydown', handleEscape)
+
+  if (canViewStaff.value) {
+    void fetchStaff()
+  }
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleEscape)
 })
 </script>
 
 <style scoped>
 .ym-staff-page {
-  /* Local section color until admin settings can provide it. */
-  --ym-section-accent: #06b6d4;
-  position: relative;
-}
-
-.ym-staff-hero,
-.ym-table-card,
-.ym-summary-card {
-  position: relative;
-  overflow: hidden;
-  border: 1px solid var(--ym-card-border);
-  background: var(--ym-card-bg);
-  box-shadow:
-    var(--ym-card-shadow),
-    0 18px 44px rgba(2, 6, 23, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.14);
-}
-
-.ym-staff-hero {
-  border-radius: 28px;
-  padding: clamp(1.35rem, 3vw, 2.25rem);
-}
-
-.ym-admin-hero {
-  border-color: rgba(255, 255, 255, 0.22);
-  background:
-    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.22), transparent 15rem),
-    radial-gradient(circle at 85% 8%, rgba(6, 182, 212, 0.4), transparent 19rem),
-    radial-gradient(circle at 95% 92%, rgba(190, 0, 1, 0.32), transparent 22rem),
-    linear-gradient(135deg, rgba(14, 116, 144, 0.98), rgba(6, 182, 212, 0.9) 48%, rgba(190, 0, 1, 0.78));
-  box-shadow:
-    0 34px 80px rgba(6, 182, 212, 0.24),
-    0 14px 32px rgba(2, 6, 23, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.32),
-    inset 0 -1px 0 rgba(30, 41, 59, 0.16);
-  transition: transform 200ms ease, box-shadow 200ms ease;
-}
-
-.ym-admin-hero:hover {
-  transform: translateY(-2px);
-  box-shadow:
-    0 38px 88px rgba(6, 182, 212, 0.3),
-    0 16px 36px rgba(2, 6, 23, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.34),
-    inset 0 -1px 0 rgba(30, 41, 59, 0.16);
-}
-
-.ym-admin-hero::before {
-  position: absolute;
-  inset: 1px;
-  border-radius: 27px;
-  background:
-    linear-gradient(115deg, rgba(255, 255, 255, 0.16), transparent 34%),
-    linear-gradient(290deg, rgba(255, 255, 255, 0.1), transparent 42%);
-  content: "";
-  pointer-events: none;
-}
-
-.ym-admin-hero::after {
-  position: absolute;
-  inset-inline: 7%;
-  top: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.78), transparent);
-  content: "";
-  pointer-events: none;
-}
-
-.ym-hero-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-  background-position: center;
-  background-size: 48px 48px;
-  mask-image: radial-gradient(circle at 30% 30%, #000 0%, transparent 72%);
-  opacity: 0.5;
-  pointer-events: none;
-}
-
-.ym-hero-orb {
-  position: absolute;
-  border-radius: 999px;
-  filter: blur(44px);
-  opacity: 0.3;
-}
-
-.ym-hero-orb-one {
-  top: -6rem;
-  inset-inline-end: -4rem;
-  height: 16rem;
-  width: 16rem;
-  background: rgba(255, 255, 255, 0.32);
-}
-
-.ym-hero-orb-two {
-  bottom: -6rem;
-  inset-inline-start: 20%;
-  height: 18rem;
-  width: 18rem;
-  background: rgba(56, 189, 248, 0.24);
-}
-
-.ym-hero-orb-three {
-  top: 30%;
-  inset-inline-start: -5rem;
-  height: 14rem;
-  width: 14rem;
-  background: rgba(244, 114, 182, 0.26);
-}
-
-.ym-hero-content {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.ym-hero-copy-block {
+  --ym-admin-section-accent: #06b6d4;
+  --ym-admin-section-accent-secondary: #8b5cf6;
+  display: grid;
+  gap: 14px;
   min-width: 0;
 }
 
-.ym-hero-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 0.65rem;
-}
-
-.ym-hero-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 6px 16px rgba(15, 23, 42, 0.14);
-  color: #fff;
-  font-size: 12.5px;
-  font-weight: 850;
-  padding: 0.28rem 0.7rem;
-  backdrop-filter: blur(8px);
-}
-
-.ym-hero-chip--brand {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.ym-hero-chip--status {
-  border-color: rgba(134, 239, 172, 0.42);
-  background: rgba(34, 197, 94, 0.22);
-}
-
-.ym-hero-chip-dot {
-  height: 7px;
-  width: 7px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.85);
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.7);
-}
-
-.ym-hero-chip-dot--live {
-  background: #4ade80;
-  box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.28), 0 0 12px rgba(74, 222, 128, 0.7);
-}
-
-.ym-hero-kicker,
-.ym-hero-copy,
-.ym-hero-summary small,
-.ym-hero-summary span {
-  color: rgba(255, 255, 255, 0.92);
-  font-weight: 850;
-}
-
-.ym-hero-kicker {
-  margin: 0 0 0.3rem;
-  font-size: 14.5px;
-}
-
-.ym-hero-title {
-  margin: 0;
-  color: #fff;
-  font-size: clamp(2.1rem, 3.4vw, 2.75rem);
-  font-weight: 950;
-  line-height: 1.06;
-  text-shadow: 0 2px 16px rgba(49, 46, 129, 0.35);
-}
-
-.ym-hero-copy {
-  max-width: 56rem;
-  margin: 0.5rem 0 0;
-  font-size: 15.5px;
-  line-height: 1.75;
-}
-
-.ym-hero-summary {
-  min-width: min(100%, 260px);
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  border-radius: 22px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.12)),
-    rgba(255, 255, 255, 0.14);
-  box-shadow:
-    0 20px 48px rgba(30, 41, 59, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.32),
-    inset 0 -1px 0 rgba(30, 41, 59, 0.08);
-  padding: 1.05rem 1.1rem;
-  backdrop-filter: blur(14px);
-}
-
-.ym-hero-summary strong {
-  display: block;
-  margin: 0.2rem 0;
-  color: #fff;
-  font-size: 18px;
-  font-weight: 950;
-  line-height: 1.5;
-}
-
-.ym-readonly-notice {
-  display: flex;
-  align-items: center;
-  gap: 0.9rem;
-  border: 1px solid rgba(245, 158, 11, 0.32);
-  border-radius: 20px;
-  background: rgba(245, 158, 11, 0.09);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  padding: 0.9rem 1rem;
-  color: var(--ym-text);
-}
-
-.ym-readonly-notice__badge {
-  flex: 0 0 auto;
-  border: 1px solid rgba(245, 158, 11, 0.38);
-  border-radius: 999px;
-  background: rgba(245, 158, 11, 0.16);
-  padding: 0.35rem 0.7rem;
-  color: #f59e0b;
-  font-size: 13px;
-  font-weight: 950;
-}
-
-.ym-readonly-notice p {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 800;
-  line-height: 1.7;
-}
-
-.ym-summary-grid {
+.ym-staff-workspace {
   display: grid;
-  grid-template-columns: repeat(1, minmax(0, 1fr));
-  gap: 1rem;
+  gap: 14px;
+  overflow: hidden;
+  padding: clamp(14px, 2vw, 20px);
 }
 
-.ym-summary-card {
-  --card-accent: var(--ym-section-accent);
-  border-color: color-mix(in srgb, var(--card-accent, #6366f1) 60%, var(--ym-card-border));
-  border-radius: 24px;
-  background:
-    radial-gradient(circle at 92% 6%, color-mix(in srgb, var(--card-accent, #6366f1) 45%, transparent), transparent 8.5rem),
-    linear-gradient(180deg, color-mix(in srgb, var(--card-accent, #6366f1) 18%, var(--ym-card-bg)), var(--ym-card-bg));
-  padding: 1rem;
-  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
-}
-
-.ym-summary-card::before {
-  position: absolute;
-  inset-inline: 1rem;
-  top: 0;
-  height: 5px;
-  border-radius: 0 0 999px 999px;
-  background: linear-gradient(90deg, var(--card-accent, #6366f1), color-mix(in srgb, var(--card-accent, #6366f1) 25%, transparent));
-  box-shadow: 0 0 24px color-mix(in srgb, var(--card-accent, #6366f1) 60%, transparent);
-  content: "";
-}
-
-.ym-summary-card::after {
-  position: absolute;
-  top: 1rem;
-  inset-inline-end: 1rem;
-  height: 0.8rem;
-  width: 0.8rem;
-  border-radius: 999px;
-  background: var(--card-accent, #6366f1);
-  box-shadow: 0 0 24px color-mix(in srgb, var(--card-accent, #6366f1) 80%, transparent);
-  content: "";
-}
-
-.ym-table-card::before {
-  position: absolute;
-  inset-inline: 1.25rem;
-  top: 0;
-  height: 3px;
-  border-end-end-radius: 999px;
-  border-end-start-radius: 999px;
-  background: linear-gradient(90deg, var(--ym-section-accent), color-mix(in srgb, var(--ym-section-accent) 36%, #38bdf8));
-  content: "";
-}
-
-.ym-summary-card:hover {
-  border-color: color-mix(in srgb, var(--ym-card-border) 58%, var(--card-accent));
-  box-shadow: 0 28px 64px rgba(2, 6, 23, 0.18), 0 0 34px color-mix(in srgb, var(--card-accent) 13%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.18);
-  transform: translateY(-2px);
-}
-
-.ym-summary-card span,
-.ym-summary-card small,
-.ym-table-card__head p,
-.ym-table-card__head span {
-  color: var(--ym-muted);
-  font-size: 13px;
-  font-weight: 800;
-  line-height: 1.6;
-}
-
-.ym-summary-card strong {
-  display: block;
-  margin: 0.25rem 0;
-  color: var(--ym-text);
-  font-size: clamp(1.45rem, 2vw, 1.95rem);
-  font-weight: 950;
-  line-height: 1.15;
-}
-
-.ym-table-card {
-  border-radius: 28px;
-  background:
-    radial-gradient(circle at 10% 0%, rgba(236, 72, 153, 0.1), transparent 18rem),
-    radial-gradient(circle at 92% 12%, rgba(56, 189, 248, 0.1), transparent 20rem),
-    linear-gradient(180deg, color-mix(in srgb, var(--ym-card-bg) 90%, rgba(255, 255, 255, 0.06)), var(--ym-card-bg));
-  padding: clamp(1rem, 2vw, 1.35rem);
-}
-
-.ym-table-card__head {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.ym-table-card__head h2 {
-  margin: 0;
-  color: var(--ym-text);
-  font-size: 18px;
-  font-weight: 950;
-}
-
-.ym-table-card__head p {
-  margin: 0.25rem 0 0;
-}
-
-.ym-table-card__head span {
-  border: 1px solid var(--ym-soft-border);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--ym-control-bg) 80%, transparent);
-  padding: 0.4rem 0.75rem;
-  color: var(--ym-text);
-}
-
-.ym-table-card__actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.65rem;
-}
-
-.ym-create-staff-button,
-.ym-staff-form__primary,
-.ym-staff-form__secondary,
-.ym-staff-modal__close {
-  transition: border-color 160ms ease, background 160ms ease, color 160ms ease, opacity 160ms ease, transform 160ms ease;
-}
-
-.ym-create-staff-button,
-.ym-staff-form__primary {
-  border: 1px solid color-mix(in srgb, #06b6d4 48%, transparent);
-  border-radius: 999px;
-  background: linear-gradient(135deg, #0891b2, #06b6d4);
-  color: #fff;
-  cursor: pointer;
-  font-size: 13.5px;
-  font-weight: 950;
-  padding: 0.55rem 0.95rem;
-  box-shadow: 0 16px 34px rgba(6, 182, 212, 0.2);
-}
-
-.ym-create-staff-button:hover,
-.ym-staff-form__primary:hover:not(:disabled) {
-  transform: translateY(-1px);
-}
-
-.ym-staff-feedback {
-  border: 1px solid color-mix(in srgb, #06b6d4 36%, transparent);
-  border-radius: 18px;
-  background: color-mix(in srgb, #06b6d4 12%, transparent);
-  color: var(--ym-text);
-  padding: 0.75rem 0.9rem;
-}
-
-.ym-staff-feedback p {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 850;
-  line-height: 1.7;
-}
-
-.ym-staff-feedback.is-success {
-  border-color: color-mix(in srgb, #10b981 36%, transparent);
-  background: color-mix(in srgb, #10b981 12%, transparent);
-}
-
-.ym-staff-feedback.is-error {
-  border-color: color-mix(in srgb, #ef4444 42%, transparent);
-  background: color-mix(in srgb, #ef4444 10%, transparent);
-  color: #ef4444;
-}
-
-.ym-staff-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  display: grid;
-  place-items: center;
-  background: rgba(2, 6, 23, 0.62);
-  padding: 1rem;
-  backdrop-filter: blur(10px);
-}
-
-.ym-staff-modal {
-  width: min(100%, 560px);
-  max-height: calc(100dvh - 2rem);
-  overflow-y: auto;
-  border: 1px solid var(--ym-card-border);
-  border-radius: 24px;
-  background:
-    radial-gradient(circle at 90% 0%, rgba(6, 182, 212, 0.18), transparent 14rem),
-    var(--ym-card-bg);
-  box-shadow:
-    0 28px 80px rgba(2, 6, 23, 0.42),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  padding: clamp(1rem, 2vw, 1.25rem);
-}
-
-.ym-staff-modal__head {
+.ym-staff-workspace__head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1rem;
+  gap: 16px;
 }
 
-.ym-staff-modal__head h2 {
-  margin: 0;
-  color: var(--ym-text);
-  font-size: 20px;
+.ym-staff-workspace__head h2,
+.ym-staff-dialog h2,
+.ym-staff-activity-drawer h2 {
+  margin: 3px 0 0;
+  color: var(--ym-admin-text);
+  font-size: 21px;
   font-weight: 950;
 }
 
-.ym-staff-modal__head p {
-  margin: 0.35rem 0 0;
-  color: var(--ym-muted);
+.ym-staff-workspace__head p,
+.ym-staff-dialog header p,
+.ym-staff-activity-drawer header p {
+  max-width: 760px;
+  margin: 5px 0 0;
+  color: var(--ym-admin-muted);
   font-size: 13.5px;
-  font-weight: 800;
+  font-weight: 750;
   line-height: 1.7;
 }
 
-.ym-staff-modal__close {
-  display: grid;
-  flex: 0 0 auto;
-  height: 2.3rem;
-  width: 2.3rem;
-  place-items: center;
-  border: 1px solid var(--ym-soft-border);
-  border-radius: 14px;
-  background: var(--ym-control-bg);
-  color: var(--ym-text);
-  cursor: pointer;
-  font-size: 1.4rem;
-  font-weight: 900;
-  line-height: 1;
+.ym-staff-workspace__eyebrow,
+.ym-staff-dialog header > div > span,
+.ym-staff-activity-drawer header > div > span {
+  color: var(--ym-admin-section-accent);
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: .04em;
 }
 
-.ym-staff-form {
+.ym-staff-filters {
   display: grid;
-  gap: 0.85rem;
+  grid-template-columns: minmax(230px, 1.7fr) repeat(3, minmax(145px, .7fr)) auto;
+  align-items: end;
+  gap: 10px;
+  border: 1px solid var(--ym-admin-border);
+  border-radius: 16px;
+  padding: 11px;
+  background: var(--ym-admin-surface-soft);
 }
 
 .ym-staff-field {
   display: grid;
-  gap: 0.4rem;
+  min-width: 0;
+  gap: 5px;
 }
 
-.ym-staff-field span {
-  color: var(--ym-text);
-  font-size: 13.5px;
-  font-weight: 900;
+.ym-staff-field > span {
+  color: var(--ym-admin-muted);
+  font-size: 12px;
+  font-weight: 850;
 }
 
 .ym-staff-field input,
 .ym-staff-field select {
   width: 100%;
-  border: 1px solid var(--ym-soft-border);
-  border-radius: 16px;
-  background: var(--ym-control-bg);
-  color: var(--ym-text);
-  font-size: 14.5px;
-  font-weight: 800;
+  min-height: 42px;
+  border: 1px solid var(--ym-admin-border);
+  border-radius: 12px;
   outline: none;
-  padding: 0.72rem 0.85rem;
+  padding: 0 12px;
+  background: var(--ym-admin-control-bg, var(--ym-admin-surface));
+  color: var(--ym-admin-text);
+  font-size: 13.5px;
+  font-weight: 750;
+  transition: border-color .16s ease, box-shadow .16s ease;
 }
 
 .ym-staff-field input:focus,
 .ym-staff-field select:focus {
-  border-color: color-mix(in srgb, #06b6d4 56%, transparent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, #06b6d4 14%, transparent);
+  border-color: color-mix(in srgb, var(--ym-admin-section-accent) 70%, var(--ym-admin-border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ym-admin-section-accent) 14%, transparent);
 }
 
 .ym-staff-field small {
-  color: #ef4444;
-  font-size: 12.5px;
-  font-weight: 850;
+  color: var(--ym-admin-muted);
+  font-size: 11.5px;
   line-height: 1.5;
 }
 
-.ym-staff-form__actions {
+.ym-staff-field small:last-child:not(:only-child) {
+  color: var(--ym-admin-danger, #ef4444);
+}
+
+.ym-staff-field.is-search > div {
+  position: relative;
+}
+
+.ym-staff-field.is-search > div > span {
+  position: absolute;
+  inset-inline-start: 13px;
+  top: 50%;
+  color: var(--ym-admin-muted);
+  transform: translateY(-50%);
+}
+
+.ym-staff-field.is-search input {
+  padding-inline-start: 36px;
+}
+
+.ym-staff-filter-actions,
+.ym-staff-pagination > div,
+.ym-staff-create-form footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ym-staff-primary-button,
+.ym-staff-secondary-button,
+.ym-staff-icon-button,
+.ym-staff-row-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 39px;
+  border-radius: 12px;
+  padding: 0 13px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 900;
+  transition: transform .16s ease, border-color .16s ease, opacity .16s ease;
+}
+
+.ym-staff-primary-button {
+  border: 1px solid color-mix(in srgb, var(--ym-admin-section-accent) 62%, transparent);
+  background: linear-gradient(135deg, #0891b2, #06b6d4);
+  box-shadow: 0 10px 24px rgba(6, 182, 212, .2);
+  color: #fff;
+}
+
+.ym-staff-secondary-button,
+.ym-staff-icon-button,
+.ym-staff-row-action {
+  border: 1px solid var(--ym-admin-border);
+  background: var(--ym-admin-surface-soft);
+  color: var(--ym-admin-text);
+}
+
+.ym-staff-row-action {
+  min-height: 34px;
+  border-color: color-mix(in srgb, var(--ym-admin-section-accent-secondary) 28%, var(--ym-admin-border));
+  color: color-mix(in srgb, var(--ym-admin-section-accent-secondary) 76%, var(--ym-admin-text));
+  white-space: nowrap;
+}
+
+.ym-staff-primary-button:hover:not(:disabled),
+.ym-staff-secondary-button:hover:not(:disabled),
+.ym-staff-row-action:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.ym-staff-primary-button:disabled,
+.ym-staff-secondary-button:disabled,
+.ym-staff-icon-button:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+.ym-staff-loading {
+  display: flex;
+  min-height: 190px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--ym-admin-muted);
+}
+
+.ym-staff-loading > span,
+.ym-staff-button-spinner {
+  width: 19px;
+  height: 19px;
+  border: 2px solid color-mix(in srgb, var(--ym-admin-section-accent) 24%, transparent);
+  border-top-color: var(--ym-admin-section-accent);
+  border-radius: 999px;
+  animation: ym-staff-spin .8s linear infinite;
+}
+
+.ym-staff-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--ym-admin-border);
+  border-radius: 15px;
+}
+
+.ym-staff-table {
+  width: 100%;
+  min-width: 850px;
+  border-collapse: collapse;
+}
+
+.ym-staff-table th,
+.ym-staff-table td {
+  border-bottom: 1px solid var(--ym-admin-border);
+  padding: 12px 13px;
+  text-align: start;
+}
+
+.ym-staff-table th {
+  background: color-mix(in srgb, var(--ym-admin-surface-soft) 94%, transparent);
+  color: var(--ym-admin-muted);
+  font-size: 11.5px;
+  font-weight: 950;
+}
+
+.ym-staff-table td {
+  color: var(--ym-admin-text);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.ym-staff-table tbody tr {
+  transition: background .16s ease;
+}
+
+.ym-staff-table tbody tr:hover {
+  background: color-mix(in srgb, var(--ym-admin-section-accent) 5%, transparent);
+}
+
+.ym-staff-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.ym-staff-table .is-id,
+.ym-staff-table .is-date {
+  color: var(--ym-admin-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ym-staff-email {
+  display: block;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ym-staff-role-list {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 0.65rem;
-  margin-top: 0.25rem;
+  gap: 5px;
 }
 
-.ym-staff-form__secondary {
-  border: 1px solid var(--ym-soft-border);
+.ym-staff-role {
+  border: 1px solid color-mix(in srgb, var(--ym-admin-section-accent-secondary) 28%, var(--ym-admin-border));
   border-radius: 999px;
-  background: var(--ym-control-bg);
-  color: var(--ym-text);
-  cursor: pointer;
-  font-size: 13.5px;
-  font-weight: 950;
-  padding: 0.55rem 0.95rem;
+  padding: 3px 8px;
+  background: color-mix(in srgb, var(--ym-admin-section-accent-secondary) 8%, transparent);
+  color: var(--ym-admin-text);
+  font-size: 11px;
+  font-weight: 900;
 }
 
-.ym-staff-form__primary:disabled,
-.ym-staff-form__secondary:disabled,
-.ym-staff-modal__close:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
+.ym-staff-role.is-admin {
+  border-color: color-mix(in srgb, #f59e0b 35%, var(--ym-admin-border));
+  background: color-mix(in srgb, #f59e0b 9%, transparent);
+  color: #d97706;
 }
 
-.ym-staff-state {
+.ym-staff-role.is-staff {
+  border-color: color-mix(in srgb, #10b981 35%, var(--ym-admin-border));
+  background: color-mix(in srgb, #10b981 9%, transparent);
+  color: #059669;
+}
+
+.ym-staff-pagination {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 0.75rem;
-  padding: 2.5rem 1rem;
-  color: var(--ym-muted);
-  text-align: center;
-  font-size: 15px;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--ym-admin-muted);
+  font-size: 12.5px;
   font-weight: 800;
 }
 
-.ym-staff-state.is-error {
-  color: #ef4444;
+.ym-staff-pagination strong {
+  color: var(--ym-admin-text);
+  font-variant-numeric: tabular-nums;
 }
 
-.ym-staff-state__spinner {
-  height: 26px;
-  width: 26px;
-  border: 3px solid color-mix(in srgb, var(--ym-muted) 30%, transparent);
-  border-top-color: #38bdf8;
+.ym-staff-dialog-backdrop,
+.ym-staff-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  background: rgba(2, 6, 23, .66);
+  backdrop-filter: blur(10px);
+}
+
+.ym-staff-dialog-backdrop {
+  place-items: center;
+  padding: 16px;
+}
+
+.ym-staff-dialog,
+.ym-staff-activity-drawer {
+  border: 1px solid var(--ym-admin-border);
+  background:
+    radial-gradient(circle at 90% 0%, rgba(6, 182, 212, .13), transparent 240px),
+    var(--ym-admin-surface);
+  box-shadow: 0 30px 90px rgba(2, 6, 23, .48);
+  color: var(--ym-admin-text);
+}
+
+.ym-staff-dialog {
+  width: min(100%, 620px);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  border-radius: 22px;
+  padding: 18px;
+}
+
+.ym-staff-dialog > header,
+.ym-staff-activity-drawer > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.ym-staff-icon-button {
+  width: 38px;
+  min-height: 38px;
+  padding: 0;
+  font-size: 21px;
+}
+
+.ym-staff-create-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.ym-staff-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.ym-staff-create-form footer {
+  justify-content: flex-end;
+  margin-top: 5px;
+}
+
+.ym-staff-inline-error {
+  margin: 0;
+  border: 1px solid color-mix(in srgb, #ef4444 35%, transparent);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, #ef4444 8%, transparent);
+  color: #ef4444;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.ym-staff-drawer-backdrop {
+  justify-items: end;
+}
+
+.ym-staff-activity-drawer {
+  width: min(100%, 720px);
+  height: 100dvh;
+  overflow-y: auto;
+  padding: 18px;
+}
+
+.ym-staff-drawer-backdrop.is-ltr {
+  justify-items: start;
+}
+
+.ym-staff-activity-drawer header p {
+  display: grid;
+  gap: 2px;
+}
+
+.ym-staff-activity-drawer header p strong {
+  color: var(--ym-admin-text);
+}
+
+.ym-staff-activity-drawer header p small {
+  color: var(--ym-admin-muted);
+}
+
+.ym-staff-activity-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.ym-staff-activity-summary > span {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--ym-admin-border);
+  border-radius: 13px;
+  padding: 10px;
+  background: var(--ym-admin-surface-soft);
+}
+
+.ym-staff-activity-summary small {
+  color: var(--ym-admin-muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.ym-staff-activity-summary strong {
+  overflow: hidden;
+  color: var(--ym-admin-text);
+  font-size: 13px;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ym-staff-timeline {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ym-staff-timeline > li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 10px;
+  padding-bottom: 13px;
+}
+
+.ym-staff-timeline > li:not(:last-child)::before {
+  position: absolute;
+  inset-inline-start: 10px;
+  top: 20px;
+  bottom: -2px;
+  width: 1px;
+  background: var(--ym-admin-border);
+  content: "";
+}
+
+.ym-staff-timeline__dot {
+  position: relative;
+  z-index: 1;
+  width: 11px;
+  height: 11px;
+  margin: 6px 0 0 5px;
+  border: 2px solid var(--ym-admin-surface);
   border-radius: 999px;
-  animation: ym-staff-spin 0.8s linear infinite;
+  background: #94a3b8;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #94a3b8 18%, transparent);
+}
+
+.ym-staff-timeline__dot.is-success {
+  background: #10b981;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #10b981 18%, transparent);
+}
+
+.ym-staff-timeline__dot.is-failed {
+  background: #ef4444;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #ef4444 18%, transparent);
+}
+
+.ym-staff-timeline article {
+  border: 1px solid var(--ym-admin-border);
+  border-radius: 14px;
+  padding: 11px;
+  background: var(--ym-admin-surface-soft);
+}
+
+.ym-staff-timeline article > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ym-staff-timeline article > header > div {
+  display: grid;
+  gap: 3px;
+}
+
+.ym-staff-timeline article > header strong {
+  color: var(--ym-admin-text);
+  font-size: 13.5px;
+  font-weight: 950;
+}
+
+.ym-staff-timeline article > header small {
+  color: var(--ym-admin-muted);
+  font-size: 11.5px;
+}
+
+.ym-staff-timeline article > header > span {
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: color-mix(in srgb, #94a3b8 10%, transparent);
+  color: #64748b;
+  font-size: 10.5px;
+  font-weight: 950;
+}
+
+.ym-staff-timeline article > header > span.is-success {
+  background: color-mix(in srgb, #10b981 10%, transparent);
+  color: #059669;
+}
+
+.ym-staff-timeline article > header > span.is-failed {
+  background: color-mix(in srgb, #ef4444 10%, transparent);
+  color: #dc2626;
+}
+
+.ym-staff-timeline dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin: 10px 0 0;
+}
+
+.ym-staff-timeline dl > div {
+  display: flex;
+  gap: 5px;
+}
+
+.ym-staff-timeline dt {
+  color: var(--ym-admin-muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.ym-staff-timeline dd {
+  margin: 0;
+  color: var(--ym-admin-text);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.ym-staff-timeline details {
+  margin-top: 10px;
+  border-top: 1px solid var(--ym-admin-border);
+  padding-top: 9px;
+}
+
+.ym-staff-timeline summary {
+  cursor: pointer;
+  color: var(--ym-admin-section-accent-secondary);
+  font-size: 11.5px;
+  font-weight: 900;
+}
+
+.ym-staff-timeline ul {
+  display: grid;
+  gap: 6px;
+  margin: 9px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ym-staff-timeline ul li {
+  display: grid;
+  grid-template-columns: minmax(110px, .7fr) minmax(0, 1.3fr);
+  gap: 8px;
+}
+
+.ym-staff-timeline ul span {
+  color: var(--ym-admin-muted);
+  font-size: 11px;
+}
+
+.ym-staff-timeline code {
+  overflow-wrap: anywhere;
+  color: var(--ym-admin-text);
+  font-size: 11px;
+}
+
+.ym-staff-toast {
+  position: fixed;
+  z-index: 120;
+  inset-inline-end: 24px;
+  bottom: 24px;
+  max-width: min(420px, calc(100vw - 48px));
+  margin: 0;
+  border: 1px solid color-mix(in srgb, #10b981 38%, transparent);
+  border-radius: 13px;
+  padding: 11px 14px;
+  background: color-mix(in srgb, #10b981 90%, #052e2b);
+  box-shadow: 0 18px 50px rgba(2, 6, 23, .35);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
 }
 
 @keyframes ym-staff-spin {
   to { transform: rotate(360deg); }
 }
 
-.ym-staff-table-wrap {
-  position: relative;
-  z-index: 1;
-  overflow-x: auto;
-  border: 1px solid color-mix(in srgb, var(--ym-soft-border) 74%, transparent);
-  border-radius: 22px;
-  background: color-mix(in srgb, var(--ym-card-bg) 82%, transparent);
-}
-
-.ym-staff-table {
-  width: max-content;
-  min-width: max(100%, 962px);
-  border-collapse: collapse;
-  table-layout: fixed;
-}
-
-.ym-staff-table thead th {
-  position: relative;
-  padding: 0.85rem 0.95rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--ym-soft-border) 75%, transparent);
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--ym-control-bg) 90%, rgba(99, 102, 241, 0.16)), var(--ym-control-bg));
-  color: var(--ym-text);
-  font-size: 12.5px;
-  font-weight: 950;
-  text-align: start;
-  text-transform: uppercase;
-}
-
-.ym-staff-table th,
-.ym-staff-table td {
-  box-sizing: border-box;
-}
-
-
-
-.ym-table-th-content {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.45rem;
-}
-
-.ym-sort-button {
-  display: inline-flex;
-  min-width: 0;
-  max-width: calc(100% - 1rem);
-  align-items: center;
-  gap: 0.35rem;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-  text-align: start;
-}
-
-.ym-sort-indicator {
-  display: inline-flex;
-  width: 1rem;
-  justify-content: center;
-  color: var(--ym-muted);
-  font-size: 11px;
-  line-height: 1;
-  opacity: 0.58;
-}
-
-.ym-sort-indicator.is-active {
-  color: #38bdf8;
-  opacity: 1;
-}
-
-
-.ym-staff-table tbody td {
-  padding: 0.85rem 0.95rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--ym-soft-border) 62%, transparent);
-  color: var(--ym-text);
-  font-size: 14.5px;
-  font-weight: 750;
-  vertical-align: middle;
-}
-
-.ym-staff-table tbody tr:last-child td {
-  border-bottom: none;
-}
-
-.ym-staff-table tbody tr:hover td {
-  background: color-mix(in srgb, #38bdf8 9%, transparent);
-}
-
-.ym-staff-cell-id,
-.ym-staff-cell-created {
-  color: var(--ym-muted);
-  font-variant-numeric: tabular-nums;
-  font-weight: 850;
-  white-space: nowrap;
-}
-
-.ym-staff-cell-name {
-  font-weight: 900;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.ym-staff-cell-email {
-  color: var(--ym-muted);
-  direction: ltr;
-  min-width: 0;
-  text-align: left;
-  unicode-bidi: isolate;
-  overflow: hidden;
-}
-
-.ym-truncated-text,
-.ym-email-text {
-  display: block;
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ym-email-text {
-  direction: ltr;
-  text-align: left;
-  unicode-bidi: isolate;
-}
-
-.ym-staff-cell-roles {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-.ym-staff-chip {
-  display: inline-flex;
-  min-width: 5.6rem;
-  max-width: 7.5rem;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid color-mix(in srgb, #38bdf8 32%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, #38bdf8 18%, transparent);
-  color: #38bdf8;
-  font-size: 12px;
-  font-weight: 900;
-  overflow: hidden;
-  padding: 0.2rem 0.6rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ym-staff-chip.is-muted {
-  border-color: transparent;
-  background: transparent;
-  color: var(--ym-muted);
-}
-
-.ym-staff-chip.is-admin {
-  border-color: color-mix(in srgb, #ef4444 32%, transparent);
-  background: color-mix(in srgb, #ef4444 18%, transparent);
-  color: #ef4444;
-}
-
-.ym-staff-chip.is-staff {
-  border-color: color-mix(in srgb, #f59e0b 32%, transparent);
-  background: color-mix(in srgb, #f59e0b 18%, transparent);
-  color: #f59e0b;
-}
-
-.ym-staff-chip.is-client {
-  border-color: color-mix(in srgb, #10b981 32%, transparent);
-  background: color-mix(in srgb, #10b981 18%, transparent);
-  color: #10b981;
-}
-
-.ym-staff-chip.is-designer {
-  border-color: color-mix(in srgb, #a78bfa 32%, transparent);
-  background: color-mix(in srgb, #a78bfa 18%, transparent);
-  color: #a78bfa;
-}
-
-.ym-staff-pagination {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 1rem;
-  padding-top: 0.9rem;
-  border-top: 1px solid color-mix(in srgb, var(--ym-soft-border) 70%, transparent);
-}
-
-.ym-staff-pagination__info {
-  color: var(--ym-muted);
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.ym-staff-pagination__actions {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-
-.ym-staff-pagination__current {
-  color: var(--ym-text);
-  font-size: 13.5px;
-  font-weight: 900;
-  font-variant-numeric: tabular-nums;
-}
-
-.ym-staff-page-btn {
-  border: 1px solid var(--ym-soft-border);
-  border-radius: 14px;
-  background: var(--ym-control-bg);
-  color: var(--ym-text);
-  cursor: pointer;
-  font-size: 13.5px;
-  font-weight: 900;
-  padding: 0.5rem 0.9rem;
-  transition: border-color 160ms ease, background 160ms ease, opacity 160ms ease, transform 160ms ease;
-}
-
-.ym-staff-page-btn:hover:not(:disabled) {
-  border-color: color-mix(in srgb, #38bdf8 52%, transparent);
-  background: color-mix(in srgb, #38bdf8 10%, transparent);
-  transform: translateY(-1px);
-}
-
-.ym-staff-page-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.4;
-}
-
-@media (min-width: 768px) {
-  .ym-summary-grid {
+@media (max-width: 1120px) {
+  .ym-staff-filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-}
 
-@media (min-width: 1024px) {
-  .ym-hero-content {
-    align-items: center;
-    flex-direction: row;
-    justify-content: space-between;
-  }
-
-  .ym-summary-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+  .ym-staff-filter-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
   }
 }
 
-@media (max-width: 640px) {
-  .ym-readonly-notice {
-    align-items: flex-start;
+@media (max-width: 700px) {
+  .ym-staff-workspace__head,
+  .ym-staff-pagination {
+    align-items: stretch;
     flex-direction: column;
   }
 
-  .ym-staff-pagination {
-    justify-content: center;
+  .ym-staff-filters,
+  .ym-staff-form-grid,
+  .ym-staff-activity-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .ym-staff-filter-actions,
+  .ym-staff-pagination > div {
+    justify-content: space-between;
+  }
+
+  .ym-staff-dialog {
+    padding: 14px;
+  }
+
+  .ym-staff-activity-drawer {
+    width: 100%;
+    padding: 14px;
   }
 }
-/* YM-ADMIN-UI final fix: clean semantic staff table */
-.ym-staff-table-wrap {
-  overflow-x: auto;
-}
 
-.ym-staff-table {
-  width: 100% !important;
-  min-width: 920px;
-  table-layout: fixed;
-  border-collapse: separate;
-  border-spacing: 0;
-  direction: rtl;
+@media (prefers-reduced-motion: reduce) {
+  .ym-staff-primary-button,
+  .ym-staff-secondary-button,
+  .ym-staff-row-action {
+    transition: none;
+  }
 }
-
-/* من اليمين لليسار:
-   # | الاسم | البريد الإلكتروني | الأدوار | تاريخ الإنشاء
-*/
-.ym-staff-table th:nth-child(1),
-.ym-staff-table td:nth-child(1) {
-  width: 6% !important;
-}
-
-.ym-staff-table th:nth-child(2),
-.ym-staff-table td:nth-child(2) {
-  width: 22% !important;
-}
-
-.ym-staff-table th:nth-child(3),
-.ym-staff-table td:nth-child(3) {
-  width: 26% !important;
-}
-
-.ym-staff-table th:nth-child(4),
-.ym-staff-table td:nth-child(4) {
-  width: 20% !important;
-}
-
-.ym-staff-table th:nth-child(5),
-.ym-staff-table td:nth-child(5) {
-  width: 26% !important;
-}
-
-.ym-staff-table th,
-.ym-staff-table td,
-.ym-staff-cell-id,
-.ym-staff-cell-name,
-.ym-staff-cell-email,
-.ym-staff-cell-roles,
-.ym-staff-cell-created {
-  display: table-cell !important;
-  box-sizing: border-box;
-  overflow: hidden;
-  vertical-align: middle;
-}
-
-.ym-staff-table .ym-table-th-content,
-.ym-staff-table .ym-sort-button {
-  width: 100%;
-}
-
-/* # */
-.ym-staff-th-id,
-.ym-staff-cell-id {
-  direction: ltr;
-  text-align: center !important;
-  white-space: nowrap;
-}
-
-.ym-staff-th-id .ym-table-th-content,
-.ym-staff-th-id .ym-sort-button {
-  justify-content: center;
-}
-
-/* الاسم */
-.ym-staff-th-name,
-.ym-staff-cell-name {
-  direction: rtl;
-  text-align: right !important;
-  white-space: nowrap;
-}
-
-.ym-staff-th-name .ym-table-th-content,
-.ym-staff-th-name .ym-sort-button {
-  justify-content: flex-start;
-  direction: rtl;
-  text-align: right;
-}
-
-.ym-staff-cell-name .ym-name-preview {
-  display: inline-block !important;
-  max-width: 16ch;
-  overflow: hidden;
-  text-overflow: clip;
-  white-space: nowrap;
-  vertical-align: middle;
-  unicode-bidi: isolate;
-}
-
-.ym-staff-cell-name .ym-name-preview[dir="ltr"] {
-  direction: ltr !important;
-  text-align: left !important;
-}
-
-.ym-staff-cell-name .ym-name-preview[dir="rtl"] {
-  direction: rtl !important;
-  text-align: right !important;
-}
-
-/* البريد */
-.ym-staff-th-email,
-.ym-staff-cell-email {
-  direction: rtl !important;
-  text-align: right !important;
-  white-space: nowrap;
-  unicode-bidi: isolate;
-}
-
-.ym-staff-th-email .ym-table-th-content,
-.ym-staff-th-email .ym-sort-button {
-  justify-content: flex-start;
-  direction: rtl;
-  text-align: right;
-}
-
-.ym-staff-cell-email .ym-email-preview {
-  display: inline-block !important;
-  max-width: 16ch;
-  direction: ltr !important;
-  text-align: left !important;
-  overflow: hidden;
-  text-overflow: clip;
-  white-space: nowrap;
-  vertical-align: middle;
-  unicode-bidi: isolate !important;
-}
-
-/* الأدوار */
-.ym-staff-th-roles,
-.ym-staff-cell-roles {
-  direction: rtl;
-  text-align: center !important;
-  white-space: nowrap;
-}
-
-.ym-staff-th-roles .ym-table-th-content {
-  justify-content: center;
-}
-
-.ym-staff-cell-roles .ym-staff-chip {
-  display: inline-flex !important;
-  min-width: 76px;
-  max-width: 92px;
-  justify-content: center;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  vertical-align: middle;
-}
-
-/* التاريخ */
-.ym-staff-th-created,
-.ym-staff-cell-created {
-  direction: ltr;
-  text-align: center !important;
-  white-space: nowrap;
-}
-
-.ym-staff-th-created .ym-table-th-content,
-.ym-staff-th-created .ym-sort-button {
-  justify-content: center;
-  direction: ltr;
-  text-align: center;
-}
-
-/* YM-ADMIN-UI final fix: staff email column users parity */
-.ym-staff-table .ym-staff-th-email,
-.ym-staff-table .ym-staff-cell-email {
-  direction: rtl !important;
-  text-align: right !important;
-  white-space: nowrap !important;
-  unicode-bidi: isolate !important;
-}
-
-.ym-staff-table .ym-staff-th-email .ym-table-th-content,
-.ym-staff-table .ym-staff-th-email .ym-sort-button {
-  display: flex !important;
-  width: 100% !important;
-  justify-content: flex-start !important;
-  align-items: center !important;
-  direction: rtl !important;
-  text-align: right !important;
-}
-
-.ym-staff-table .ym-staff-cell-email .ym-email-preview {
-  display: inline-block !important;
-  max-width: 16ch !important;
-  direction: ltr !important;
-  text-align: left !important;
-  overflow: hidden !important;
-  text-overflow: clip !important;
-  white-space: nowrap !important;
-  vertical-align: middle !important;
-  unicode-bidi: isolate !important;
-}
-
 </style>

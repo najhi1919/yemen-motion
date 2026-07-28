@@ -4,10 +4,9 @@ namespace Tests\Feature\Admin;
 
 use App\Models\AuditEvent;
 use App\Models\User;
+use Database\Seeders\AuthRolesSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
-use Spatie\Permission\Models\Role;
-use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
 class AdminStaffAuditEventsTest extends TestCase
@@ -18,14 +17,7 @@ class AdminStaffAuditEventsTest extends TestCase
     {
         parent::setUp();
 
-        app(PermissionRegistrar::class)->forgetCachedPermissions();
-
-        foreach (['super-admin', 'admin', 'staff', 'client', 'designer'] as $roleName) {
-            Role::firstOrCreate([
-                'name' => $roleName,
-                'guard_name' => 'web',
-            ]);
-        }
+        $this->seed(AuthRolesSeeder::class);
     }
 
     public function test_staff_creation_records_a_safe_audit_event_with_actor_and_target(): void
@@ -40,8 +32,7 @@ class AdminStaffAuditEventsTest extends TestCase
         ])->postJson('/api/admin/staff', $this->validPayload([
             'name' => 'Audited Staff',
             'email' => 'audited.staff@example.com',
-            'role' => 'staff',
-        ]))->assertStatus(201);
+        ]))->assertCreated();
 
         $createdUser = User::findOrFail($response->json('data.user.id'));
         $event = AuditEvent::query()
@@ -66,6 +57,7 @@ class AdminStaffAuditEventsTest extends TestCase
         ], $event->metadata);
 
         $storedMetadata = json_encode($event->metadata, JSON_THROW_ON_ERROR);
+
         $this->assertStringNotContainsString('password-secret', $storedMetadata);
         $this->assertStringNotContainsString('audited.staff@example.com', $storedMetadata);
         $this->assertStringNotContainsString('password', strtolower($storedMetadata));
@@ -73,27 +65,25 @@ class AdminStaffAuditEventsTest extends TestCase
         $this->assertStringNotContainsString('payload', strtolower($storedMetadata));
     }
 
-    public function test_admin_creation_records_the_assigned_admin_role(): void
+    public function test_delegated_creator_is_recorded_as_the_actor(): void
     {
-        $superAdmin = $this->userWithRole('super-admin');
-        Sanctum::actingAs($superAdmin, ['*']);
+        $admin = $this->userWithRole('admin');
+        $admin->givePermissionTo('admin.staff.create');
+        Sanctum::actingAs($admin, ['*']);
 
         $response = $this->postJson('/api/admin/staff', $this->validPayload([
-            'name' => 'Audited Admin',
-            'email' => 'audited.admin@example.com',
-            'role' => 'admin',
-        ]))->assertStatus(201);
+            'email' => 'delegated.audit@example.com',
+            'role' => 'staff',
+        ]))->assertCreated();
 
-        $createdUser = User::findOrFail($response->json('data.user.id'));
         $event = AuditEvent::query()
             ->where('event_type', 'staff.created')
             ->sole();
 
-        $this->assertEquals($superAdmin->id, $event->actor_id);
-        $this->assertEquals($createdUser->id, $event->target_id);
-        $this->assertSame('admin', $event->metadata['assigned_role']);
-        $this->assertSame('admin', $event->metadata['created_user_role']);
-        $this->assertSame('admin_staff_create', $event->metadata['source']);
+        $this->assertEquals($admin->id, $event->actor_id);
+        $this->assertSame('admin', $event->actor_role);
+        $this->assertEquals($response->json('data.user.id'), $event->target_id);
+        $this->assertSame('staff', $event->metadata['assigned_role']);
     }
 
     public function test_validation_failure_does_not_record_staff_created(): void
@@ -103,7 +93,7 @@ class AdminStaffAuditEventsTest extends TestCase
 
         $this->postJson('/api/admin/staff', $this->validPayload([
             'role' => 'super-admin',
-        ]))->assertStatus(422);
+        ]))->assertUnprocessable();
 
         $this->assertSame(
             0,
@@ -117,7 +107,7 @@ class AdminStaffAuditEventsTest extends TestCase
         Sanctum::actingAs($admin, ['*']);
 
         $this->postJson('/api/admin/staff', $this->validPayload())
-            ->assertStatus(403);
+            ->assertForbidden();
 
         $this->assertSame(
             0,
@@ -136,9 +126,9 @@ class AdminStaffAuditEventsTest extends TestCase
         ], $overrides);
     }
 
-    private function userWithRole(string $role, array $attributes = []): User
+    private function userWithRole(string $role): User
     {
-        $user = User::factory()->create($attributes);
+        $user = User::factory()->create();
         $user->assignRole($role);
 
         return $user;

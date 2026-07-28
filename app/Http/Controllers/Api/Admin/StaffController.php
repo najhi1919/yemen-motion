@@ -3,9 +3,13 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\ListStaffRequest;
+use App\Http\Requests\Admin\StaffActivityRequest;
 use App\Http\Requests\Admin\StoreStaffRequest;
+use App\Models\AuditEvent;
 use App\Models\User;
 use App\Services\Audit\AuditEventLogger;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -16,6 +20,65 @@ class StaffController extends Controller
     public function __construct(
         private readonly AuditEventLogger $auditEventLogger,
     ) {}
+
+    public function index(ListStaffRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
+        $perPage = (int) ($validated['per_page'] ?? 15);
+        $search = trim((string) ($validated['search'] ?? ''));
+        $role = trim((string) ($validated['role'] ?? ''));
+        $sortBy = (string) ($validated['sort_by'] ?? 'id');
+        $sortDirection = (string) ($validated['sort_direction'] ?? 'asc');
+
+        $query = $this->internalTeamQuery()
+            ->with('roles:id,name')
+            ->when($search !== '', function (Builder $query) use ($search): void {
+                $query->where(function (Builder $subQuery) use ($search): void {
+                    $subQuery
+                        ->where('name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%");
+                });
+            })
+            ->when($role !== '', function (Builder $query) use ($role): void {
+                $query->whereHas(
+                    'roles',
+                    fn (Builder $roleQuery) => $roleQuery->where('name', $role),
+                );
+            })
+            ->when(
+                filled($validated['created_from'] ?? null),
+                fn (Builder $query) => $query->whereDate('created_at', '>=', $validated['created_from']),
+            )
+            ->when(
+                filled($validated['created_to'] ?? null),
+                fn (Builder $query) => $query->whereDate('created_at', '<=', $validated['created_to']),
+            )
+            ->orderBy($sortBy, $sortDirection);
+
+        $users = $query
+            ->paginate($perPage)
+            ->withQueryString()
+            ->through(fn (User $user): array => $this->staffPayload($user));
+
+        return response()->json([
+            'success' => true,
+            'data' => $users,
+            'message' => 'تم جلب فريق العمل بنجاح.',
+            'errors' => null,
+            'meta' => [
+                'summary' => [
+                    'total' => $this->internalTeamQuery()->count(),
+                    'staff_role' => $this->internalTeamQuery()
+                        ->whereHas('roles', fn (Builder $query) => $query->where('name', 'staff'))
+                        ->count(),
+                    'admin_role' => $this->internalTeamQuery()
+                        ->whereHas('roles', fn (Builder $query) => $query->where('name', 'admin'))
+                        ->count(),
+                ],
+                'available_roles' => ['staff', 'admin'],
+            ],
+        ]);
+    }
 
     public function store(StoreStaffRequest $request): JsonResponse
     {
@@ -35,7 +98,6 @@ class StaffController extends Controller
 
         $assignedRole = $user->roles->first()?->name ?? $validated['role'];
 
-        // نسجل الحدث بعد اكتمال إنشاء الحساب وإسناد الدور، دون تمرير بيانات الطلب الحساسة.
         $this->recordStaffCreatedAuditEvent($request, $user, $assignedRole);
 
         return response()->json([
@@ -43,21 +105,130 @@ class StaffController extends Controller
             'message' => 'تم إنشاء الموظف بنجاح.',
             'data' => [
                 'user' => [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'email' => $user->email,
+                    ...$this->staffPayload($user),
                     'role' => $assignedRole,
-                    'roles' => $user->roles->pluck('name')->values(),
-                    'created_at' => $user->created_at?->toJSON(),
                 ],
             ],
             'errors' => null,
         ], 201);
     }
 
+    public function activity(StaffActivityRequest $request, User $staff): JsonResponse
+    {
+        if (
+            $staff->isSuperAdmin()
+            || ! $staff->hasAnyRole(['staff', 'admin'])
+        ) {
+            abort(404);
+        }
+
+        $validated = $request->validated();
+        $perPage = (int) ($validated['per_page'] ?? 10);
+
+        $events = AuditEvent::query()
+            ->where(function (Builder $query) use ($staff): void {
+                $query
+                    ->where(function (Builder $targetQuery) use ($staff): void {
+                        $targetQuery
+                            ->where('target_type', 'user')
+                            ->where('target_id', $staff->id);
+                    })
+                    ->orWhere(function (Builder $actorQuery) use ($staff): void {
+                        $actorQuery
+                            ->where('actor_type', 'user')
+                            ->where('actor_id', $staff->id);
+                    });
+            })
+            ->when(
+                filled($validated['event_type'] ?? null),
+                fn (Builder $query) => $query->where('event_type', $validated['event_type']),
+            )
+            ->when(
+                filled($validated['category'] ?? null),
+                fn (Builder $query) => $query->where('category', $validated['category']),
+            )
+            ->when(
+                filled($validated['severity'] ?? null),
+                fn (Builder $query) => $query->where('severity', $validated['severity']),
+            )
+            ->when(
+                filled($validated['outcome'] ?? null),
+                fn (Builder $query) => $query->where('outcome', $validated['outcome']),
+            )
+            ->when(
+                filled($validated['from'] ?? null),
+                fn (Builder $query) => $query->whereDate('occurred_at', '>=', $validated['from']),
+            )
+            ->when(
+                filled($validated['to'] ?? null),
+                fn (Builder $query) => $query->whereDate('occurred_at', '<=', $validated['to']),
+            )
+            ->orderByDesc('occurred_at')
+            ->orderByDesc('id')
+            ->paginate($perPage)
+            ->withQueryString()
+            ->through(fn (AuditEvent $event): array => $this->activityPayload($event));
+
+        return response()->json([
+            'success' => true,
+            'data' => $events,
+            'message' => 'تم جلب سجل عمليات الحساب بنجاح.',
+            'errors' => null,
+            'meta' => [
+                'staff' => $this->staffPayload($staff->loadMissing('roles:id,name')),
+            ],
+        ]);
+    }
+
+    private function internalTeamQuery(): Builder
+    {
+        return User::query()
+            ->whereHas(
+                'roles',
+                fn (Builder $query) => $query->whereIn('name', ['staff', 'admin']),
+            )
+            ->whereDoesntHave(
+                'roles',
+                fn (Builder $query) => $query->where('name', User::superAdminRoleName()),
+            );
+    }
+
     /**
-     * يسجل إنشاء الموظف بسياق محدود، ولا يستقبل password أو email أو payload كامل.
+     * @return array<string, mixed>
      */
+    private function staffPayload(User $user): array
+    {
+        return [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'roles' => $user->roles->pluck('name')->sort()->values(),
+            'created_at' => $user->created_at?->toJSON(),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function activityPayload(AuditEvent $event): array
+    {
+        return [
+            'id' => $event->id,
+            'event_type' => $event->event_type,
+            'category' => $event->category,
+            'severity' => $event->severity,
+            'actor_id' => $event->actor_id,
+            'actor_role' => $event->actor_role,
+            'target_id' => $event->target_id,
+            'action' => $event->action,
+            'outcome' => $event->outcome,
+            'request_id' => $event->request_id,
+            'correlation_id' => $event->correlation_id,
+            'metadata' => $event->metadata,
+            'occurred_at' => $event->occurred_at?->toJSON(),
+        ];
+    }
+
     private function recordStaffCreatedAuditEvent(
         StoreStaffRequest $request,
         User $createdUser,
@@ -90,7 +261,6 @@ class StaffController extends Controller
         } catch (Throwable $exception) {
             report($exception);
 
-            // في الاختبارات نعيد الخطأ حتى لا تمر عيوب audit أو مخطط البيانات بصمت.
             if (app()->environment('testing')) {
                 throw $exception;
             }

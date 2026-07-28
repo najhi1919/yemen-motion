@@ -9,16 +9,25 @@ class StoreStaffRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return (bool) $this->user()?->hasRole('super-admin');
+        $user = $this->user();
+
+        return $user !== null
+            && ! $user->hasAnyRole(['client', 'designer'])
+            && $user->hasAnyRole(['super-admin', 'admin', 'staff'])
+            && $user->can('admin.staff.create');
     }
 
     public function rules(): array
     {
+        $allowedRoles = $this->user()?->isSuperAdmin()
+            ? ['staff', 'admin']
+            : ['staff'];
+
         return [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
-            'role' => ['required', 'string', Rule::in(['staff', 'admin'])],
+            'role' => ['required', 'string', Rule::in($allowedRoles)],
         ];
     }
 
@@ -33,7 +42,7 @@ class StoreStaffRequest extends FormRequest
             'password.min' => 'كلمة المرور يجب أن تكون 8 أحرف على الأقل.',
             'password.confirmed' => 'تأكيد كلمة المرور غير مطابق.',
             'role.required' => 'الدور مطلوب.',
-            'role.in' => 'الدور المسموح هو staff أو admin فقط.',
+            'role.in' => 'لا يمكنك إسناد هذا الدور عند إنشاء الموظف.',
         ];
     }
 }

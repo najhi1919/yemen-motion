@@ -36,7 +36,7 @@ class DashboardSearchController extends Controller
             $grouped['users'] = $this->searchUsers($query, $limit);
         }
 
-        if ($this->isSuperAdmin($viewer)) {
+        if ($this->canSearch($viewer, 'admin.staff.view')) {
             $grouped['staff'] = $this->searchStaff($query, $limit);
         }
 
@@ -119,7 +119,8 @@ class DashboardSearchController extends Controller
     {
         return User::query()
             ->with('roles:id,name')
-            ->whereHas('roles', fn ($roleQuery) => $roleQuery->where('name', 'staff'))
+            ->whereHas('roles', fn ($roleQuery) => $roleQuery->whereIn('name', ['staff', 'admin']))
+            ->whereDoesntHave('roles', fn ($roleQuery) => $roleQuery->where('name', User::superAdminRoleName()))
             ->where(function ($userQuery) use ($query) {
                 $userQuery
                     ->where('name', 'like', "%{$query}%")
@@ -134,7 +135,7 @@ class DashboardSearchController extends Controller
                 'title' => $user->name,
                 'subtitle' => $user->email,
                 'route' => '/admin/staff',
-                'permission' => 'super-admin',
+                'permission' => 'admin.staff.view',
                 'meta' => [
                     'id' => $user->id,
                     'roles' => $user->roles->pluck('name')->values(),

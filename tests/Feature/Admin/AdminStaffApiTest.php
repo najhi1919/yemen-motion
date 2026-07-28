@@ -3,11 +3,11 @@
 namespace Tests\Feature\Admin;
 
 use App\Models\User;
+use Database\Seeders\AuthRolesSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\Sanctum;
 use Spatie\Permission\Models\Role;
-use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
 class AdminStaffApiTest extends TestCase
@@ -18,53 +18,178 @@ class AdminStaffApiTest extends TestCase
     {
         parent::setUp();
 
-        app(PermissionRegistrar::class)->forgetCachedPermissions();
-
-        foreach (['super-admin', 'admin', 'staff', 'client', 'designer'] as $roleName) {
-            Role::firstOrCreate([
-                'name' => $roleName,
-                'guard_name' => 'web',
-            ]);
-        }
+        $this->seed(AuthRolesSeeder::class);
     }
 
-    public function test_unauthenticated_user_cannot_create_staff(): void
+    public function test_unauthenticated_user_cannot_read_or_create_staff(): void
     {
-        $this->postJson('/api/admin/staff', $this->validPayload())
-            ->assertStatus(401);
+        $this->getJson('/api/admin/staff')->assertUnauthorized();
+        $this->postJson('/api/admin/staff', $this->validPayload())->assertUnauthorized();
     }
 
-    public function test_non_super_admin_cannot_create_staff(): void
+    public function test_internal_user_without_permissions_cannot_read_or_create_staff(): void
     {
         $admin = $this->userWithRole('admin');
         Sanctum::actingAs($admin, ['*']);
 
-        $this->postJson('/api/admin/staff', $this->validPayload())
-            ->assertStatus(403);
+        $this->getJson('/api/admin/staff')->assertForbidden();
+        $this->postJson('/api/admin/staff', $this->validPayload())->assertForbidden();
     }
 
-    public function test_super_admin_can_create_staff_user_with_staff_role(): void
+    public function test_delegated_admin_can_read_internal_team_only(): void
     {
+        $viewer = $this->userWithRole('admin');
+        $viewer->givePermissionTo('admin.staff.view');
+
+        $staff = $this->userWithRole('staff', [
+            'name' => 'Staff Member',
+            'email' => 'staff.member@example.com',
+        ]);
+        $admin = $this->userWithRole('admin', [
+            'name' => 'Admin Member',
+            'email' => 'admin.member@example.com',
+        ]);
+        $superAdmin = $this->userWithRole('super-admin');
+        $client = $this->userWithRole('client');
+        $designer = $this->userWithRole('designer');
+
+        Sanctum::actingAs($viewer, ['*']);
+
+        $response = $this->getJson('/api/admin/staff?sort_by=name&sort_direction=asc')
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('message', 'تم جلب فريق العمل بنجاح.')
+            ->assertJsonPath('meta.summary.total', 3);
+
+        $ids = collect($response->json('data.data'))->pluck('id');
+
+        $this->assertTrue($ids->contains($viewer->id));
+        $this->assertTrue($ids->contains($staff->id));
+        $this->assertTrue($ids->contains($admin->id));
+        $this->assertFalse($ids->contains($superAdmin->id));
+        $this->assertFalse($ids->contains($client->id));
+        $this->assertFalse($ids->contains($designer->id));
+    }
+
+    public function test_staff_role_with_view_permission_can_read_team(): void
+    {
+        $viewer = $this->userWithRole('staff');
+        $viewer->givePermissionTo('admin.staff.view');
+        Sanctum::actingAs($viewer, ['*']);
+
+        $this->getJson('/api/admin/staff')
+            ->assertOk()
+            ->assertJsonPath('data.data.0.id', $viewer->id);
+    }
+
+    public function test_external_roles_remain_forbidden_even_with_staff_permissions(): void
+    {
+        foreach (['client', 'designer'] as $role) {
+            $user = $this->userWithRole($role);
+            $user->givePermissionTo([
+                'admin.staff.view',
+                'admin.staff.create',
+                'admin.staff.activity.view',
+            ]);
+            Sanctum::actingAs($user, ['*']);
+
+            $this->getJson('/api/admin/staff')->assertForbidden();
+            $this->postJson('/api/admin/staff', $this->validPayload([
+                'email' => "{$role}.forbidden@example.com",
+            ]))->assertForbidden();
+        }
+    }
+
+    public function test_role_and_search_filters_are_scoped_to_internal_team(): void
+    {
+        $viewer = $this->userWithRole('admin');
+        $viewer->givePermissionTo('admin.staff.view');
+
+        $staff = $this->userWithRole('staff', [
+            'name' => 'Ali Staff',
+            'email' => 'ali.staff@example.com',
+        ]);
+        $admin = $this->userWithRole('admin', [
+            'name' => 'Ali Admin',
+            'email' => 'ali.admin@example.com',
+        ]);
+
+        Sanctum::actingAs($viewer, ['*']);
+
+        $staffResponse = $this->getJson('/api/admin/staff?search=Ali&role=staff')
+            ->assertOk();
+
+        $this->assertSame(
+            [$staff->id],
+            collect($staffResponse->json('data.data'))->pluck('id')->all(),
+        );
+
+        $adminResponse = $this->getJson('/api/admin/staff?search=Ali&role=admin')
+            ->assertOk();
+
+        $this->assertContains(
+            $admin->id,
+            collect($adminResponse->json('data.data'))->pluck('id')->all(),
+        );
+    }
+
+    public function test_unknown_list_parameter_is_rejected(): void
+    {
+        $viewer = $this->userWithRole('admin');
+        $viewer->givePermissionTo('admin.staff.view');
+        Sanctum::actingAs($viewer, ['*']);
+
+        $this->getJson('/api/admin/staff?payload=x')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['payload']);
+    }
+
+    public function test_delegated_admin_can_create_staff_with_create_permission(): void
+    {
+        $admin = $this->userWithRole('admin');
+        $admin->givePermissionTo('admin.staff.create');
+        Sanctum::actingAs($admin, ['*']);
+
+        $response = $this->postJson('/api/admin/staff', $this->validPayload([
+            'name' => 'Delegated Staff',
+            'email' => 'delegated.staff@example.com',
+            'role' => 'staff',
+        ]))
+            ->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.user.role', 'staff');
+
+        $created = User::findOrFail($response->json('data.user.id'));
+
+        $this->assertTrue($created->hasRole('staff'));
+    }
+
+    public function test_delegated_creator_cannot_create_admin_role(): void
+    {
+        $admin = $this->userWithRole('admin');
+        $admin->givePermissionTo('admin.staff.create');
+        Sanctum::actingAs($admin, ['*']);
+
+        $this->postJson('/api/admin/staff', $this->validPayload([
+            'email' => 'delegated.admin.denied@example.com',
+            'role' => 'admin',
+        ]))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['role']);
+    }
+
+    public function test_super_admin_can_read_and_create_without_permission_pivots(): void
+    {
+        $role = Role::findByName(User::superAdminRoleName(), 'web');
+        $role->syncPermissions([]);
+
         $superAdmin = $this->userWithRole('super-admin');
         Sanctum::actingAs($superAdmin, ['*']);
 
-        $response = $this->postJson('/api/admin/staff', $this->validPayload([
-            'name' => 'Staff Operator',
-            'email' => 'staff.operator@example.com',
-            'role' => 'staff',
-        ]))
-            ->assertStatus(201)
-            ->assertJsonPath('success', true)
-            ->assertJsonPath('message', 'تم إنشاء الموظف بنجاح.')
-            ->assertJsonPath('data.user.name', 'Staff Operator')
-            ->assertJsonPath('data.user.email', 'staff.operator@example.com')
-            ->assertJsonPath('data.user.role', 'staff')
-            ->assertJsonMissing(['password' => 'password-secret']);
-
-        $user = User::where('email', 'staff.operator@example.com')->firstOrFail();
-
-        $this->assertSame($user->id, $response->json('data.user.id'));
-        $this->assertTrue($user->hasRole('staff'));
+        $this->getJson('/api/admin/staff')->assertOk();
+        $this->postJson('/api/admin/staff', $this->validPayload([
+            'email' => 'super.created.staff@example.com',
+        ]))->assertCreated();
     }
 
     public function test_super_admin_can_create_admin_user_with_admin_role(): void
@@ -77,8 +202,7 @@ class AdminStaffApiTest extends TestCase
             'email' => 'admin.operator@example.com',
             'role' => 'admin',
         ]))
-            ->assertStatus(201)
-            ->assertJsonPath('success', true)
+            ->assertCreated()
             ->assertJsonPath('data.user.role', 'admin');
 
         $user = User::where('email', 'admin.operator@example.com')->firstOrFail();
@@ -86,7 +210,7 @@ class AdminStaffApiTest extends TestCase
         $this->assertTrue($user->hasRole('admin'));
     }
 
-    public function test_super_admin_cannot_create_user_with_super_admin_role(): void
+    public function test_super_admin_role_cannot_be_created_from_staff_endpoint(): void
     {
         $superAdmin = $this->userWithRole('super-admin');
         Sanctum::actingAs($superAdmin, ['*']);
@@ -94,11 +218,11 @@ class AdminStaffApiTest extends TestCase
         $this->postJson('/api/admin/staff', $this->validPayload([
             'role' => 'super-admin',
         ]))
-            ->assertStatus(422)
+            ->assertUnprocessable()
             ->assertJsonValidationErrors(['role']);
     }
 
-    public function test_duplicate_email_returns_validation_error(): void
+    public function test_duplicate_email_and_missing_confirmation_are_rejected(): void
     {
         User::factory()->create(['email' => 'duplicate.staff@example.com']);
 
@@ -108,20 +232,14 @@ class AdminStaffApiTest extends TestCase
         $this->postJson('/api/admin/staff', $this->validPayload([
             'email' => 'duplicate.staff@example.com',
         ]))
-            ->assertStatus(422)
+            ->assertUnprocessable()
             ->assertJsonValidationErrors(['email']);
-    }
 
-    public function test_password_confirmation_is_required(): void
-    {
-        $superAdmin = $this->userWithRole('super-admin');
-        Sanctum::actingAs($superAdmin, ['*']);
-
-        $payload = $this->validPayload();
+        $payload = $this->validPayload(['email' => 'missing.confirmation@example.com']);
         unset($payload['password_confirmation']);
 
         $this->postJson('/api/admin/staff', $payload)
-            ->assertStatus(422)
+            ->assertUnprocessable()
             ->assertJsonValidationErrors(['password']);
     }
 
@@ -132,10 +250,7 @@ class AdminStaffApiTest extends TestCase
 
         $this->postJson('/api/admin/staff', $this->validPayload([
             'email' => 'hashed.staff@example.com',
-            'password' => 'password-secret',
-            'password_confirmation' => 'password-secret',
-        ]))
-            ->assertStatus(201);
+        ]))->assertCreated();
 
         $user = User::where('email', 'hashed.staff@example.com')->firstOrFail();
 

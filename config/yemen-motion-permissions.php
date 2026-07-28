@@ -99,6 +99,21 @@ return [
             'label_ar' => 'حذف صلاحية',
         ],
         [
+            'name' => 'admin.staff.view',
+            'group' => 'admin.staff',
+            'label_ar' => 'عرض إدارة الموظفين',
+        ],
+        [
+            'name' => 'admin.staff.create',
+            'group' => 'admin.staff',
+            'label_ar' => 'إنشاء حساب موظف',
+        ],
+        [
+            'name' => 'admin.staff.activity.view',
+            'group' => 'admin.staff',
+            'label_ar' => 'عرض سجل عمليات حساب الموظف',
+        ],
+        [
             'name' => 'admin.works.access',
             'group' => 'admin.works',
             'label_ar' => 'دخول إدارة الأعمال',
