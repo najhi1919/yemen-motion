@@ -254,11 +254,18 @@ class DesignerWorksIndexTest extends TestCase
         $this->get("/api/designer/works/{$work->id}/media/{$media->id}/content")->assertForbidden();
     }
 
-    public function test_no_designer_write_route_is_created(): void
+    public function test_designer_index_and_media_routes_remain_read_only(): void
     {
-        $routes = collect(Route::getRoutes()->getRoutes())
-            ->filter(fn ($route) => str_starts_with($route->uri(), 'api/designer/works'));
-        $this->assertTrue($routes->every(fn ($route) => $route->methods() === ['GET', 'HEAD']));
+        foreach ([
+            'designer.works.index',
+            'designer.works.media.content',
+            'designer.works.media.poster',
+        ] as $routeName) {
+            $route = Route::getRoutes()->getByName($routeName);
+
+            $this->assertNotNull($route);
+            $this->assertSame(['GET', 'HEAD'], $route->methods());
+        }
     }
 
     public function test_designer_remains_denied_from_admin_works_routes(): void

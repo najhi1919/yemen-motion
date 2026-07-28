@@ -34,6 +34,7 @@ use App\Http\Controllers\Api\AuthApiController;
 use App\Http\Controllers\Api\DashboardSearchController;
 use App\Http\Controllers\Api\DesignerProfileController;
 use App\Http\Controllers\Api\DesignerProfileMediaController;
+use App\Http\Controllers\Api\DesignerWorksAuthoringController;
 use App\Http\Controllers\Api\DesignerWorksIndexController;
 use App\Http\Controllers\Api\DesignerWorksMediaController;
 use Illuminate\Http\Request;
@@ -50,6 +51,14 @@ Route::prefix('auth')->group(function () {
 Route::middleware(['auth:sanctum', 'account.active'])->get('/user', [AuthApiController::class, 'user']);
 
 Route::middleware(['auth:sanctum', 'account.active'])->prefix('designer')->group(function () {
+    Route::post('/works', [DesignerWorksAuthoringController::class, 'store'])
+        ->name('designer.works.store');
+    Route::get('/works/{work}/authoring', [DesignerWorksAuthoringController::class, 'show'])
+        ->whereNumber('work')
+        ->name('designer.works.authoring.show');
+    Route::patch('/works/{work}', [DesignerWorksAuthoringController::class, 'update'])
+        ->whereNumber('work')
+        ->name('designer.works.update');
     Route::get('/works', [DesignerWorksIndexController::class, 'index'])
         ->name('designer.works.index');
     Route::get('/works/{work}/media/{media}/content', [DesignerWorksMediaController::class, 'content'])

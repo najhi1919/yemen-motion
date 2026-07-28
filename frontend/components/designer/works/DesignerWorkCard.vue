@@ -80,6 +80,13 @@ const mediaLabels: Record<string, string> = {
           آخر تحديث {{ formatYmDate(work.updated_at, 'ar') }}
         </time>
       </div>
+      <NuxtLink
+        v-if="work.status === 'draft' || work.status === 'changes_requested'"
+        :to="`/designer/works/${work.id}/edit`"
+        class="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl border border-[#E21D1D] px-4 text-sm font-bold text-[#B81414] transition hover:bg-red-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-red-200 motion-reduce:transition-none"
+      >
+        تعديل العمل
+      </NuxtLink>
     </div>
   </article>
 </template>
