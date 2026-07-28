@@ -154,24 +154,24 @@
         <table class="ym-staff-table">
           <thead>
             <tr>
-              <th>#</th>
-              <th>{{ copy.colName }}</th>
-              <th>{{ copy.colEmail }}</th>
-              <th>{{ copy.colRoles }}</th>
-              <th>{{ copy.colCreated }}</th>
-              <th v-if="canViewActivity">{{ copy.colActions }}</th>
+              <th class="is-id">#</th>
+              <th class="is-name">{{ copy.colName }}</th>
+              <th class="is-email">{{ copy.colEmail }}</th>
+              <th class="is-roles">{{ copy.colRoles }}</th>
+              <th class="is-date">{{ copy.colCreated }}</th>
+              <th v-if="canViewActivity" class="is-actions">{{ copy.colActions }}</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="user in staffUsers" :key="user.id">
               <td class="is-id">{{ user.id }}</td>
-              <td>
+              <td class="is-name">
                 <strong :dir="textDirection(user.name)">{{ user.name }}</strong>
               </td>
-              <td dir="ltr">
+              <td class="is-email" dir="ltr">
                 <span class="ym-staff-email" :title="user.email">{{ user.email }}</span>
               </td>
-              <td>
+              <td class="is-roles">
                 <div class="ym-staff-role-list">
                   <span
                     v-for="role in user.roles"
@@ -184,7 +184,7 @@
                 </div>
               </td>
               <td class="is-date">{{ formatDateTime(user.created_at) }}</td>
-              <td v-if="canViewActivity">
+              <td v-if="canViewActivity" class="is-actions">
                 <button
                   type="button"
                   class="ym-staff-row-action"
@@ -244,7 +244,7 @@
     <Teleport to="body">
       <div
         v-if="createModalOpen"
-        class="ym-staff-dialog-backdrop"
+        class="ym-staff-dialog-backdrop ym-admin-page"
         :dir="currentLocale === 'en' ? 'ltr' : 'rtl'"
         :style="{ '--ym-admin-section-accent': '#06b6d4', '--ym-admin-section-accent-secondary': '#8b5cf6' }"
         role="presentation"
@@ -362,7 +362,7 @@
     <Teleport to="body">
       <div
         v-if="activityOpen && selectedStaff"
-        class="ym-staff-drawer-backdrop"
+        class="ym-staff-drawer-backdrop ym-admin-page"
         :class="{ 'is-ltr': currentLocale === 'en' }"
         :dir="currentLocale === 'en' ? 'ltr' : 'rtl'"
         :style="{ '--ym-admin-section-accent': '#06b6d4', '--ym-admin-section-accent-secondary': '#8b5cf6' }"
@@ -1905,4 +1905,200 @@ onBeforeUnmount(() => {
     transition: none;
   }
 }
+
+/* YM-STAFF-001B visual verification patch */
+.ym-staff-table {
+  min-width: 920px;
+  table-layout: fixed;
+}
+
+.ym-staff-table th,
+.ym-staff-table td {
+  vertical-align: middle;
+}
+
+.ym-staff-table .is-id {
+  width: 6%;
+}
+
+.ym-staff-table .is-name {
+  width: 18%;
+}
+
+.ym-staff-table .is-email {
+  width: 28%;
+}
+
+.ym-staff-table .is-roles {
+  width: 14%;
+}
+
+.ym-staff-table .is-date {
+  width: 18%;
+}
+
+.ym-staff-table .is-actions {
+  width: 16%;
+}
+
+.ym-staff-table th.is-id,
+.ym-staff-table td.is-id,
+.ym-staff-table th.is-email,
+.ym-staff-table td.is-email,
+.ym-staff-table th.is-roles,
+.ym-staff-table td.is-roles,
+.ym-staff-table th.is-date,
+.ym-staff-table td.is-date,
+.ym-staff-table th.is-actions,
+.ym-staff-table td.is-actions {
+  text-align: center;
+}
+
+.ym-staff-table th.is-name,
+.ym-staff-table td.is-name {
+  text-align: start;
+}
+
+.ym-staff-table td.is-name strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ym-staff-table td.is-email {
+  direction: ltr;
+}
+
+.ym-staff-table .is-roles .ym-staff-role-list,
+.ym-staff-table .is-actions .ym-staff-row-action {
+  justify-content: center;
+}
+
+.ym-staff-dialog-backdrop,
+.ym-staff-drawer-backdrop {
+  --ym-admin-text: #0f172a;
+  --ym-admin-muted: #64748b;
+  --ym-admin-border: rgba(100, 116, 139, .24);
+  --ym-admin-surface: #ffffff;
+  --ym-admin-surface-soft: #f8fafc;
+  --ym-admin-control-bg: #ffffff;
+  --ym-admin-danger: #ef4444;
+  isolation: isolate;
+  background: rgba(2, 6, 23, .58);
+  backdrop-filter: blur(8px) saturate(115%);
+}
+
+.ym-staff-dialog,
+.ym-staff-activity-drawer {
+  background:
+    radial-gradient(circle at 90% 0%, rgba(6, 182, 212, .13), transparent 260px),
+    radial-gradient(circle at 8% 100%, rgba(139, 92, 246, .08), transparent 280px),
+    #ffffff;
+  box-shadow:
+    0 34px 100px rgba(2, 6, 23, .5),
+    inset 0 1px 0 rgba(255, 255, 255, .9);
+}
+
+.ym-staff-drawer-backdrop {
+  align-items: center;
+  justify-items: end;
+  padding: 12px;
+}
+
+.ym-staff-drawer-backdrop.is-ltr {
+  justify-items: start;
+}
+
+.ym-staff-activity-drawer {
+  display: grid;
+  width: min(calc(100% - 24px), 680px);
+  height: calc(100dvh - 24px);
+  min-height: 0;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  border-radius: 24px;
+  padding: 0;
+}
+
+.ym-staff-activity-drawer > header {
+  position: relative;
+  z-index: 2;
+  border-bottom: 1px solid var(--ym-admin-border);
+  padding: 20px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(6, 182, 212, .09),
+      rgba(139, 92, 246, .06)
+    ),
+    #ffffff;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, .06);
+}
+
+.ym-staff-activity-drawer > header .ym-staff-icon-button {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #f8fafc;
+}
+
+.ym-staff-activity-summary {
+  margin: 14px 18px 0;
+}
+
+.ym-staff-timeline {
+  min-height: 0;
+  margin: 14px 18px 0;
+  overflow-y: auto;
+  padding: 0 4px 12px;
+  scrollbar-gutter: stable;
+}
+
+.ym-staff-activity-drawer > .ym-staff-loading,
+.ym-staff-activity-drawer :deep(.ym-admin-empty) {
+  min-height: 0;
+  margin: 14px 18px 18px;
+  overflow-y: auto;
+  border: 1px solid var(--ym-admin-border);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 50% 20%, rgba(6, 182, 212, .07), transparent 190px),
+    #f8fafc;
+}
+
+.ym-staff-activity-drawer :deep(.ym-admin-empty) {
+  align-content: center;
+  padding: 28px 20px;
+}
+
+.ym-staff-activity-drawer > .ym-staff-pagination {
+  margin: 0;
+  border-top: 1px solid var(--ym-admin-border);
+  padding: 12px 18px 16px;
+  background: #ffffff;
+}
+
+@media (max-width: 700px) {
+  .ym-staff-drawer-backdrop {
+    padding: 0;
+  }
+
+  .ym-staff-activity-drawer {
+    width: 100%;
+    height: 100dvh;
+    border-radius: 0;
+  }
+
+  .ym-staff-activity-drawer > header {
+    padding: 16px;
+  }
+
+  .ym-staff-activity-summary,
+  .ym-staff-timeline,
+  .ym-staff-activity-drawer > .ym-staff-loading,
+  .ym-staff-activity-drawer :deep(.ym-admin-empty) {
+    margin-inline: 14px;
+  }
+}
+
 </style>
