@@ -24,7 +24,7 @@ const save = async () => {
 </script>
 
 <template>
-  <div class="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
+  <div class="ym-designer-authoring-page mx-auto w-full max-w-4xl space-y-6 px-4 py-7 sm:px-6 sm:py-10">
     <DesignerWorkAuthoringHeader title="إضافة عمل جديد" />
     <DesignerWorkAuthoringForm
       :draft="form"

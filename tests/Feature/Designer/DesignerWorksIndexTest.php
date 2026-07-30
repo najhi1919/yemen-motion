@@ -23,7 +23,7 @@ class DesignerWorksIndexTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->disk = (string) config('filesystems.default');
+        $this->disk = 'works_private';
         Storage::fake($this->disk);
         $this->designer = $this->userWithRole('designer');
     }

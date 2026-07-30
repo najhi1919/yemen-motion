@@ -49,8 +49,14 @@ const availabilityClass = computed(() => {
       @avatar-source="setPreviewAvatarSource"
     />
     <div class="grid items-stretch gap-5 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-6">
-      <section class="flex min-w-0 flex-col rounded-[20px] border border-[rgba(17,17,17,0.11)] bg-white p-6 shadow-[0_8px_24px_rgba(17,17,17,0.05)] sm:p-8">
+      <section class="ym-profile-data-card flex min-w-0 flex-col rounded-[20px] border border-[var(--ym-d-border)] bg-[var(--ym-d-surface)] p-6 shadow-[var(--ym-d-shadow-sm)] sm:p-7">
         <div class="min-w-0">
+          <div class="mb-4 flex items-center gap-2">
+            <span class="h-1 w-10 rounded-full bg-[var(--ym-d-red)]" aria-hidden="true" />
+            <p class="text-sm font-extrabold text-[var(--ym-d-charcoal)]">
+              بيانات الملف
+            </p>
+          </div>
           <div class="flex flex-wrap items-center gap-2">
             <span
               class="inline-flex rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset"
@@ -58,12 +64,12 @@ const availabilityClass = computed(() => {
             >
               {{ availabilityLabel }}
             </span>
-            <span class="rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-[#C91414]">
+            <span class="rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-[var(--ym-d-red-strong)]">
               مسودة غير منشورة
             </span>
           </div>
 
-          <div class="mt-5 min-w-0">
+          <div class="mt-4 min-w-0">
             <h2 class="break-words text-2xl font-extrabold leading-tight text-[#151515] sm:text-3xl">
               {{ profile.display_name }}
             </h2>
@@ -78,7 +84,7 @@ const availabilityClass = computed(() => {
           </div>
         </div>
 
-        <div class="mt-6 border-t border-[rgba(17,17,17,0.09)] pt-5">
+        <div class="mt-4 border-t border-[rgba(17,17,17,0.09)] pt-4">
           <p class="text-[15px] font-semibold text-[#666666]">
             التخصص الرئيسي
           </p>
@@ -87,12 +93,12 @@ const availabilityClass = computed(() => {
           </p>
         </div>
 
-        <div class="mt-6">
+        <div class="mt-5 rounded-2xl bg-[var(--ym-d-surface-warm)] p-4">
           <div class="flex items-center justify-between gap-3">
             <p class="text-[15px] font-semibold text-[#666666]">
               اكتمال البيانات الأساسية
             </p>
-            <span class="text-sm font-extrabold text-[#C91414]">
+            <span class="text-sm font-extrabold text-[var(--ym-d-red-strong)]">
               {{ completion.percentage }}%
             </span>
           </div>
@@ -105,7 +111,7 @@ const availabilityClass = computed(() => {
             :aria-valuenow="completion.percentage"
           >
             <div
-              class="h-full rounded-full bg-[#E21D1D] transition-[width] duration-300 motion-reduce:transition-none"
+              class="h-full rounded-full bg-[var(--ym-d-red)] transition-[width] duration-300 motion-reduce:transition-none"
               :style="{ width: `${completion.percentage}%` }"
             />
           </div>
@@ -114,22 +120,24 @@ const availabilityClass = computed(() => {
           </p>
         </div>
 
-        <button
-          type="button"
-          class="mt-7 inline-flex min-h-12 w-full items-center justify-center rounded-xl bg-[#E21D1D] px-6 text-sm font-bold text-white transition hover:bg-[#C91414] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-red-200 motion-reduce:transition-none sm:w-fit"
-          @click="$emit('edit')"
-        >
-          تعديل البيانات
-        </button>
+        <div class="mt-5 border-t border-[var(--ym-d-border)] pt-5">
+          <button
+            type="button"
+            class="inline-flex min-h-12 w-full items-center justify-center rounded-xl bg-[var(--ym-d-red)] px-6 text-sm font-bold text-white transition hover:bg-[var(--ym-d-red-strong)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[var(--ym-d-focus)] motion-reduce:transition-none sm:w-fit"
+            @click="$emit('edit')"
+          >
+            تعديل البيانات
+          </button>
+        </div>
       </section>
 
-      <aside class="flex min-h-full min-w-0 flex-col rounded-[20px] bg-[#111111] p-6 text-white shadow-[0_8px_24px_rgba(17,17,17,0.08)] sm:p-7">
-        <p class="text-[15px] font-bold text-neutral-300">
-          معاينة الملف
-        </p>
+      <aside class="ym-profile-preview-card flex min-h-full min-w-0 flex-col overflow-hidden rounded-[20px] bg-[var(--ym-d-charcoal)] text-white shadow-[var(--ym-d-shadow-md)]">
+        <div class="relative z-10 shrink-0 px-6 pb-2 pt-5">
+          <p class="text-[15px] font-bold text-white/80">معاينة الملف</p>
+        </div>
 
-        <div class="flex flex-1 flex-col items-center justify-center py-5 text-center sm:py-7">
-          <div class="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-2 border-white/20 bg-white/10">
+        <div class="relative z-10 flex flex-1 flex-col items-center justify-center px-6 py-6 text-center sm:py-7">
+          <div class="flex h-[88px] w-[88px] items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white/10 shadow-[0_0_0_4px_var(--ym-d-red-border)]">
             <img
               v-if="previewAvatarSource && !previewAvatarFailed"
               :src="previewAvatarSource"
@@ -141,18 +149,21 @@ const availabilityClass = computed(() => {
               v-else
               src="/logo.svg"
               alt=""
-              class="h-9 w-9 brightness-0 invert opacity-55"
+              class="h-9 w-9 opacity-60"
             >
           </div>
 
-          <div class="mt-5 h-1 w-10 rounded-full bg-[#E21D1D]" aria-hidden="true" />
-          <h3 class="mt-4 max-w-full break-words text-2xl font-extrabold leading-tight text-white">
+          <div class="mt-4 h-1 w-10 rounded-full bg-[var(--ym-d-red)]" aria-hidden="true" />
+          <h3 class="mt-3 max-w-full break-words text-[1.65rem] font-extrabold leading-tight text-white">
             {{ profile.display_name }}
           </h3>
+          <bdi class="mt-1 block max-w-full truncate text-sm font-medium text-white/55" dir="ltr">
+            @{{ username }}
+          </bdi>
           <p class="mt-2 max-w-full break-words text-[15px] font-medium text-neutral-200">
             {{ profile.professional_title || 'لم يحدد المسمى المهني' }}
           </p>
-          <p class="mt-3 max-w-full break-words text-[15px] font-semibold text-neutral-300">
+          <p class="mt-2 max-w-full break-words text-[15px] font-semibold text-white/70">
             {{ profile.primary_specialty || 'لم يحدد التخصص الرئيسي' }}
           </p>
         </div>
@@ -160,3 +171,35 @@ const availabilityClass = computed(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.ym-profile-preview-card {
+  position: relative;
+  isolation: isolate;
+}
+
+.ym-profile-preview-card::before,
+.ym-profile-preview-card::after {
+  position: absolute;
+  pointer-events: none;
+  content: "";
+}
+
+.ym-profile-preview-card::before {
+  inset: 0;
+  background:
+    linear-gradient(var(--ym-d-red), var(--ym-d-red)) top right / 40px 3px no-repeat,
+    linear-gradient(118deg, transparent 65%, rgba(255, 255, 255, 0.045) 65% 65.8%, transparent 65.8%),
+    linear-gradient(62deg, transparent 82%, rgba(226, 29, 29, 0.09) 82% 83%, transparent 83%);
+}
+
+.ym-profile-preview-card::after {
+  left: -5rem;
+  bottom: -6rem;
+  width: 14rem;
+  height: 14rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  box-shadow: 0 0 60px rgba(226, 29, 29, 0.09);
+}
+</style>

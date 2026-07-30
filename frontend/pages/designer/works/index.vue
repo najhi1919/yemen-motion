@@ -1,4 +1,68 @@
 <script setup lang="ts">
+const worksViewRoute = useRoute()
+const worksViewRouter = useRouter()
+const routeView = worksViewRoute.query.view
+const worksView = ref<'grid' | 'list'>(
+  routeView === 'list' || routeView === 'grid' ? routeView : 'grid',
+)
+
+watch(
+  () => worksViewRoute.query.view,
+  value => {
+    if (value === 'grid' || value === 'list') {
+      worksView.value = value
+
+      if (import.meta.client) {
+        localStorage.setItem('ym-designer-works-view', value)
+      }
+    }
+  },
+)
+
+onMounted(async () => {
+  if (
+    worksViewRoute.query.view === 'grid'
+    || worksViewRoute.query.view === 'list'
+  ) {
+    localStorage.setItem(
+      'ym-designer-works-view',
+      worksViewRoute.query.view,
+    )
+    return
+  }
+
+  const storedView = localStorage.getItem('ym-designer-works-view')
+
+  if (storedView === 'grid' || storedView === 'list') {
+    worksView.value = storedView
+    await worksViewRouter.replace({
+      query: {
+        ...worksViewRoute.query,
+        view: storedView,
+      },
+    })
+  }
+})
+
+async function changeWorksView(value: 'grid' | 'list'): Promise<void> {
+  if (worksView.value === value) {
+    return
+  }
+
+  worksView.value = value
+
+  if (import.meta.client) {
+    localStorage.setItem('ym-designer-works-view', value)
+  }
+
+  await worksViewRouter.replace({
+    query: {
+      ...worksViewRoute.query,
+      view: value,
+    },
+  })
+}
+
 import type { DesignerWorkGroup } from '~/types/designer-work'
 
 definePageMeta({
@@ -48,9 +112,11 @@ await useAsyncData('designer-owned-works', () => fetchWorks())
 </script>
 
 <template>
-  <div class="mx-auto max-w-7xl space-y-6 overflow-x-hidden px-4 py-7 sm:px-6 sm:py-9 lg:px-8">
+  <div class="ym-designer-works-page mx-auto max-w-[1280px] space-y-6 overflow-x-hidden px-4 py-6 sm:space-y-7 sm:px-6 sm:py-9 lg:px-8 lg:py-10">
     <DesignerWorksHeader :total="summary.total" />
     <DesignerWorksFilters
+      :view="worksView"
+      @view="changeWorksView"
       :query="filters.q"
       :group="filters.group"
       :summary="summary"
@@ -58,6 +124,7 @@ await useAsyncData('designer-owned-works', () => fetchWorks())
       @group="applyGroup"
     />
     <DesignerWorksGrid
+      :view="worksView"
       :works="works"
       :meta="meta"
       :cover-urls="coverUrls"

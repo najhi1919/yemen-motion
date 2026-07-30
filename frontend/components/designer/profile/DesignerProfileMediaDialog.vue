@@ -129,7 +129,7 @@ onBeforeUnmount(() => {
   <Teleport to="body">
     <div
       v-if="open"
-      class="fixed inset-0 z-50 bg-black/55 sm:flex sm:items-center sm:justify-center sm:p-6"
+      class="ym-designer-portal fixed inset-0 z-50 bg-black/55 sm:flex sm:items-center sm:justify-center sm:p-6"
       @mousedown.self="requestClose"
     >
       <section
@@ -139,22 +139,22 @@ onBeforeUnmount(() => {
         :aria-labelledby="`designer-media-title-${mode}`"
         class="flex h-full w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-3xl"
       >
-        <header class="flex shrink-0 items-center justify-between border-b border-neutral-200 px-5 py-4 sm:px-6">
+        <header class="flex shrink-0 items-center justify-between border-b-2 border-[var(--ym-d-red)] bg-[var(--ym-d-charcoal)] px-5 py-4 text-white sm:px-6">
           <div>
             <h2
               :id="`designer-media-title-${mode}`"
-              class="text-xl font-bold text-neutral-950"
+              class="text-xl font-bold text-white"
             >
               {{ title }}
             </h2>
-            <p class="mt-1 text-[15px] text-neutral-600">
+            <p class="mt-1 text-[15px] text-white/65">
               راجع المعاينة ثم احفظ التغيير صراحة.
             </p>
           </div>
           <button
             ref="closeButton"
             type="button"
-            class="inline-flex h-11 w-11 items-center justify-center rounded-xl text-2xl text-neutral-700 transition hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E21D1D] motion-reduce:transition-none"
+            class="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/25 text-2xl text-white transition hover:border-[var(--ym-d-red)] hover:bg-[var(--ym-d-red)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[var(--ym-d-focus)] motion-reduce:transition-none"
             aria-label="إغلاق نافذة الوسائط"
             :disabled="busy"
             @click="requestClose"
@@ -166,7 +166,7 @@ onBeforeUnmount(() => {
         <div class="flex-1 overflow-y-auto px-5 py-6 sm:px-6">
           <div
             v-if="mode === 'avatar'"
-            class="mx-auto h-48 w-48 overflow-hidden rounded-full border border-neutral-200 bg-neutral-100"
+            class="mx-auto h-48 w-48 overflow-hidden rounded-full border border-[var(--ym-d-border)] bg-[var(--ym-d-surface-muted)]"
           >
             <img
               v-if="displayedUrl"
@@ -184,7 +184,7 @@ onBeforeUnmount(() => {
 
           <div
             v-else
-            class="aspect-[16/6] overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-100"
+            class="aspect-[16/6] overflow-hidden rounded-2xl border border-[var(--ym-d-border)] bg-[var(--ym-d-surface-muted)]"
           >
             <img
               v-if="displayedUrl"
@@ -208,13 +208,13 @@ onBeforeUnmount(() => {
             <input
               type="file"
               accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
-              class="block min-h-11 w-full rounded-xl border border-neutral-300 bg-white p-2 text-[15px] text-neutral-800 file:ml-3 file:rounded-lg file:border-0 file:bg-neutral-900 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E21D1D]"
+              class="block min-h-11 w-full rounded-xl border border-[var(--ym-d-border-strong)] bg-[var(--ym-d-surface-warm)] p-2 text-[15px] text-[var(--ym-d-text)] file:ml-3 file:rounded-lg file:border-0 file:bg-[var(--ym-d-red)] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[var(--ym-d-focus)]"
               :disabled="busy"
               @change="onFileChange"
             >
           </label>
 
-          <div v-if="mode === 'cover' && displayedUrl" class="mt-7 space-y-5 rounded-2xl bg-neutral-50 p-4">
+          <div v-if="mode === 'cover' && displayedUrl" class="mt-7 space-y-5 rounded-2xl border border-[var(--ym-d-border)] bg-[var(--ym-d-surface-muted)] p-4">
             <div>
               <div class="mb-2 flex items-center justify-between gap-4">
                 <label for="cover-focal-x" class="text-[15px] font-semibold text-neutral-900">
@@ -279,7 +279,7 @@ onBeforeUnmount(() => {
           </button>
         </div>
 
-        <footer class="flex shrink-0 flex-wrap items-center gap-3 border-t border-neutral-200 bg-white px-5 py-4 sm:px-6">
+        <footer class="flex shrink-0 flex-wrap items-center gap-3 border-t border-[var(--ym-d-border)] bg-[var(--ym-d-surface)] px-5 py-4 sm:px-6">
           <button
             type="button"
             class="inline-flex min-h-12 items-center justify-center rounded-xl bg-[#E21D1D] px-6 text-sm font-bold text-white transition hover:bg-[#C91414] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E21D1D] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
@@ -290,7 +290,7 @@ onBeforeUnmount(() => {
           </button>
           <button
             type="button"
-            class="inline-flex min-h-12 items-center justify-center rounded-xl border border-neutral-300 bg-white px-5 text-sm font-semibold text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E21D1D]"
+            class="inline-flex min-h-12 items-center justify-center rounded-xl border border-[var(--ym-d-border-strong)] bg-white px-5 text-sm font-semibold text-[var(--ym-d-charcoal)] hover:bg-[var(--ym-d-surface-muted)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[var(--ym-d-focus)]"
             :disabled="busy"
             @click="requestClose"
           >

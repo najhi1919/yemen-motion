@@ -66,7 +66,25 @@ Route::middleware(['auth:sanctum', 'account.active'])->prefix('designer')->group
         ->name('designer.works.media.content');
     Route::get('/works/{work}/media/{media}/poster', [DesignerWorksMediaController::class, 'poster'])
         ->whereNumber('work')->whereNumber('media')
-        ->name('designer.works.media.poster');
+            ->name('designer.works.media.poster');
+        Route::get('/works/{work}/media', [DesignerWorksMediaController::class, 'index'])
+            ->whereNumber('work')->name('designer.works.media.index');
+        Route::post('/works/{work}/media', [DesignerWorksMediaController::class, 'store'])
+            ->whereNumber('work')->name('designer.works.media.store');
+        Route::patch('/works/{work}/media/order', [DesignerWorksMediaController::class, 'reorder'])
+            ->whereNumber('work')->name('designer.works.media.reorder');
+        Route::patch('/works/{work}/media/cover', [DesignerWorksMediaController::class, 'updateCover'])
+            ->whereNumber('work')->name('designer.works.media.cover');
+        Route::post('/works/{work}/media/{media}/retry-processing', [DesignerWorksMediaController::class, 'retryProcessing'])
+            ->whereNumber('work')->whereNumber('media')->name('designer.works.media.retry');
+        Route::patch('/works/{work}/media/{media}/video-cover/current', [DesignerWorksMediaController::class, 'useCurrentVideoCover'])
+            ->whereNumber('work')->whereNumber('media')->name('designer.works.media.video-cover.current');
+        Route::patch('/works/{work}/media/{media}/video-cover/frame', [DesignerWorksMediaController::class, 'selectVideoCoverFrame'])
+            ->whereNumber('work')->whereNumber('media')->name('designer.works.media.video-cover.frame');
+        Route::post('/works/{work}/media/{media}/video-cover/upload', [DesignerWorksMediaController::class, 'uploadVideoCover'])
+            ->whereNumber('work')->whereNumber('media')->name('designer.works.media.video-cover.upload');
+        Route::delete('/works/{work}/media/{media}', [DesignerWorksMediaController::class, 'destroy'])
+            ->whereNumber('work')->whereNumber('media')->name('designer.works.media.destroy');
     Route::get('/profile/username-availability', [DesignerProfileController::class, 'usernameAvailability'])
         ->middleware('throttle:30,1');
         Route::get('/profile', [DesignerProfileController::class, 'show']);

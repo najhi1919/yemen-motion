@@ -239,27 +239,27 @@ onBeforeUnmount(() => {
     >
       <section
         v-if="open"
-        class="fixed inset-y-0 right-0 z-[60] flex h-full w-full flex-col bg-[#FCFCFC] shadow-2xl sm:max-w-[600px]"
+        class="ym-designer-portal fixed inset-y-0 right-0 z-[60] flex h-full w-full flex-col bg-[var(--ym-d-page)] text-[var(--ym-d-text)] shadow-2xl sm:max-w-[600px]"
         role="dialog"
         aria-modal="true"
         aria-labelledby="designer-profile-drawer-title"
         dir="rtl"
       >
-        <header class="shrink-0 border-b border-neutral-200 bg-white px-5 py-5 sm:px-8">
+        <header class="shrink-0 border-b-2 border-[var(--ym-d-red)] bg-[var(--ym-d-charcoal)] px-5 py-5 text-white sm:px-8">
           <div class="flex items-start justify-between gap-4">
           <div>
-            <p class="text-xs font-bold text-[#C91414]">الملف المهني الأساسي</p>
-            <h2 id="designer-profile-drawer-title" class="mt-1 text-xl font-extrabold text-[#151515]">
+            <p class="text-xs font-bold text-white/65">الملف المهني الأساسي</p>
+            <h2 id="designer-profile-drawer-title" class="mt-1 text-xl font-extrabold text-white">
               {{ profile ? 'تعديل الملف المهني' : 'إنشاء ملف المصمم' }}
             </h2>
-            <p v-if="isDirty" class="mt-2 text-[15px] font-semibold text-amber-700">
+            <p v-if="isDirty" class="mt-2 text-[15px] font-semibold text-amber-200">
               لديك تغييرات غير محفوظة
             </p>
           </div>
           <button
             ref="closeButton"
             type="button"
-            class="flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-neutral-200 bg-white text-xl text-neutral-700 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-red-200"
+            class="flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-white/25 bg-transparent text-xl text-white hover:border-[var(--ym-d-red)] hover:bg-[var(--ym-d-red)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[var(--ym-d-focus)]"
             aria-label="إغلاق نافذة إعداد الملف"
             @click="requestClose"
           >
@@ -307,7 +307,7 @@ onBeforeUnmount(() => {
             {{ error }}
           </div>
 
-          <form id="designer-profile-form" class="space-y-6" @submit.prevent="submit">
+          <form id="designer-profile-form" class="space-y-6 rounded-[20px] border border-[var(--ym-d-border)] bg-[var(--ym-d-surface)] p-4 shadow-[var(--ym-d-shadow-sm)] sm:p-6" @submit.prevent="submit">
             <div v-if="username">
               <p class="mb-2 text-sm font-bold text-neutral-800">
                 اسم المستخدم
@@ -337,7 +337,7 @@ onBeforeUnmount(() => {
                 dir="ltr"
                 autocomplete="username"
                 :aria-invalid="Boolean(fieldError('username'))"
-                class="min-h-12 w-full rounded-xl border border-neutral-300 bg-white px-4 text-base text-neutral-900 outline-none transition focus:border-[#E21D1D] focus:ring-4 focus:ring-red-100"
+                class="min-h-12 w-full rounded-xl border border-[var(--ym-d-border-strong)] bg-[var(--ym-d-surface-warm)] px-4 text-base text-[var(--ym-d-text)] outline-none transition focus:border-[var(--ym-d-red)] focus:ring-4 focus:ring-[var(--ym-d-focus)]"
                 @input="normalizeEditableUsername"
               >
               <p class="mt-2 text-sm leading-6 text-neutral-600 sm:text-[15px]">
@@ -373,7 +373,7 @@ onBeforeUnmount(() => {
                 maxlength="120"
                 autocomplete="name"
                 :aria-invalid="Boolean(fieldError('display_name'))"
-                class="min-h-12 w-full rounded-xl border border-neutral-300 bg-white px-4 text-base text-neutral-900 outline-none transition focus:border-[#E21D1D] focus:ring-4 focus:ring-red-100"
+                class="min-h-12 w-full rounded-xl border border-[var(--ym-d-border-strong)] bg-[var(--ym-d-surface-warm)] px-4 text-base text-[var(--ym-d-text)] outline-none transition focus:border-[var(--ym-d-red)] focus:ring-4 focus:ring-[var(--ym-d-focus)]"
               >
               <p v-if="fieldError('display_name')" class="mt-2 text-sm font-semibold text-[#B42318]">
                 {{ fieldError('display_name') }}
@@ -389,7 +389,7 @@ onBeforeUnmount(() => {
                 v-model="form.professional_title"
                 type="text"
                 maxlength="160"
-                class="min-h-12 w-full rounded-xl border border-neutral-300 bg-white px-4 text-base text-neutral-900 outline-none transition focus:border-[#E21D1D] focus:ring-4 focus:ring-red-100"
+                class="min-h-12 w-full rounded-xl border border-[var(--ym-d-border-strong)] bg-[var(--ym-d-surface-warm)] px-4 text-base text-[var(--ym-d-text)] outline-none transition focus:border-[var(--ym-d-red)] focus:ring-4 focus:ring-[var(--ym-d-focus)]"
               >
               <p v-if="fieldError('professional_title')" class="mt-2 text-sm font-semibold text-[#B42318]">
                 {{ fieldError('professional_title') }}
@@ -405,7 +405,7 @@ onBeforeUnmount(() => {
                 v-model="form.primary_specialty"
                 type="text"
                 maxlength="120"
-                class="min-h-12 w-full rounded-xl border border-neutral-300 bg-white px-4 text-base text-neutral-900 outline-none transition focus:border-[#E21D1D] focus:ring-4 focus:ring-red-100"
+                class="min-h-12 w-full rounded-xl border border-[var(--ym-d-border-strong)] bg-[var(--ym-d-surface-warm)] px-4 text-base text-[var(--ym-d-text)] outline-none transition focus:border-[var(--ym-d-red)] focus:ring-4 focus:ring-[var(--ym-d-focus)]"
               >
               <p v-if="fieldError('primary_specialty')" class="mt-2 text-sm font-semibold text-[#B42318]">
                 {{ fieldError('primary_specialty') }}
@@ -422,7 +422,7 @@ onBeforeUnmount(() => {
                 v-model="form.bio"
                 rows="6"
                 maxlength="800"
-                class="w-full resize-y rounded-xl border border-neutral-300 bg-white px-4 py-3 text-base leading-7 text-neutral-900 outline-none transition focus:border-[#E21D1D] focus:ring-4 focus:ring-red-100"
+                class="w-full resize-y rounded-xl border border-[var(--ym-d-border-strong)] bg-[var(--ym-d-surface-warm)] px-4 py-3 text-base leading-7 text-[var(--ym-d-text)] outline-none transition focus:border-[var(--ym-d-red)] focus:ring-4 focus:ring-[var(--ym-d-focus)]"
               />
               <p v-if="fieldError('bio')" class="mt-2 text-sm font-semibold text-[#B42318]">
                 {{ fieldError('bio') }}
@@ -436,7 +436,7 @@ onBeforeUnmount(() => {
               <select
                 id="designer-availability"
                 v-model="form.availability"
-                class="min-h-12 w-full rounded-xl border border-neutral-300 bg-white px-4 text-base text-neutral-900 outline-none transition focus:border-[#E21D1D] focus:ring-4 focus:ring-red-100"
+                class="min-h-12 w-full rounded-xl border border-[var(--ym-d-border-strong)] bg-[var(--ym-d-surface-warm)] px-4 text-base text-[var(--ym-d-text)] outline-none transition focus:border-[var(--ym-d-red)] focus:ring-4 focus:ring-[var(--ym-d-focus)]"
               >
                 <option value="available">متاح للعمل</option>
                 <option value="partially_available">متاح جزئيًا</option>
@@ -449,7 +449,7 @@ onBeforeUnmount(() => {
           </form>
         </div>
 
-        <footer class="shrink-0 border-t border-neutral-200 bg-white px-5 py-4 sm:px-8">
+        <footer class="shrink-0 border-t border-[var(--ym-d-border)] bg-[var(--ym-d-surface)] px-5 py-4 sm:px-8">
           <div class="flex flex-col gap-3 sm:flex-row sm:justify-start">
             <button
               type="submit"
@@ -461,7 +461,7 @@ onBeforeUnmount(() => {
             </button>
             <button
               type="button"
-              class="min-h-12 rounded-xl border border-neutral-300 bg-white px-6 font-bold text-neutral-800 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-neutral-200"
+              class="min-h-12 rounded-xl border border-[var(--ym-d-border-strong)] bg-white px-6 font-bold text-[var(--ym-d-charcoal)] hover:bg-[var(--ym-d-surface-muted)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[var(--ym-d-focus)]"
               @click="requestClose"
             >
               إلغاء

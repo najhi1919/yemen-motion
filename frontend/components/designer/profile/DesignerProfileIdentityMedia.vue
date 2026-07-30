@@ -9,6 +9,10 @@ const emit = defineEmits<{
   avatarSource: [source: string | null]
 }>()
 
+const designerHeaderAvatarSource = useState<string | null>(
+  'ym-designer-header-avatar-source',
+  () => null,
+)
 const currentProfile = ref(props.profile)
 const dialogOpen = ref(false)
 const dialogMode = ref<'avatar' | 'cover'>('avatar')
@@ -66,6 +70,7 @@ watch(
 watch(
   () => currentProfile.value.identity_media.avatar_url,
   async url => {
+    designerHeaderAvatarSource.value = url || null
     await refreshMediaObjectUrl(url, avatarObjectUrl)
     emit('avatarSource', avatarObjectUrl.value)
   },
@@ -144,14 +149,14 @@ const handleFocalSave = async (x: number, y: number) => {
 
 <template>
   <section
-    class="overflow-hidden rounded-[20px] border border-[rgba(17,17,17,0.11)] bg-white shadow-[0_8px_24px_rgba(17,17,17,0.05)]"
+    class="overflow-hidden rounded-[20px] border border-[var(--ym-d-border)] bg-[var(--ym-d-surface)] shadow-[var(--ym-d-shadow-sm)]"
     aria-labelledby="identity-media-title"
   >
     <h2 id="identity-media-title" class="sr-only">
       الصورة الشخصية وغلاف المصمم
     </h2>
 
-    <div class="relative h-[170px] overflow-hidden bg-[#F7F7F7] sm:h-[220px] lg:h-[240px]">
+    <div class="relative h-[170px] overflow-hidden border-t-4 border-[var(--ym-d-red)] bg-[var(--ym-d-surface-muted)] sm:h-[220px] lg:h-[240px]">
       <img
         v-if="coverObjectUrl"
         :src="coverObjectUrl"
@@ -161,7 +166,7 @@ const handleFocalSave = async (x: number, y: number) => {
       >
       <div
         v-else
-        class="flex h-full items-center justify-center bg-gradient-to-bl from-[#F3F3F3] via-[#FAFAFA] to-white"
+        class="flex h-full items-center justify-center bg-gradient-to-bl from-[var(--ym-d-surface-muted)] via-[var(--ym-d-surface-warm)] to-white"
       >
         <img
           src="/logo.svg"
@@ -177,10 +182,7 @@ const handleFocalSave = async (x: number, y: number) => {
 
       <button
         type="button"
-        class="absolute left-4 top-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-red-200 motion-reduce:transition-none sm:left-5 sm:top-5"
-        :class="coverObjectUrl
-          ? 'border-white/30 bg-[rgba(17,17,17,0.76)] text-white backdrop-blur-sm hover:bg-[rgba(17,17,17,0.9)]'
-          : 'border-[#E21D1D] bg-[#E21D1D] text-white hover:bg-[#C91414]'"
+        class="absolute left-4 top-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[var(--ym-d-red)] bg-[var(--ym-d-red)] px-4 text-sm font-bold text-white transition hover:border-[var(--ym-d-red-strong)] hover:bg-[var(--ym-d-red-strong)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[var(--ym-d-focus)] motion-reduce:transition-none sm:left-5 sm:top-5"
         @click="openDialog('cover')"
       >
         <svg
@@ -197,9 +199,9 @@ const handleFocalSave = async (x: number, y: number) => {
       </button>
     </div>
 
-    <div class="relative px-5 pb-5 pt-[72px] sm:px-7 sm:pb-6 md:pt-5">
-      <div class="absolute -top-14 right-5 sm:-top-16 sm:right-7">
-        <div class="h-28 w-28 overflow-hidden rounded-full border-4 border-white bg-[#F4F4F4] shadow-[0_6px_18px_rgba(17,17,17,0.13)] sm:h-32 sm:w-32">
+    <div class="ym-profile-identity-band relative border-t-2 border-[var(--ym-d-red)] bg-[var(--ym-d-charcoal)] px-5 pb-4 pt-[68px] text-white sm:px-7 sm:pb-5 md:pt-4">
+      <div class="ym-profile-avatar-overlap absolute -top-14 right-5 z-30 sm:-top-16 sm:right-7">
+        <div class="h-28 w-28 overflow-hidden rounded-full border-4 border-white bg-[var(--ym-d-surface-muted)] shadow-[0_0_0_3px_var(--ym-d-red-border),0_8px_22px_rgba(17,17,17,0.22)] sm:h-32 sm:w-32">
           <img
             v-if="avatarObjectUrl"
             :src="avatarObjectUrl"
@@ -212,29 +214,27 @@ const handleFocalSave = async (x: number, y: number) => {
         </div>
       </div>
 
-      <div class="flex flex-col gap-4 md:inline-flex md:min-h-24 md:items-start md:justify-center md:gap-3 md:pr-[148px]">
+      <div class="flex min-h-24 flex-col justify-center gap-3 md:pr-[156px]">
         <div class="min-w-0">
-          <p class="break-words text-2xl font-extrabold leading-tight text-[#151515] sm:text-3xl">
+          <p class="break-words text-2xl font-extrabold leading-tight text-white sm:text-3xl">
             {{ currentProfile.display_name }}
           </p>
           <p
             v-if="currentProfile.professional_title"
-            class="mt-1.5 break-words text-[15px] font-medium text-[#666666] sm:text-base"
+            class="mt-1.5 break-words text-[15px] font-medium text-white/75 sm:text-base"
           >
             {{ currentProfile.professional_title }}
           </p>
+          <div class="ym-profile-identity-actions mt-3">
+            <button
+              type="button"
+              class="inline-flex min-h-11 w-full shrink-0 items-center justify-center rounded-xl border border-[var(--ym-d-red)] bg-[var(--ym-d-red)] px-5 text-sm font-bold text-white transition hover:border-[var(--ym-d-red-strong)] hover:bg-[var(--ym-d-red-strong)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[var(--ym-d-focus)] motion-reduce:transition-none md:w-auto"
+              @click="openDialog('avatar')"
+            >
+              {{ avatarObjectUrl ? 'تغيير الصورة' : 'إضافة صورة شخصية' }}
+            </button>
+          </div>
         </div>
-
-        <button
-          type="button"
-          class="inline-flex min-h-11 w-full shrink-0 items-center justify-center rounded-xl border px-5 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-red-200 motion-reduce:transition-none md:w-auto"
-          :class="avatarObjectUrl
-            ? 'border-[#E21D1D] bg-white text-[#B81414] hover:bg-[rgba(226,29,29,0.07)]'
-            : 'border-[#E21D1D] bg-[#E21D1D] text-white hover:bg-[#C91414]'"
-          @click="openDialog('avatar')"
-        >
-          {{ avatarObjectUrl ? 'تغيير الصورة' : 'إضافة صورة شخصية' }}
-        </button>
       </div>
 
       <p
@@ -269,3 +269,23 @@ const handleFocalSave = async (x: number, y: number) => {
     />
   </section>
 </template>
+
+<style scoped>
+.ym-profile-identity-band {
+  isolation: isolate;
+  background:
+    linear-gradient(118deg, transparent 62%, rgba(255, 255, 255, 0.04) 62% 62.7%, transparent 62.7%),
+    linear-gradient(62deg, transparent 83%, rgba(226, 29, 29, 0.08) 83% 84%, transparent 84%),
+    radial-gradient(circle at 8% 100%, rgba(226, 29, 29, 0.08), transparent 28%),
+    var(--ym-d-charcoal);
+  overflow: visible;
+}
+
+.ym-profile-avatar-overlap {
+  pointer-events: none;
+}
+
+.ym-profile-avatar-overlap > * {
+  pointer-events: auto;
+}
+</style>

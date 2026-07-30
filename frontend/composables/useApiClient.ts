@@ -7,14 +7,24 @@ export function useApiClient() {
   const baseUrl = (config.public.apiBaseUrl as string) || 'http://127.0.0.1:8000/api'
 
   async function apiFetch<T = unknown>(endpoint: string, options: FetchOptions<'json'> = {}): Promise<T> {
-    const headers: Record<string, string> = {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      ...(options.headers as Record<string, string> | undefined)
+    const headers = new Headers(options.headers)
+
+    if (!headers.has('Accept')) {
+      headers.set('Accept', 'application/json')
+    }
+
+    const isFormData =
+      typeof FormData !== 'undefined'
+      && options.body instanceof FormData
+
+    if (isFormData) {
+      headers.delete('Content-Type')
+    } else if (!headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json')
     }
 
     if (tokenCookie.value) {
-      headers.Authorization = `Bearer ${tokenCookie.value}`
+      headers.set('Authorization', `Bearer ${tokenCookie.value}`)
     }
 
     try {
