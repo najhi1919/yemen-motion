@@ -1,6 +1,7 @@
 export type DesignerWorkGroup = 'all' | 'draft' | 'review' | 'changes' | 'published' | 'closed'
 export type DesignerWorkSort = 'updated_at' | 'created_at' | 'title'
 export type DesignerWorkDirection = 'asc' | 'desc'
+export type DesignerWorkCoverDisplayMode = 'fill' | 'fit'
 
 export interface DesignerWorkCoverMedia {
   id: number
@@ -29,6 +30,13 @@ export interface DesignerWork {
   updated_at: string
   category: DesignerWorkTaxonomySummary | null
   tags: DesignerWorkTaxonomySummary[]
+  cover_presentation: {
+    display_mode: DesignerWorkCoverDisplayMode
+    focal_point: {
+      x: number
+      y: number
+    }
+  }
   cover_media: DesignerWorkCoverMedia | null
 }
 

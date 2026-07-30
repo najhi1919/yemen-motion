@@ -7,6 +7,7 @@ use App\Models\Work;
 use App\Models\WorkMedia;
 use App\Models\WorkCategory;
 use App\Models\WorkTag;
+use Database\Seeders\AuthRolesSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
@@ -25,6 +26,7 @@ class DesignerWorksIndexTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seed(AuthRolesSeeder::class);
         $this->disk = 'works_private';
         Storage::fake($this->disk);
         $this->designer = $this->userWithRole('designer');
@@ -66,7 +68,7 @@ class DesignerWorksIndexTest extends TestCase
 
     public function test_multi_role_designer_still_sees_only_owned_works(): void
     {
-        $this->attachRole($this->designer, 'super_admin');
+        $this->attachRole($this->designer, 'super-admin');
         $owned = $this->work($this->designer, Work::STATUS_DRAFT);
         $this->work($this->userWithRole('designer'), Work::STATUS_DRAFT);
         Sanctum::actingAs($this->designer);
@@ -336,6 +338,50 @@ class DesignerWorksIndexTest extends TestCase
                 ->assertJsonCount(1, 'data')
                 ->assertJsonPath('data.0.id', $owned->id);
         }
+    }
+
+    public function test_resource_exposes_nested_cover_presentation_without_raw_fields(): void
+    {
+        $work = $this->work($this->designer, Work::STATUS_DRAFT, [
+            'cover_display_mode' => Work::COVER_DISPLAY_MODE_FIT,
+            'cover_focal_x' => 24,
+            'cover_focal_y' => 76,
+        ]);
+        Sanctum::actingAs($this->designer);
+
+        $this->getJson('/api/designer/works')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $work->id)
+            ->assertJsonPath('data.0.cover_presentation.display_mode', 'fit')
+            ->assertJsonPath('data.0.cover_presentation.focal_point.x', 24)
+            ->assertJsonPath('data.0.cover_presentation.focal_point.y', 76)
+            ->assertJsonMissingPath('data.0.cover_display_mode')
+            ->assertJsonMissingPath('data.0.cover_focal_x')
+            ->assertJsonMissingPath('data.0.cover_focal_y')
+            ->assertJsonStructure([
+                'summary',
+                'meta',
+                'applied_filters',
+            ]);
+    }
+
+    public function test_cover_presentation_does_not_change_search_summary_or_pagination(): void
+    {
+        $this->work($this->designer, Work::STATUS_DRAFT, [
+            'title' => 'عرض غلاف مطابق',
+            'cover_display_mode' => Work::COVER_DISPLAY_MODE_FIT,
+        ]);
+        $this->work($this->designer, Work::STATUS_PUBLISHED, [
+            'title' => 'عمل آخر',
+        ]);
+        Sanctum::actingAs($this->designer);
+
+        $this->getJson('/api/designer/works?q=مطابق&per_page=12')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('summary.total', 2)
+            ->assertJsonPath('meta.per_page', 12)
+            ->assertJsonPath('data.0.cover_presentation.display_mode', 'fit');
     }
 
     private function assertGroup(string $group, array $included, string $excluded): void

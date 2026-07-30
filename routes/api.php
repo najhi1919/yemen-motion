@@ -38,6 +38,7 @@ use App\Http\Controllers\Api\DesignerWorksAuthoringController;
 use App\Http\Controllers\Api\DesignerWorksIndexController;
 use App\Http\Controllers\Api\DesignerWorksMetadataController;
 use App\Http\Controllers\Api\DesignerWorksMediaController;
+use App\Http\Controllers\Api\DesignerWorksPresentationController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -68,6 +69,12 @@ Route::middleware(['auth:sanctum', 'account.active'])->prefix('designer')->group
     Route::patch('/works/{work}/metadata', [DesignerWorksMetadataController::class, 'update'])
         ->whereNumber('work')
         ->name('designer.works.metadata.update');
+    Route::get('/works/{work}/presentation', [DesignerWorksPresentationController::class, 'show'])
+        ->whereNumber('work')
+        ->name('designer.works.presentation.show');
+    Route::patch('/works/{work}/presentation', [DesignerWorksPresentationController::class, 'update'])
+        ->whereNumber('work')
+        ->name('designer.works.presentation.update');
     Route::get('/works/{work}/media/{media}/content', [DesignerWorksMediaController::class, 'content'])
         ->whereNumber('work')->whereNumber('media')
         ->name('designer.works.media.content');

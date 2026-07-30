@@ -48,6 +48,21 @@ export const useDesignerWorkMedia = (workId: number) => {
   const videoCoverSaving = ref(false)
   const videoCoverError = ref<string | null>(null)
   const videoCoverOpener = ref<DesignerWorkVideoCoverDialogState['opener']>(null)
+  const presentationCover = computed(() => {
+    const coverId = work.value?.cover_media_id
+    if (!coverId) return null
+    const item = media.value.find(mediaItem => mediaItem.id === coverId)
+    if (!item) return null
+
+    return {
+      id: item.id,
+      kind: item.kind,
+      processing_status: item.processing_status,
+      url: item.kind === 'image'
+        ? imageObjectUrls.value[item.id] || null
+        : posterObjectUrls.value[item.id] || null,
+    }
+  })
   let pollTimer: ReturnType<typeof setTimeout> | null = null
 
   const revokeUrl = (url?: string | null) => {
@@ -511,6 +526,7 @@ export const useDesignerWorkMedia = (workId: number) => {
     videoCoverSaving: readonly(videoCoverSaving),
     videoCoverError: readonly(videoCoverError),
     videoCoverOpener: readonly(videoCoverOpener),
+    presentationCover,
     fetchMedia,
     uploadMedia,
     deleteMedia,

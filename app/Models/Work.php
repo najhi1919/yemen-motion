@@ -49,6 +49,15 @@ class Work extends Model
         self::MEDIA_TYPE_GALLERY,
     ];
 
+    public const COVER_DISPLAY_MODE_FILL = 'fill';
+
+    public const COVER_DISPLAY_MODE_FIT = 'fit';
+
+    public const COVER_DISPLAY_MODES = [
+        self::COVER_DISPLAY_MODE_FILL,
+        self::COVER_DISPLAY_MODE_FIT,
+    ];
+
     private const PUBLIC_CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 
     private const PUBLIC_CODE_ATTEMPTS = 20;
@@ -103,6 +112,8 @@ class Work extends Model
             'reviewer_id' => 'integer',
             'category_id' => 'integer',
             'cover_media_id' => 'integer',
+            'cover_focal_x' => 'integer',
+            'cover_focal_y' => 'integer',
             'price_amount' => 'decimal:2',
             'delivery_days' => 'integer',
             'is_featured' => 'boolean',

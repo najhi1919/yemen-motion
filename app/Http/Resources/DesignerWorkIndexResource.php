@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\WorkMedia;
+use App\Models\Work;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -37,6 +38,17 @@ class DesignerWorkIndexResource extends JsonResource
                 'name_en' => $tag->name_en,
                 'slug' => $tag->slug,
             ])->values()->all(),
+            'cover_presentation' => [
+                'display_mode' => in_array(
+                    $this->cover_display_mode,
+                    Work::COVER_DISPLAY_MODES,
+                    true,
+                ) ? $this->cover_display_mode : Work::COVER_DISPLAY_MODE_FILL,
+                'focal_point' => [
+                    'x' => max(0, min(100, (int) ($this->cover_focal_x ?? 50))),
+                    'y' => max(0, min(100, (int) ($this->cover_focal_y ?? 50))),
+                ],
+            ],
             'cover_media' => $cover ? [
                 'id' => $cover->id,
                 'kind' => $cover->kind,

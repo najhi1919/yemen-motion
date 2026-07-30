@@ -3,6 +3,7 @@ import DesignerWorkAuthoringForm from '~/components/designer/works/authoring/Des
 import DesignerWorkAuthoringHeader from '~/components/designer/works/authoring/DesignerWorkAuthoringHeader.vue'
 import DesignerWorkMediaSection from '~/components/designer/works/media/DesignerWorkMediaSection.vue'
 import DesignerWorkMetadataSection from '~/components/designer/works/metadata/DesignerWorkMetadataSection.vue'
+import DesignerWorkPresentationSection from '~/components/designer/works/presentation/DesignerWorkPresentationSection.vue'
 
 definePageMeta({ layout: 'designer' })
 useHead({ title: 'تعديل العمل' })
@@ -28,12 +29,14 @@ const {
 } = authoring
 const mediaManager = useDesignerWorkMedia(workId)
 const metadataManager = useDesignerWorkMetadata()
+const presentationManager = useDesignerWorkPresentation()
 
 await fetchWork(workId)
 
 if (work.value) {
   await metadataManager.fetchMetadata(workId)
   await mediaManager.fetchMedia()
+  await presentationManager.fetchPresentation(workId)
 }
 
 const saveBasicData = async () => {
@@ -85,6 +88,10 @@ const saveBasicData = async () => {
       />
       <DesignerWorkMetadataSection :manager="metadataManager" />
       <DesignerWorkMediaSection :manager="mediaManager" />
+      <DesignerWorkPresentationSection
+        :manager="presentationManager"
+        :media-manager="mediaManager"
+      />
     </template>
 
     <section v-else role="alert" class="rounded-[20px] border border-[var(--ym-d-red-border)] bg-[var(--ym-d-surface)] p-5 text-[#8F1111] shadow-[var(--ym-d-shadow-sm)]">

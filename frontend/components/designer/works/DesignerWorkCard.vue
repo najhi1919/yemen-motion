@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { DesignerWork } from '~/types/designer-work'
+import { getDesignerWorkCoverStyle } from '~/utils/designerWorkCoverPresentation'
 import { formatYmDate } from '~/utils/ymFormatting'
 
 const props = withDefaults(defineProps<{
@@ -11,6 +12,11 @@ const props = withDefaults(defineProps<{
 })
 const coverFailed = ref(false)
 const isList = computed(() => props.variant === 'list')
+const coverStyle = computed(() => getDesignerWorkCoverStyle(
+  props.work.cover_presentation?.display_mode,
+  props.work.cover_presentation?.focal_point,
+))
+const coverIsFit = computed(() => props.work.cover_presentation?.display_mode === 'fit')
 
 watch(() => props.coverUrl, () => {
   coverFailed.value = false
@@ -65,7 +71,9 @@ const mediaLabels: Record<string, string> = {
         :src="coverUrl"
         :alt="work.title"
         loading="lazy"
-        class="h-full w-full object-cover object-center transition-transform duration-200 group-hover:scale-[1.015] group-focus-within:scale-[1.015] motion-reduce:transform-none motion-reduce:transition-none"
+        class="h-full w-full transition-transform duration-200 motion-reduce:transform-none motion-reduce:transition-none"
+        :class="coverIsFit ? '' : 'group-hover:scale-[1.015] group-focus-within:scale-[1.015]'"
+        :style="coverStyle"
         @error="coverFailed = true"
       >
       <div v-else class="ym-work-cover-fallback flex h-full w-full items-center justify-center">
