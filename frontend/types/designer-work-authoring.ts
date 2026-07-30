@@ -13,6 +13,7 @@ export type DesignerWorkMediaType = 'image' | 'video' | 'gallery'
 
 export interface DesignerWorkAuthoring {
   id: number
+  public_code: string
   title: string
   slug: string
   summary: string | null

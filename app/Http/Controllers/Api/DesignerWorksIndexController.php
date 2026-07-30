@@ -29,7 +29,7 @@ class DesignerWorksIndexController extends Controller
             $summary[$group] = (clone $owned)->whereIn('status', $statuses)->count();
         }
 
-        $query = (clone $owned)->with('coverMedia');
+        $query = (clone $owned)->with(['coverMedia', 'category', 'tags']);
         $escapedSearch = $request->escapedSearch();
 
         if ($escapedSearch !== null) {
@@ -37,7 +37,18 @@ class DesignerWorksIndexController extends Controller
                 $pattern = '%'.$escapedSearch.'%';
                 $search->where('title', 'like', $pattern)
                     ->orWhere('summary', 'like', $pattern)
-                    ->orWhere('slug', 'like', $pattern);
+                    ->orWhere('slug', 'like', $pattern)
+                    ->orWhere('public_code', 'like', $pattern)
+                    ->orWhereHas('category', function (Builder $category) use ($pattern): void {
+                        $category->where('name_ar', 'like', $pattern)
+                            ->orWhere('name_en', 'like', $pattern)
+                            ->orWhere('slug', 'like', $pattern);
+                    })
+                    ->orWhereHas('tags', function (Builder $tags) use ($pattern): void {
+                        $tags->where('name_ar', 'like', $pattern)
+                            ->orWhere('name_en', 'like', $pattern)
+                            ->orWhere('slug', 'like', $pattern);
+                    });
             });
         }
 

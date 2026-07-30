@@ -2,6 +2,7 @@
 import DesignerWorkAuthoringForm from '~/components/designer/works/authoring/DesignerWorkAuthoringForm.vue'
 import DesignerWorkAuthoringHeader from '~/components/designer/works/authoring/DesignerWorkAuthoringHeader.vue'
 import DesignerWorkMediaSection from '~/components/designer/works/media/DesignerWorkMediaSection.vue'
+import DesignerWorkMetadataSection from '~/components/designer/works/metadata/DesignerWorkMetadataSection.vue'
 
 definePageMeta({ layout: 'designer' })
 useHead({ title: 'تعديل العمل' })
@@ -26,10 +27,12 @@ const {
   reset,
 } = authoring
 const mediaManager = useDesignerWorkMedia(workId)
+const metadataManager = useDesignerWorkMetadata()
 
 await fetchWork(workId)
 
 if (work.value) {
+  await metadataManager.fetchMetadata(workId)
   await mediaManager.fetchMedia()
 }
 
@@ -80,6 +83,7 @@ const saveBasicData = async () => {
         @save="saveBasicData"
         @reset="reset"
       />
+      <DesignerWorkMetadataSection :manager="metadataManager" />
       <DesignerWorkMediaSection :manager="mediaManager" />
     </template>
 

@@ -12,9 +12,12 @@ class DesignerWorkIndexResource extends JsonResource
     {
         $cover = $this->whenLoaded('coverMedia');
         $cover = $cover instanceof WorkMedia ? $cover : null;
+        $category = $this->relationLoaded('category') ? $this->category : null;
+        $tags = $this->relationLoaded('tags') ? $this->tags : collect();
 
         return [
             'id' => $this->id,
+            'public_code' => $this->public_code,
             'title' => $this->title,
             'slug' => $this->slug,
             'summary' => $this->summary,
@@ -22,6 +25,18 @@ class DesignerWorkIndexResource extends JsonResource
             'media_type' => $this->media_type,
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
+            'category' => $category ? [
+                'id' => (int) $category->id,
+                'name_ar' => $category->name_ar,
+                'name_en' => $category->name_en,
+                'slug' => $category->slug,
+            ] : null,
+            'tags' => $tags->map(static fn ($tag): array => [
+                'id' => (int) $tag->id,
+                'name_ar' => $tag->name_ar,
+                'name_en' => $tag->name_en,
+                'slug' => $tag->slug,
+            ])->values()->all(),
             'cover_media' => $cover ? [
                 'id' => $cover->id,
                 'kind' => $cover->kind,

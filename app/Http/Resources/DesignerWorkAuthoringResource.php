@@ -11,6 +11,7 @@ class DesignerWorkAuthoringResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'public_code' => $this->public_code,
             'title' => $this->title,
             'slug' => $this->slug,
             'summary' => $this->summary,

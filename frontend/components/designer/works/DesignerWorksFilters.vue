@@ -76,7 +76,7 @@ onBeforeUnmount(() => {
           v-model="searchValue"
           type="search"
           autocomplete="off"
-          placeholder="ابحث بعنوان العمل أو ملخصه"
+          placeholder="ابحث بالعنوان أوالرمز أوالتصنيف أوالوسوم"
           class="min-h-12 w-full rounded-xl border border-[var(--ym-d-border-strong)] bg-[var(--ym-d-page)] py-2 pl-12 pr-14 text-base text-[var(--ym-d-text)] outline-none transition duration-200 placeholder:text-[var(--ym-d-muted)] focus:border-[var(--ym-d-red)] focus:bg-white focus:ring-4 focus:ring-[var(--ym-d-focus)] motion-reduce:transition-none sm:text-sm"
         >
         <button

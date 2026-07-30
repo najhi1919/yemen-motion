@@ -205,7 +205,7 @@ class DesignerWorksAuthoringTest extends TestCase
         $work = $this->postJson('/api/designer/works', ['title' => 'Safe'])
             ->assertCreated()->json('data.work');
         $this->assertSame([
-            'id', 'title', 'slug', 'summary', 'description', 'status', 'visibility_status',
+            'id', 'public_code', 'title', 'slug', 'summary', 'description', 'status', 'visibility_status',
             'media_type', 'price_amount', 'delivery_days', 'category_id', 'cover_media_id',
             'created_at', 'updated_at',
         ], array_keys($work));
@@ -371,6 +371,47 @@ class DesignerWorksAuthoringTest extends TestCase
         $this->postJson('/api/admin/works', ['title' => 'Blocked'])->assertForbidden();
         $this->getJson("/api/admin/works/{$work->id}/authoring")->assertForbidden();
         $this->patchJson("/api/admin/works/{$work->id}", ['title' => 'Blocked'])->assertForbidden();
+    }
+
+    public function test_public_code_is_generated_unique_exposed_and_immutable(): void
+    {
+        $designer = $this->designer();
+        Sanctum::actingAs($designer);
+
+        $first = $this->postJson('/api/designer/works', ['title' => 'First'])
+            ->assertCreated();
+        $second = $this->postJson('/api/designer/works', ['title' => 'Second'])
+            ->assertCreated();
+        $firstCode = $first->json('data.work.public_code');
+        $secondCode = $second->json('data.work.public_code');
+
+        $this->assertMatchesRegularExpression(
+            '/^YM-W-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{10}$/',
+            $firstCode,
+        );
+        $this->assertNotSame($firstCode, $secondCode);
+
+        $work = Work::query()->findOrFail($first->json('data.work.id'));
+        $this->getJson("/api/designer/works/{$work->id}/authoring")
+            ->assertOk()->assertJsonPath('data.work.public_code', $firstCode);
+        $this->patchJson($this->endpoint($work), ['title' => 'Changed'])
+            ->assertOk()->assertJsonPath('data.work.public_code', $firstCode);
+        $this->assertSame($firstCode, $work->fresh()->public_code);
+    }
+
+    public function test_public_code_is_rejected_from_designer_store_and_update_payloads(): void
+    {
+        $designer = $this->designer();
+        Sanctum::actingAs($designer);
+        $this->postJson('/api/designer/works', [
+            'title' => 'Blocked',
+            'public_code' => 'YM-W-AAAAAAAAAA',
+        ])->assertUnprocessable();
+
+        $work = Work::factory()->create(['designer_id' => $designer->id]);
+        $this->patchJson($this->endpoint($work), [
+            'public_code' => 'YM-W-BBBBBBBBBB',
+        ])->assertUnprocessable();
     }
 
     private function designer(array $attributes = []): User

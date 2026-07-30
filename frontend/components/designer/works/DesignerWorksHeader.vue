@@ -33,7 +33,7 @@ defineProps<{ total: number }>()
         <span class="relative z-10 h-1 w-10 rounded-full bg-[var(--ym-d-red)]" aria-hidden="true" />
         <div class="relative z-10">
           <span class="text-sm font-bold text-white/65">إجمالي الأعمال</span>
-          <bdi class="mt-2 block text-5xl font-black leading-none text-white">{{ total.toLocaleString('ar-YE') }}</bdi>
+          <bdi class="mt-2 block text-5xl font-black leading-none text-white">{{ total.toLocaleString('ar-YE-u-nu-latn') }}</bdi>
         </div>
       </div>
     </div>

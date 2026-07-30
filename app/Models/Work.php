@@ -49,7 +49,49 @@ class Work extends Model
         self::MEDIA_TYPE_GALLERY,
     ];
 
-    protected $guarded = ['id'];
+    private const PUBLIC_CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+
+    private const PUBLIC_CODE_ATTEMPTS = 20;
+
+    protected $guarded = ['id', 'public_code'];
+
+    protected static function booted(): void
+    {
+        static::creating(function (Work $work): void {
+            if ($work->getAttribute('public_code')) {
+                return;
+            }
+
+            $work->setAttribute('public_code', self::generateUniquePublicCode());
+        });
+
+        static::updating(function (Work $work): void {
+            if ($work->isDirty('public_code') && $work->exists) {
+                $work->setAttribute('public_code', $work->getOriginal('public_code'));
+            }
+        });
+    }
+
+    private static function generateUniquePublicCode(): string
+    {
+        $maximum = strlen(self::PUBLIC_CODE_ALPHABET) - 1;
+
+        for ($attempt = 0; $attempt < self::PUBLIC_CODE_ATTEMPTS; $attempt++) {
+            $suffix = '';
+
+            for ($index = 0; $index < 10; $index++) {
+                $suffix .= self::PUBLIC_CODE_ALPHABET[random_int(0, $maximum)];
+            }
+
+            $code = 'YM-W-'.$suffix;
+
+            if (! self::query()->where('public_code', $code)->exists()) {
+                return $code;
+            }
+        }
+
+        throw new \RuntimeException('Unable to generate a unique work code.');
+    }
 
     /**
      * @return array<string, string>

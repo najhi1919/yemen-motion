@@ -5,6 +5,8 @@ namespace Tests\Feature\Designer;
 use App\Models\User;
 use App\Models\Work;
 use App\Models\WorkMedia;
+use App\Models\WorkCategory;
+use App\Models\WorkTag;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
@@ -272,6 +274,68 @@ class DesignerWorksIndexTest extends TestCase
     {
         Sanctum::actingAs($this->designer);
         $this->getJson('/api/admin/works')->assertForbidden();
+    }
+
+    public function test_index_exposes_safe_public_code_category_and_tags(): void
+    {
+        $category = WorkCategory::query()->create([
+            'name_ar' => 'تحريك',
+            'name_en' => 'Motion',
+            'slug' => 'motion',
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+        $tag = WorkTag::query()->create([
+            'name_ar' => 'هوية',
+            'name_en' => 'Branding',
+            'slug' => 'branding',
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+        $work = $this->work($this->designer, Work::STATUS_DRAFT, ['category_id' => $category->id]);
+        $work->tags()->sync([$tag->id]);
+        Sanctum::actingAs($this->designer);
+
+        $this->getJson('/api/designer/works')
+            ->assertOk()
+            ->assertJsonPath('data.0.public_code', $work->public_code)
+            ->assertJsonPath('data.0.category.name_ar', 'تحريك')
+            ->assertJsonPath('data.0.tags.0.name_en', 'Branding')
+            ->assertJsonMissingPath('data.0.category.sort_order')
+            ->assertJsonMissingPath('data.0.tags.0.pivot')
+            ->assertJsonMissingPath('data.0.tags.0.is_active');
+    }
+
+    public function test_search_supports_public_code_category_and_tag_names_with_ownership_scope(): void
+    {
+        $category = WorkCategory::query()->create([
+            'name_ar' => 'رسوم متحركة',
+            'name_en' => 'Animation',
+            'slug' => 'animation',
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+        $tag = WorkTag::query()->create([
+            'name_ar' => 'هوية بصرية',
+            'name_en' => 'Visual Branding',
+            'slug' => 'visual-branding',
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+        $owned = $this->work($this->designer, Work::STATUS_DRAFT, ['category_id' => $category->id]);
+        $owned->tags()->sync([$tag->id]);
+        $foreign = $this->work($this->userWithRole('designer'), Work::STATUS_DRAFT, [
+            'category_id' => $category->id,
+        ]);
+        $foreign->tags()->sync([$tag->id]);
+        Sanctum::actingAs($this->designer);
+
+        foreach ([$owned->public_code, 'رسوم', 'Animation', 'هوية', 'Visual'] as $query) {
+            $this->getJson('/api/designer/works?q='.urlencode($query))
+                ->assertOk()
+                ->assertJsonCount(1, 'data')
+                ->assertJsonPath('data.0.id', $owned->id);
+        }
     }
 
     private function assertGroup(string $group, array $included, string $excluded): void

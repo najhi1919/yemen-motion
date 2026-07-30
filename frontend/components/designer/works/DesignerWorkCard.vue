@@ -111,13 +111,18 @@ const mediaLabels: Record<string, string> = {
       :class="isList ? 'ym-work-list-content flex flex-col justify-center p-3 sm:p-4' : 'flex flex-col p-4 sm:p-5'"
     >
       <div class="min-w-0" :class="isList ? '' : 'flex-1'">
-        <span
-          class="inline-flex max-w-full items-center rounded-full bg-[var(--ym-d-surface-muted)] font-bold text-[var(--ym-d-charcoal)]"
-          :class="isList ? 'min-h-6 px-2 text-[11px] sm:min-h-7 sm:px-3 sm:text-xs' : 'min-h-7 px-3 text-xs'"
-          dir="auto"
-        >
-          {{ mediaLabels[work.media_type] || work.media_type }}
-        </span>
+        <div class="flex min-w-0 items-center justify-between gap-2">
+          <span
+            class="inline-flex max-w-full items-center rounded-full bg-[var(--ym-d-surface-muted)] font-bold text-[var(--ym-d-charcoal)]"
+            :class="isList ? 'min-h-6 px-2 text-[11px] sm:min-h-7 sm:px-3 sm:text-xs' : 'min-h-7 px-3 text-xs'"
+            dir="auto"
+          >
+            {{ mediaLabels[work.media_type] || work.media_type }}
+          </span>
+          <bdi dir="ltr" class="min-w-0 truncate text-xs font-semibold text-[var(--ym-d-muted)]">
+            #{{ work.public_code }}
+          </bdi>
+        </div>
         <h2
           class="mt-3 line-clamp-2 min-w-0 break-words font-black text-[var(--ym-d-text)] [overflow-wrap:anywhere]"
           :class="isList
@@ -135,6 +140,29 @@ const mediaLabels: Record<string, string> = {
         >
           {{ work.summary || 'لا يوجد ملخص' }}
         </p>
+        <div
+          class="mt-3 flex min-w-0 flex-wrap items-center gap-1.5 overflow-hidden"
+          :class="isList ? 'max-h-6' : 'min-h-7 max-h-7'"
+        >
+          <span
+            v-if="work.category"
+            class="max-w-32 truncate rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-bold text-neutral-700"
+            dir="auto"
+          >
+            {{ work.category.name_ar }}
+          </span>
+          <span
+            v-for="tag in work.tags.slice(0, 2)"
+            :key="tag.id"
+            class="max-w-32 truncate rounded-full border border-[var(--ym-d-red-border)] bg-[var(--ym-d-red-soft)] px-2.5 py-1 text-[11px] font-bold text-[var(--ym-d-red-strong)]"
+            dir="auto"
+          >
+            {{ tag.name_ar }}
+          </span>
+          <span v-if="work.tags.length > 2" class="text-xs font-bold text-[var(--ym-d-muted)]">
+            +{{ work.tags.length - 2 }}
+          </span>
+        </div>
       </div>
     </div>
 

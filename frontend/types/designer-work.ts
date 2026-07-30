@@ -10,8 +10,16 @@ export interface DesignerWorkCoverMedia {
   poster_url: string | null
 }
 
+export interface DesignerWorkTaxonomySummary {
+  id: number
+  name_ar: string
+  name_en: string | null
+  slug: string
+}
+
 export interface DesignerWork {
   id: number
+  public_code: string
   title: string
   slug: string
   summary: string | null
@@ -19,6 +27,8 @@ export interface DesignerWork {
   media_type: string
   created_at: string
   updated_at: string
+  category: DesignerWorkTaxonomySummary | null
+  tags: DesignerWorkTaxonomySummary[]
   cover_media: DesignerWorkCoverMedia | null
 }
 
