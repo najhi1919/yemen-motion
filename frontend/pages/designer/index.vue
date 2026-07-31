@@ -1,9 +1,13 @@
 <script setup lang="ts">
+import type { ComponentPublicInstance } from 'vue'
 import DesignerProfileOverview from '~/components/designer/profile/DesignerProfileOverview.vue'
+import DesignerProfilePreviewDrawer from '~/components/designer/profile/DesignerProfilePreviewDrawer.vue'
 import DesignerProfileProfessionalDrawer from '~/components/designer/profile/DesignerProfileProfessionalDrawer.vue'
 import DesignerProfileProfessionalOverview from '~/components/designer/profile/DesignerProfileProfessionalOverview.vue'
+import DesignerProfilePublicationConfirmDialog from '~/components/designer/profile/DesignerProfilePublicationConfirmDialog.vue'
+import DesignerProfilePublicationPanel from '~/components/designer/profile/DesignerProfilePublicationPanel.vue'
 import DesignerProfileSetupDrawer from '~/components/designer/profile/DesignerProfileSetupDrawer.vue'
-import type { DesignerProfilePayload } from '~/types/designer-profile'
+import type { DesignerProfile, DesignerProfilePayload } from '~/types/designer-profile'
 import type { DesignerProfileProfessionalPayload } from '~/types/designer-profile-professional'
 
 definePageMeta({
@@ -32,11 +36,50 @@ const {
   clearError: clearProfessionalError,
 } = useDesignerProfileProfessional()
 
+const {
+  publicationState,
+  previewState,
+  publicationLoading,
+  previewLoading,
+  publicationSaving,
+  publicationError,
+  previewError,
+  fetchPublication,
+  fetchPreview,
+  publishProfile,
+  hideProfile,
+  clearPreview,
+  clearErrors: clearPublicationErrors,
+} = useDesignerProfilePublication()
+
 const drawerOpen = ref(false)
 const drawerSession = ref(0)
 const successMessage = ref<string | null>(null)
 const professionalDrawerOpen = ref(false)
+const previewDrawerOpen = ref(false)
+const confirmationOpen = ref(false)
+const confirmationAction = ref<'publish' | 'hide'>('publish')
+const confirmationRepublish = ref(false)
+const publicationSuccessMessage = ref<string | null>(null)
+const profileOverview = ref<ComponentPublicInstance | null>(null)
 const authStore = useAuthStore()
+let successTimer: ReturnType<typeof window.setTimeout> | null = null
+let publicationSuccessTimer: ReturnType<typeof window.setTimeout> | null = null
+let mediaObserver: MutationObserver | null = null
+
+const synchronizedProfile = computed<DesignerProfile | null>(() => {
+  const profile = profileState.value?.profile
+  const publication = publicationState.value?.publication
+
+  if (!profile) return null
+  if (!publication) return profile
+
+  return {
+    ...profile,
+    publication_status: publication.status,
+    published_at: publication.published_at,
+  }
+})
 
 function openProfileEditor(): void {
   drawerSession.value += 1
@@ -47,7 +90,9 @@ async function loadProfile(): Promise<void> {
   try {
     const loaded = await fetchProfile()
     if (loaded.profile) {
-      try { await fetchProfessional() } catch { /* Professional failure remains isolated. */ }
+      await Promise.allSettled([fetchProfessional(), fetchPublication()])
+      await nextTick()
+      observeMediaSuccess()
     }
   } catch {
     // The composable exposes the reader-facing error state.
@@ -58,11 +103,12 @@ async function handleSave(payload: DesignerProfilePayload): Promise<void> {
   try {
     const saved = await saveProfile(payload)
     if (saved.profile) {
-      try { await fetchProfessional() } catch { /* Basic profile remains usable. */ }
+      await Promise.allSettled([fetchProfessional(), fetchPublication()])
     }
     drawerOpen.value = false
     successMessage.value = 'تم حفظ بيانات ملفك بنجاح.'
-    window.setTimeout(() => {
+    if (successTimer) window.clearTimeout(successTimer)
+    successTimer = window.setTimeout(() => {
       successMessage.value = null
     }, 3200)
   } catch {
@@ -79,13 +125,104 @@ async function handleProfessionalSave(payload: DesignerProfileProfessionalPayloa
   try {
     await saveProfessional(payload)
     await fetchProfile()
+    try { await fetchPublication() } catch { /* Professional save remains successful. */ }
     professionalDrawerOpen.value = false
     successMessage.value = 'تم حفظ بياناتك المهنية بنجاح.'
-    window.setTimeout(() => { successMessage.value = null }, 3200)
+    if (successTimer) window.clearTimeout(successTimer)
+    successTimer = window.setTimeout(() => { successMessage.value = null }, 3200)
   } catch {
     // Keep the professional drawer open with the safe API error.
   }
 }
+
+function showPublicationSuccess(message: string): void {
+  publicationSuccessMessage.value = message
+  if (publicationSuccessTimer) window.clearTimeout(publicationSuccessTimer)
+  publicationSuccessTimer = window.setTimeout(() => {
+    publicationSuccessMessage.value = null
+  }, 4200)
+}
+
+async function retryPublication(): Promise<void> {
+  try { await fetchPublication() } catch { /* Safe error state is shown in the panel. */ }
+}
+
+function openAvatarEditor(): void {
+  const root = profileOverview.value?.$el as HTMLElement | undefined
+  const avatarButton = root?.querySelector<HTMLButtonElement>('.ym-profile-identity-actions button')
+  avatarButton?.click()
+}
+
+function observeMediaSuccess(): void {
+  mediaObserver?.disconnect()
+  const root = profileOverview.value?.$el as HTMLElement | undefined
+  const identityBand = root?.querySelector<HTMLElement>('.ym-profile-identity-band')
+  if (!identityBand) return
+
+  mediaObserver = new MutationObserver(mutations => {
+    const hasNewFeedback = mutations.some(mutation =>
+      Array.from(mutation.addedNodes).some(node =>
+        node instanceof HTMLElement
+        && node.matches('[role="status"]')
+        && (node.textContent?.includes('تم حفظ الوسائط') || node.textContent?.includes('تم حذف الوسائط')),
+      ),
+    )
+
+    if (hasNewFeedback) void retryPublication()
+  })
+  mediaObserver.observe(identityBand, { childList: true, subtree: true })
+}
+
+async function openPreview(): Promise<void> {
+  clearPublicationErrors()
+  clearPreview()
+  previewDrawerOpen.value = true
+  try { await fetchPreview() } catch { /* Preview drawer owns its error state. */ }
+}
+
+async function retryPreview(): Promise<void> {
+  try { await fetchPreview() } catch { /* Preview drawer owns its error state. */ }
+}
+
+function closePreview(): void {
+  previewDrawerOpen.value = false
+  clearPreview()
+}
+
+function openConfirmation(action: 'publish' | 'hide'): void {
+  clearPublicationErrors()
+  confirmationAction.value = action
+  confirmationRepublish.value = action === 'publish'
+    && publicationState.value?.publication.status === 'hidden'
+  confirmationOpen.value = true
+}
+
+async function confirmPublicationAction(): Promise<void> {
+  const expectedUpdatedAt = publicationState.value?.expected_updated_at
+  if (!expectedUpdatedAt || publicationSaving.value) return
+
+  const wasRepublish = confirmationRepublish.value
+  const succeeded = confirmationAction.value === 'publish'
+    ? await publishProfile(expectedUpdatedAt)
+    : await hideProfile(expectedUpdatedAt)
+
+  if (!succeeded) return
+  confirmationOpen.value = false
+
+  if (confirmationAction.value === 'hide') {
+    showPublicationSuccess('تم إخفاء ملفك بنجاح، ولم تُحذف بياناتك.')
+  } else if (wasRepublish) {
+    showPublicationSuccess('تمت إعادة نشر ملفك بنجاح.')
+  } else {
+    showPublicationSuccess('تم نشر حالة ملفك بنجاح.')
+  }
+}
+
+onBeforeUnmount(() => {
+  mediaObserver?.disconnect()
+  if (successTimer) window.clearTimeout(successTimer)
+  if (publicationSuccessTimer) window.clearTimeout(publicationSuccessTimer)
+})
 
 onMounted(async () => {
   if (!authStore.isInitialized) {
@@ -141,11 +278,27 @@ onMounted(async () => {
       </section>
 
       <DesignerProfileOverview
-        v-else-if="profileState?.profile"
-        :profile="profileState.profile"
+        v-else-if="synchronizedProfile"
+        ref="profileOverview"
+        :profile="synchronizedProfile"
         :username="profileState.username"
         :completion="profileState.basic_completion"
         @edit="openProfileEditor"
+      />
+
+      <DesignerProfilePublicationPanel
+        v-if="profileState?.profile"
+        :state="publicationState"
+        :loading="publicationLoading"
+        :error="publicationError"
+        :success-message="publicationSuccessMessage"
+        @retry="retryPublication"
+        @preview="openPreview"
+        @publish="openConfirmation('publish')"
+        @hide="openConfirmation('hide')"
+        @edit-basic="openProfileEditor"
+        @edit-avatar="openAvatarEditor"
+        @edit-professional="openProfessionalEditor"
       />
 
       <DesignerProfileProfessionalOverview
@@ -214,7 +367,7 @@ onMounted(async () => {
     <DesignerProfileSetupDrawer
       :key="drawerSession"
       :open="drawerOpen"
-      :profile="profileState?.profile || null"
+      :profile="synchronizedProfile"
       :username="profileState?.username || null"
       :saving="saving"
       :error="error"
@@ -232,6 +385,23 @@ onMounted(async () => {
       :validation-errors="professionalValidationErrors"
       @close="professionalDrawerOpen = false"
       @save="handleProfessionalSave"
+    />
+    <DesignerProfilePreviewDrawer
+      :open="previewDrawerOpen"
+      :preview="previewState"
+      :loading="previewLoading"
+      :error="previewError"
+      @close="closePreview"
+      @retry="retryPreview"
+    />
+    <DesignerProfilePublicationConfirmDialog
+      :open="confirmationOpen"
+      :action="confirmationAction"
+      :republish="confirmationRepublish"
+      :saving="publicationSaving"
+      :error="publicationError"
+      @close="confirmationOpen = false"
+      @confirm="confirmPublicationAction"
     />
   </main>
 </template>

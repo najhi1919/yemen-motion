@@ -1,47 +1,48 @@
 <?php
 
-use App\Http\Controllers\Api\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Api\Admin\Analytics\UserAnalyticsController as AdminUserAnalyticsController;
 use App\Http\Controllers\Api\Admin\AuditEventController as AdminAuditEventController;
-use App\Http\Controllers\Api\Admin\RoleController as AdminRoleController;
 use App\Http\Controllers\Api\Admin\PermissionController as AdminPermissionController;
 use App\Http\Controllers\Api\Admin\Reports\UserReportController as AdminUserReportController;
+use App\Http\Controllers\Api\Admin\RoleController as AdminRoleController;
 use App\Http\Controllers\Api\Admin\StaffController as AdminStaffController;
+use App\Http\Controllers\Api\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Api\Admin\WorksAccessController as AdminWorksAccessController;
 use App\Http\Controllers\Api\Admin\WorksActivityController as AdminWorksActivityController;
 use App\Http\Controllers\Api\Admin\WorksAuthoringController as AdminWorksAuthoringController;
 use App\Http\Controllers\Api\Admin\WorksIndexController as AdminWorksIndexController;
 use App\Http\Controllers\Api\Admin\WorksMediaController as AdminWorksMediaController;
 use App\Http\Controllers\Api\Admin\WorksOverviewController as AdminWorksOverviewController;
-use App\Http\Controllers\Api\Admin\WorksReportsController as AdminWorksReportsController;
 use App\Http\Controllers\Api\Admin\WorksReportActionController as AdminWorksReportActionController;
-use App\Http\Controllers\Api\Admin\WorksTrackedReportsController as AdminWorksTrackedReportsController;
+use App\Http\Controllers\Api\Admin\WorksReportsController as AdminWorksReportsController;
 use App\Http\Controllers\Api\Admin\WorksReviewActionController as AdminWorksReviewActionController;
 use App\Http\Controllers\Api\Admin\WorksReviewQueueController as AdminWorksReviewQueueController;
 use App\Http\Controllers\Api\Admin\WorksReviewSubmissionController as AdminWorksReviewSubmissionController;
 use App\Http\Controllers\Api\Admin\WorksSettingsController as AdminWorksSettingsController;
 use App\Http\Controllers\Api\Admin\WorksShowController as AdminWorksShowController;
+use App\Http\Controllers\Api\Admin\WorksTaxonomyAssignmentController as AdminWorksTaxonomyAssignmentController;
 use App\Http\Controllers\Api\Admin\WorksTaxonomyCatalogController as AdminWorksTaxonomyCatalogController;
 use App\Http\Controllers\Api\Admin\WorksTaxonomyCategoryActionController as AdminWorksTaxonomyCategoryActionController;
 use App\Http\Controllers\Api\Admin\WorksTaxonomyController as AdminWorksTaxonomyController;
 use App\Http\Controllers\Api\Admin\WorksTaxonomyTagActionController as AdminWorksTaxonomyTagActionController;
-use App\Http\Controllers\Api\Admin\WorksTaxonomyAssignmentController as AdminWorksTaxonomyAssignmentController;
 use App\Http\Controllers\Api\Admin\WorksTaxonomyTagMergeController as AdminWorksTaxonomyTagMergeController;
+use App\Http\Controllers\Api\Admin\WorksTrackedReportsController as AdminWorksTrackedReportsController;
 use App\Http\Controllers\Api\Admin\WorksVisibilityActionController as AdminWorksVisibilityActionController;
 use App\Http\Controllers\Api\Admin\WorksVisibilityController as AdminWorksVisibilityController;
 use App\Http\Controllers\Api\Audit\PageViewAuditController;
 use App\Http\Controllers\Api\AuthApiController;
+use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DashboardSearchController;
 use App\Http\Controllers\Api\DesignerProfileController;
 use App\Http\Controllers\Api\DesignerProfileMediaController;
 use App\Http\Controllers\Api\DesignerProfileProfessionalController;
-use App\Http\Controllers\Api\DesignerWorksAuthoringController;
+use App\Http\Controllers\Api\DesignerProfilePublicationController;
 use App\Http\Controllers\Api\DesignerWorksArchiveController;
+use App\Http\Controllers\Api\DesignerWorksAuthoringController;
 use App\Http\Controllers\Api\DesignerWorksIndexController;
-use App\Http\Controllers\Api\DesignerWorksMetadataController;
 use App\Http\Controllers\Api\DesignerWorksMediaController;
+use App\Http\Controllers\Api\DesignerWorksMetadataController;
 use App\Http\Controllers\Api\DesignerWorksPresentationController;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
@@ -88,49 +89,57 @@ Route::middleware(['auth:sanctum', 'account.active'])->prefix('designer')->group
         ->name('designer.works.media.content');
     Route::get('/works/{work}/media/{media}/poster', [DesignerWorksMediaController::class, 'poster'])
         ->whereNumber('work')->whereNumber('media')
-            ->name('designer.works.media.poster');
-        Route::get('/works/{work}/media', [DesignerWorksMediaController::class, 'index'])
-            ->whereNumber('work')->name('designer.works.media.index');
-        Route::post('/works/{work}/media', [DesignerWorksMediaController::class, 'store'])
-            ->whereNumber('work')->name('designer.works.media.store');
-        Route::patch('/works/{work}/media/order', [DesignerWorksMediaController::class, 'reorder'])
-            ->whereNumber('work')->name('designer.works.media.reorder');
-        Route::patch('/works/{work}/media/cover', [DesignerWorksMediaController::class, 'updateCover'])
-            ->whereNumber('work')->name('designer.works.media.cover');
-        Route::post('/works/{work}/media/{media}/retry-processing', [DesignerWorksMediaController::class, 'retryProcessing'])
-            ->whereNumber('work')->whereNumber('media')->name('designer.works.media.retry');
-        Route::patch('/works/{work}/media/{media}/video-cover/current', [DesignerWorksMediaController::class, 'useCurrentVideoCover'])
-            ->whereNumber('work')->whereNumber('media')->name('designer.works.media.video-cover.current');
-        Route::patch('/works/{work}/media/{media}/video-cover/frame', [DesignerWorksMediaController::class, 'selectVideoCoverFrame'])
-            ->whereNumber('work')->whereNumber('media')->name('designer.works.media.video-cover.frame');
-        Route::post('/works/{work}/media/{media}/video-cover/upload', [DesignerWorksMediaController::class, 'uploadVideoCover'])
-            ->whereNumber('work')->whereNumber('media')->name('designer.works.media.video-cover.upload');
-        Route::delete('/works/{work}/media/{media}', [DesignerWorksMediaController::class, 'destroy'])
-            ->whereNumber('work')->whereNumber('media')->name('designer.works.media.destroy');
+        ->name('designer.works.media.poster');
+    Route::get('/works/{work}/media', [DesignerWorksMediaController::class, 'index'])
+        ->whereNumber('work')->name('designer.works.media.index');
+    Route::post('/works/{work}/media', [DesignerWorksMediaController::class, 'store'])
+        ->whereNumber('work')->name('designer.works.media.store');
+    Route::patch('/works/{work}/media/order', [DesignerWorksMediaController::class, 'reorder'])
+        ->whereNumber('work')->name('designer.works.media.reorder');
+    Route::patch('/works/{work}/media/cover', [DesignerWorksMediaController::class, 'updateCover'])
+        ->whereNumber('work')->name('designer.works.media.cover');
+    Route::post('/works/{work}/media/{media}/retry-processing', [DesignerWorksMediaController::class, 'retryProcessing'])
+        ->whereNumber('work')->whereNumber('media')->name('designer.works.media.retry');
+    Route::patch('/works/{work}/media/{media}/video-cover/current', [DesignerWorksMediaController::class, 'useCurrentVideoCover'])
+        ->whereNumber('work')->whereNumber('media')->name('designer.works.media.video-cover.current');
+    Route::patch('/works/{work}/media/{media}/video-cover/frame', [DesignerWorksMediaController::class, 'selectVideoCoverFrame'])
+        ->whereNumber('work')->whereNumber('media')->name('designer.works.media.video-cover.frame');
+    Route::post('/works/{work}/media/{media}/video-cover/upload', [DesignerWorksMediaController::class, 'uploadVideoCover'])
+        ->whereNumber('work')->whereNumber('media')->name('designer.works.media.video-cover.upload');
+    Route::delete('/works/{work}/media/{media}', [DesignerWorksMediaController::class, 'destroy'])
+        ->whereNumber('work')->whereNumber('media')->name('designer.works.media.destroy');
     Route::get('/profile/username-availability', [DesignerProfileController::class, 'usernameAvailability'])
         ->middleware('throttle:30,1');
-        Route::get('/profile', [DesignerProfileController::class, 'show']);
-        Route::put('/profile', [DesignerProfileController::class, 'upsert']);
-        Route::get('/profile/professional', [DesignerProfileProfessionalController::class, 'show'])
-            ->name('designer.profile.professional.show');
-        Route::put('/profile/professional', [DesignerProfileProfessionalController::class, 'update'])
-            ->name('designer.profile.professional.update');
-        Route::get('/profile/avatar/content', [DesignerProfileMediaController::class, 'avatarContent']);
-        Route::post('/profile/avatar', [DesignerProfileMediaController::class, 'storeAvatar']);
-        Route::delete('/profile/avatar', [DesignerProfileMediaController::class, 'destroyAvatar']);
-        Route::get('/profile/cover/content', [DesignerProfileMediaController::class, 'coverContent']);
-        Route::post('/profile/cover', [DesignerProfileMediaController::class, 'storeCover']);
-        Route::patch('/profile/cover/focal-point', [DesignerProfileMediaController::class, 'updateCoverFocalPoint']);
-        Route::delete('/profile/cover', [DesignerProfileMediaController::class, 'destroyCover']);
+    Route::get('/profile', [DesignerProfileController::class, 'show']);
+    Route::put('/profile', [DesignerProfileController::class, 'upsert']);
+    Route::get('/profile/professional', [DesignerProfileProfessionalController::class, 'show'])
+        ->name('designer.profile.professional.show');
+    Route::put('/profile/professional', [DesignerProfileProfessionalController::class, 'update'])
+        ->name('designer.profile.professional.update');
+    Route::get('/profile/publication', [DesignerProfilePublicationController::class, 'show'])
+        ->name('designer.profile.publication.show');
+    Route::get('/profile/publication/preview', [DesignerProfilePublicationController::class, 'preview'])
+        ->name('designer.profile.publication.preview');
+    Route::patch('/profile/publication/publish', [DesignerProfilePublicationController::class, 'publish'])
+        ->name('designer.profile.publication.publish');
+    Route::patch('/profile/publication/hide', [DesignerProfilePublicationController::class, 'hide'])
+        ->name('designer.profile.publication.hide');
+    Route::get('/profile/avatar/content', [DesignerProfileMediaController::class, 'avatarContent']);
+    Route::post('/profile/avatar', [DesignerProfileMediaController::class, 'storeAvatar']);
+    Route::delete('/profile/avatar', [DesignerProfileMediaController::class, 'destroyAvatar']);
+    Route::get('/profile/cover/content', [DesignerProfileMediaController::class, 'coverContent']);
+    Route::post('/profile/cover', [DesignerProfileMediaController::class, 'storeCover']);
+    Route::patch('/profile/cover/focal-point', [DesignerProfileMediaController::class, 'updateCoverFocalPoint']);
+    Route::delete('/profile/cover', [DesignerProfileMediaController::class, 'destroyCover']);
 });
 
 Route::middleware(['auth:sanctum', 'account.active'])->post('/audit/page-view', PageViewAuditController::class);
 
 Route::middleware(['auth:sanctum', 'account.active'])->prefix('dashboard')->group(function () {
-    Route::get('/stats', [\App\Http\Controllers\Api\DashboardController::class, 'stats']);
-    Route::get('/activity', [\App\Http\Controllers\Api\DashboardController::class, 'activity']);
-    Route::get('/chart', [\App\Http\Controllers\Api\DashboardController::class, 'chart']);
-    Route::get('/overview', [\App\Http\Controllers\Api\DashboardController::class, 'overview']);
+    Route::get('/stats', [DashboardController::class, 'stats']);
+    Route::get('/activity', [DashboardController::class, 'activity']);
+    Route::get('/chart', [DashboardController::class, 'chart']);
+    Route::get('/overview', [DashboardController::class, 'overview']);
     Route::get('/search', DashboardSearchController::class);
 });
 

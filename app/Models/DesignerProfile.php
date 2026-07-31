@@ -39,6 +39,16 @@ class DesignerProfile extends Model
 
     public const PUBLICATION_DRAFT = 'draft';
 
+    public const PUBLICATION_PUBLISHED = 'published';
+
+    public const PUBLICATION_HIDDEN = 'hidden';
+
+    public const PUBLICATION_STATUSES = [
+        self::PUBLICATION_DRAFT,
+        self::PUBLICATION_PUBLISHED,
+        self::PUBLICATION_HIDDEN,
+    ];
+
     public const AVAILABILITIES = [
         self::AVAILABILITY_AVAILABLE,
         self::AVAILABILITY_PARTIALLY_AVAILABLE,
@@ -76,6 +86,7 @@ class DesignerProfile extends Model
             'cover_focal_x' => 'integer',
             'cover_focal_y' => 'integer',
             'published_at' => 'datetime',
+            'hidden_at' => 'datetime',
             'years_of_experience' => 'integer',
             'show_availability_publicly' => 'boolean',
             'show_specialties_publicly' => 'boolean',

@@ -6,8 +6,8 @@
 |---|---|
 | Phase status | `in-progress` |
 | Documentation baseline | `382d2c3256f0a1eeb32787d475d097f07e035d9d` |
-| Current completed station | `YM-DESIGNER-PROFILE-PROFESSIONAL-DATA-004A` |
-| Next planned station | `YM-DESIGNER-PROFILE-PUBLICATION-LIFECYCLE-005A` |
+| Current station | `YM-DESIGNER-PROFILE-PUBLICATION-LIFECYCLE-005A` |
+| Station status | `visually-approved` |
 
 ## لوحة التقدم
 
@@ -16,7 +16,7 @@
 | completed | Historical basic profile workspace and identity media | `implemented / verified by commits; original Station ID unknown` |
 | completed | `YM-DESIGNER-PROFILE-PROFESSIONAL-DATA-004A` | `closed` |
 | in progress | Phase 6 overall | `in-progress` |
-| planned | `YM-DESIGNER-PROFILE-PUBLICATION-LIFECYCLE-005A` | `planned` |
+| visually approved | `YM-DESIGNER-PROFILE-PUBLICATION-LIFECYCLE-005A` | `visually-approved`; Final build and Git closure pending |
 | planned | `YM-DESIGNER-PUBLIC-PROFILE-006A` | `planned` |
 | planned | `YM-DESIGNER-PROFILE-FEATURED-WORKS-007A` | `planned` |
 | unassigned future scope | Organization/Brand Data، Admin Oversight، Final Accessibility Closure | `not implemented / ID unassigned` |
@@ -34,6 +34,15 @@
 - CI: لم تظهر نتيجة في الاستعلام الفوري الوحيد؛ لم ينفذ polling، ولذلك لا تسجل حالة نجاح أوفشل.
 - `PROJECT_MAP.md` و`reports/`: بقيا خارج نطاق المحطة.
 
+## جاهزية إغلاق محطة 005A
+
+- الاعتماد البصري: `visually-approved` بتاريخ `2026-08-01`.
+- شمل الاعتماد حالات المسودة غير الجاهزة والجاهزة، والمعاينة، والنشر، والإخفاء، وإعادة النشر، ومزامنة الحالة.
+- شمل العرض Desktop وMobile وRTL، وإغلاق Drawer وDialog، واستعادة Focus، والخصوصية، وعدم ظهور رابط التخطي أوتمرير أفقي بصورة غير مقصودة.
+- الأدلة التقنية السابقة: نجح اختبار Publication Lifecycle، ونجحت اختبارات Designer المرتبطة، ونجح Production Build السابق.
+- Final production build بعد آخر التصحيحات البصرية: `pending`.
+- Git closure وClosure Commit: `pending`.
+
 ## سجل زمني Append-only
 
 | التاريخ | الحدث | الدليل | الحالة بعد الحدث |
@@ -44,3 +53,8 @@
 | `2026-08-01` | تحقق تقني وبصري وإغلاق `004A`. | `43 tests`, `297 assertions`, production build, visual review | `closed` |
 | `2026-08-01` | Commit وPush لمحطة `004A`. | `382d2c3256f0a1eeb32787d475d097f07e035d9d`, `origin/main` | Phase `in-progress` |
 | `2026-08-01` | إنشاء نظام توثيق المرحلة وتسجيل المحطات التالية. | `YM-PHASE-DOCUMENTATION-SYSTEM-001A` | Phase `in-progress` |
+| `2026-08-01` | بدء `005A-1` لبناء Publication Readiness and Lifecycle Backend Foundation. | Baseline `c0f30279a71df7d16b15a217be9f571c5ea4aeac` | `005A in-progress` |
+| `2026-08-01` | تحقق Backend foundation لمحطة `005A-1` دون Frontend أوPublic Route. | Publication `18 tests / 215 assertions`; related suite `82 tests / 579 assertions` | `005A in-progress` |
+| `2026-08-01` | تنفيذ واجهة Workspace للنشر والمعاينة في `005A-2` دون إنشاء Public Route، مع بقاء المراجعة البصرية معلقة. | Publication Panel، blocker actions، Owner Preview Drawer، Publish/Hide confirmation | `005A in-progress` |
+| `2026-08-01` | تطبيق Migration دورة النشر محليًا بنجاح لأغراض التحقق اليدوي بعد اكتشاف غياب `hidden_at` في محاولة النشر الأولى. | تحقق يدوي محلي؛ لا تغيير في عقد المحطة | `005A in-progress` |
+| `2026-08-01` | اعتماد المستخدم بصريًا حالات Workspace ودورة النشر والمعاينة بعد التصحيحات، مع بقاء Final build وGit closure معلقين. | Desktop، Mobile، RTL، Focus، الخصوصية، مستويات القوائم، مزامنة الحالة | `005A visually-approved` |

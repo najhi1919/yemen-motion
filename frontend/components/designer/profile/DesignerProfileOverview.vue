@@ -40,6 +40,24 @@ const availabilityClass = computed(() => {
 
   return 'bg-neutral-100 text-neutral-700 ring-neutral-200'
 })
+
+const publicationLabel = computed(() => ({
+  draft: 'مسودة غير منشورة',
+  published: 'منشور',
+  hidden: 'مخفي',
+})[props.profile.publication_status])
+
+const publicationClass = computed(() => {
+  if (props.profile.publication_status === 'published') {
+    return 'bg-emerald-50 text-emerald-800 ring-emerald-200'
+  }
+
+  if (props.profile.publication_status === 'hidden') {
+    return 'bg-amber-50 text-amber-800 ring-amber-200'
+  }
+
+  return 'bg-red-50 text-[var(--ym-d-red-strong)] ring-red-200'
+})
 </script>
 
 <template>
@@ -64,8 +82,11 @@ const availabilityClass = computed(() => {
             >
               {{ availabilityLabel }}
             </span>
-            <span class="rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-[var(--ym-d-red-strong)]">
-              مسودة غير منشورة
+            <span
+              class="rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset"
+              :class="publicationClass"
+            >
+              {{ publicationLabel }}
             </span>
           </div>
 

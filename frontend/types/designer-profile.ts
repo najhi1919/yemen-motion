@@ -1,4 +1,5 @@
 export type DesignerAvailability = 'available' | 'partially_available' | 'unavailable'
+export type DesignerProfilePublicationStatus = 'draft' | 'published' | 'hidden'
 
 export interface DesignerIdentityMedia {
   avatar_url: string | null
@@ -17,7 +18,7 @@ export interface DesignerProfile {
   bio: string | null
   identity_media: DesignerIdentityMedia
   availability: DesignerAvailability
-  publication_status: 'draft'
+  publication_status: DesignerProfilePublicationStatus
   published_at: string | null
   created_at: string | null
   updated_at: string | null

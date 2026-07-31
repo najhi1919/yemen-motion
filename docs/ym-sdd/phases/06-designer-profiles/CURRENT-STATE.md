@@ -11,16 +11,19 @@
 | بطاقة معاينة الهوية الداخلية واكتمال البيانات الأساسية | `completed` | Commits التاريخية و`382d2c3...` |
 | حالة التوفر وسنوات الخبرة والمعلومات المهنية الإضافية | `completed` | محطة `004A` |
 | الخدمات والأساليب والمهارات والبرامج والأدوات واللغات | `completed` | محطة `004A` |
-| إعدادات خصوصية الأقسام المهنية | `completed as configuration only` | مخزنة وتدار داخليًا؛ لا يوجد مستهلك عام بعد |
+| إعدادات خصوصية الأقسام المهنية | `completed as configuration and owner preview enforcement` | مخزنة وتطبق داخل معاينة المالك؛ لا يوجد مستهلك عام بعد |
 | اكتمال البيانات المهنية | `completed` | عقد completion في محطة `004A` |
 | الحفظ والاسترجاع وoptimistic concurrency وno-op وtransactions وaudit | `completed` | Service واختبارات `004A` |
 | واجهة Desktop وMobile للبيانات المنفذة | `completed / visually verified` | إغلاق `004A` |
+| Publish Readiness | `completed / visually verified` | محطة `005A` بحالة `visually-approved` |
+| Owner-only visitor preview | `completed / visually verified` | معاينة خاصة داخل Workspace؛ ليست الصفحة العامة النهائية |
+| Publish وHide وRepublish | `completed / visually verified` | انتقالات دورة النشر وواجهة `005A` |
+| تطبيق الخصوصية داخل معاينة المالك | `completed / visually verified` | لا تعرض المعاينة الأقسام المخفية |
+| حالات `draft` و`published` و`hidden` داخل Workspace | `completed / visually verified` | مزامنة قسم النشر مع بطاقة بيانات الملف |
 | تطبيق الخصوصية أمام الجمهور | `not implemented` | الصفحة العامة غير مبنية |
-| معاينة عامة حقيقية وشروط Publish Readiness الكاملة | `not implemented` | مخطط في `005A` |
-| نشر الملف وإخفاؤه أوإلغاء نشره | `not implemented` | `publication_status` ما يزال `draft` |
 | الصفحة العامة `/designers/{username}` | `not implemented` | مخطط في `006A` |
 | الأعمال المميزة وترتيبها | `not implemented` | مخطط في `007A` |
-| عرض جميع الأعمال في الصفحة العامة | `not implemented` | يعتمد على `006A` وقدرة الأعمال المجاورة |
+| الأعمال العامة داخل صفحة المصمم | `not implemented` | يعتمد على `006A` وقدرة الأعمال المجاورة |
 | بيانات المنشأة أوالعلامة التجارية | `not implemented` | نطاق مستقبلي بلا ID |
 | إدارة Admin لملفات المصممين | `not implemented` | نطاق مستقبلي بلا ID |
 | تدقيق WCAG/Responsive/LTR شامل | `partially-met` | تمت مراجعات Desktop وMobile وRTL للمنفذ؛ الإغلاق الشامل لم يحدث |
@@ -34,6 +37,6 @@
 
 ## حدود التفسير
 
-- بطاقة «معاينة الملف» الحالية داخل Workspace هي معاينة هوية داخلية، وليست Public Profile Preview كاملة.
-- وجود إعدادات الخصوصية لا يعني تطبيقها للعامة؛ المستهلك العام غير مبني.
+- Owner-only visitor preview داخل Workspace تحاكي محتوى الزائر وتطبق الخصوصية، لكنها ليست Public Profile Route كاملة.
+- تطبيق إعدادات الخصوصية في معاينة المالك لا يعني تطبيقها للعامة؛ المستهلك العام غير مبني.
 - وجود إدارة أعمال المصمم لا يثبت إغلاق مرحلة Designer Profiles ولا يثبت انتسابها إلى محطة ملف شخصي.
