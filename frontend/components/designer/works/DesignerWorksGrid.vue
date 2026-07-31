@@ -12,12 +12,15 @@ defineProps<{
   error: boolean
   filtered: boolean
   view: 'grid' | 'list'
+  lifecycleActionBusyId: number | null
 }>()
 
 defineEmits<{
   retry: []
   reset: []
   page: [value: number]
+  archive: [work: DesignerWork]
+  restore: [work: DesignerWork]
 }>()
 </script>
 
@@ -102,8 +105,11 @@ defineEmits<{
         v-if="view === 'list'"
         :works="works"
         :cover-urls="coverUrls"
+        :lifecycle-action-busy-id="lifecycleActionBusyId"
         class="transition-opacity duration-200 motion-reduce:transition-none"
         :class="updating ? 'opacity-55' : 'opacity-100'"
+        @archive="$emit('archive', $event)"
+        @restore="$emit('restore', $event)"
       />
       <div
         v-else
@@ -115,7 +121,10 @@ defineEmits<{
           :key="work.id"
           :work="work"
           :cover-url="work.cover_media ? coverUrls[work.cover_media.id] : undefined"
+          :lifecycle-action-busy-id="lifecycleActionBusyId"
           class="h-full min-w-0"
+          @archive="$emit('archive', $event)"
+          @restore="$emit('restore', $event)"
         />
       </div>
 

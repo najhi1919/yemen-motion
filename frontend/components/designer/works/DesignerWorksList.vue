@@ -5,6 +5,12 @@ import DesignerWorkCard from './DesignerWorkCard.vue'
 defineProps<{
   works: readonly DesignerWork[]
   coverUrls: Readonly<Record<number, string>>
+  lifecycleActionBusyId: number | null
+}>()
+
+defineEmits<{
+  archive: [work: DesignerWork]
+  restore: [work: DesignerWork]
 }>()
 </script>
 
@@ -15,8 +21,11 @@ defineProps<{
       :key="work.id"
       :work="work"
       :cover-url="work.cover_media ? coverUrls[work.cover_media.id] : undefined"
+      :lifecycle-action-busy-id="lifecycleActionBusyId"
       variant="list"
       class="min-w-0"
+      @archive="$emit('archive', $event)"
+      @restore="$emit('restore', $event)"
     />
   </div>
 </template>

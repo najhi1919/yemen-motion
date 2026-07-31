@@ -35,6 +35,7 @@ use App\Http\Controllers\Api\DashboardSearchController;
 use App\Http\Controllers\Api\DesignerProfileController;
 use App\Http\Controllers\Api\DesignerProfileMediaController;
 use App\Http\Controllers\Api\DesignerWorksAuthoringController;
+use App\Http\Controllers\Api\DesignerWorksArchiveController;
 use App\Http\Controllers\Api\DesignerWorksIndexController;
 use App\Http\Controllers\Api\DesignerWorksMetadataController;
 use App\Http\Controllers\Api\DesignerWorksMediaController;
@@ -63,6 +64,12 @@ Route::middleware(['auth:sanctum', 'account.active'])->prefix('designer')->group
         ->name('designer.works.update');
     Route::get('/works', [DesignerWorksIndexController::class, 'index'])
         ->name('designer.works.index');
+    Route::patch('/works/{work}/archive', [DesignerWorksArchiveController::class, 'archive'])
+        ->whereNumber('work')
+        ->name('designer.works.archive');
+    Route::patch('/works/{work}/restore', [DesignerWorksArchiveController::class, 'restore'])
+        ->whereNumber('work')
+        ->name('designer.works.restore');
     Route::get('/works/{work}/metadata', [DesignerWorksMetadataController::class, 'show'])
         ->whereNumber('work')
         ->name('designer.works.metadata.show');

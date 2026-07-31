@@ -189,6 +189,33 @@ class WorksActivityAuditFoundationTest extends TestCase
         $this->assertTrue((bool) $row->requires_work);
     }
 
+    public function test_designer_lifecycle_events_have_safe_normalized_definitions(): void
+    {
+        $this->assertSame([
+            'works.designer.archived',
+            'works.designer.restored',
+        ], $this->eventTypesForGroup('lifecycle'));
+
+        $archived = $this->createAuditEvent(['event_type' => 'works.designer.archived']);
+        $restored = $this->createAuditEvent(['event_type' => 'works.designer.restored']);
+        $rows = $this->activityQuery->query()->get()->keyBy('audit_event_id');
+
+        $this->assertSame('designer_archived', $rows[$archived->id]->event_key);
+        $this->assertSame('أرشفة العمل بواسطة المصمم', $rows[$archived->id]->event_label_ar);
+        $this->assertSame('Work archived by designer', $rows[$archived->id]->event_label_en);
+        $this->assertSame('designer_restored', $rows[$restored->id]->event_key);
+        $this->assertSame('استعادة العمل بواسطة المصمم', $rows[$restored->id]->event_label_ar);
+        $this->assertSame('Work restored by designer', $rows[$restored->id]->event_label_en);
+
+        foreach ([$rows[$archived->id], $rows[$restored->id]] as $row) {
+            $this->assertSame('lifecycle', $row->event_group);
+            $this->assertSame('work', $row->target_scope);
+            $this->assertTrue((bool) $row->requires_work);
+            $this->assertFalse((bool) $row->needs_attention);
+            $this->assertSame('notice', $row->severity);
+        }
+    }
+
     public function test_taxonomy_and_assignment_events_have_normalized_definitions(): void
     {
         $this->assertSame([
@@ -553,6 +580,8 @@ class WorksActivityAuditFoundationTest extends TestCase
             'works.visibility.unfeatured',
             'works.visibility.pinned',
             'works.visibility.unpinned',
+            'works.designer.archived',
+            'works.designer.restored',
             'works.reports.review_started',
             'works.reports.dismissed',
             'works.reports.archived',
@@ -568,7 +597,7 @@ class WorksActivityAuditFoundationTest extends TestCase
         ];
 
         $this->assertSame($expectedTypes, $this->activityQuery->supportedEventTypes());
-        $this->assertCount(27, $this->activityQuery->definitions());
+        $this->assertCount(29, $this->activityQuery->definitions());
 
         foreach ($this->activityQuery->definitions() as $eventType => $definition) {
             $this->assertSame($eventType, $definition['event_type']);
@@ -578,6 +607,7 @@ class WorksActivityAuditFoundationTest extends TestCase
                 'reports',
                 'taxonomy',
                 'taxonomy_assignment',
+                'lifecycle',
             ]);
             $this->assertNotSame('', $definition['event_key']);
             $this->assertNotSame('', $definition['label_ar']);

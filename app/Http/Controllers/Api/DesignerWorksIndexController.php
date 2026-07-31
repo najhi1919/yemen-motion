@@ -16,7 +16,8 @@ class DesignerWorksIndexController extends Controller
         'review' => [Work::STATUS_SUBMITTED, Work::STATUS_IN_REVIEW, Work::STATUS_APPROVED],
         'changes' => [Work::STATUS_CHANGES_REQUESTED],
         'published' => [Work::STATUS_PUBLISHED],
-        'closed' => [Work::STATUS_REJECTED, Work::STATUS_HIDDEN, Work::STATUS_ARCHIVED],
+        'closed' => [Work::STATUS_REJECTED, Work::STATUS_HIDDEN],
+        'archived' => [Work::STATUS_ARCHIVED],
     ];
 
     public function index(DesignerWorksIndexRequest $request): JsonResponse

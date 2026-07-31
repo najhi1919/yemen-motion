@@ -33,6 +33,20 @@ class Work extends Model
 
     public const STATUS_ARCHIVED = 'archived';
 
+    public const DESIGNER_ARCHIVABLE_STATUSES = [
+        self::STATUS_DRAFT,
+        self::STATUS_CHANGES_REQUESTED,
+        self::STATUS_PUBLISHED,
+        self::STATUS_REJECTED,
+        self::STATUS_HIDDEN,
+    ];
+
+    public const DESIGNER_ARCHIVE_BLOCKED_STATUSES = [
+        self::STATUS_SUBMITTED,
+        self::STATUS_IN_REVIEW,
+        self::STATUS_APPROVED,
+    ];
+
     public const VISIBILITY_HIDDEN = 'hidden';
 
     public const VISIBILITY_PUBLIC = 'public';
@@ -233,5 +247,38 @@ class Work extends Model
     public function scopeReported(Builder $query): Builder
     {
         return $query->where('reports_count', '>', 0);
+    }
+
+    public function canBeArchivedByDesigner(): bool
+    {
+        return in_array($this->status, self::DESIGNER_ARCHIVABLE_STATUSES, true);
+    }
+
+    public function canBeRestoredByDesigner(): bool
+    {
+        return $this->status === self::STATUS_ARCHIVED;
+    }
+
+    /**
+     * @return array{status: string, visibility_status: string}
+     */
+    public function designerRestoreTarget(): array
+    {
+        if ($this->archived_from_status === self::STATUS_PUBLISHED) {
+            return [
+                'status' => self::STATUS_PUBLISHED,
+                'visibility_status' => in_array(
+                    $this->archived_from_visibility_status,
+                    [self::VISIBILITY_PUBLIC, self::VISIBILITY_HIDDEN],
+                    true,
+                ) ? $this->archived_from_visibility_status : self::VISIBILITY_PUBLIC,
+            ];
+        }
+
+        if ($this->archived_from_status === self::STATUS_HIDDEN) {
+            return ['status' => self::STATUS_HIDDEN, 'visibility_status' => self::VISIBILITY_HIDDEN];
+        }
+
+        return ['status' => self::STATUS_DRAFT, 'visibility_status' => self::VISIBILITY_HIDDEN];
     }
 }

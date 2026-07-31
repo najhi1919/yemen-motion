@@ -23,6 +23,7 @@ const groups: Array<{ value: DesignerWorkGroup, label: string, count: keyof Desi
   { value: 'changes', label: 'تحتاج تعديلًا', count: 'changes' },
   { value: 'published', label: 'المنشورة', count: 'published' },
   { value: 'closed', label: 'المغلقة', count: 'closed' },
+  { value: 'archived', label: 'المؤرشفة', count: 'archived' },
 ]
 
 watch(() => props.query, value => {
@@ -104,7 +105,7 @@ onBeforeUnmount(() => {
               ? 'border-amber-300 bg-amber-100 text-amber-900 shadow-sm'
               : item.value === 'published'
                 ? 'border-emerald-300 bg-emerald-100 text-emerald-900 shadow-sm'
-                : item.value === 'draft' || item.value === 'closed'
+                : item.value === 'draft' || item.value === 'closed' || item.value === 'archived'
                   ? 'border-neutral-300 bg-neutral-200 text-neutral-900 shadow-sm'
                   : 'border-[var(--ym-d-red)] bg-[var(--ym-d-red)] text-white shadow-sm'
             : 'border-[var(--ym-d-border)] bg-[var(--ym-d-page)] text-[var(--ym-d-charcoal)] hover:border-[var(--ym-d-border-strong)] hover:bg-white'"
@@ -118,7 +119,7 @@ onBeforeUnmount(() => {
                 ? 'bg-amber-900/10 text-amber-950'
                 : item.value === 'published'
                   ? 'bg-emerald-900/10 text-emerald-950'
-                  : item.value === 'draft' || item.value === 'closed'
+                  : item.value === 'draft' || item.value === 'closed' || item.value === 'archived'
                     ? 'bg-black/10 text-neutral-900'
                     : 'bg-white/20 text-white'
               : 'bg-white text-[var(--ym-d-muted)]'"

@@ -11,6 +11,7 @@ use Database\Seeders\AuthRolesSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -109,23 +110,28 @@ class DesignerWorksIndexTest extends TestCase
         $this->assertGroup('published', [Work::STATUS_PUBLISHED], Work::STATUS_DRAFT);
     }
 
-    public function test_closed_group_returns_rejected_hidden_and_archived(): void
+    public function test_closed_group_returns_rejected_and_hidden_without_archived(): void
     {
         $this->assertGroup('closed', [
             Work::STATUS_REJECTED,
             Work::STATUS_HIDDEN,
-            Work::STATUS_ARCHIVED,
-        ], Work::STATUS_DRAFT);
+        ], Work::STATUS_ARCHIVED);
+    }
+
+    public function test_archived_group_is_independent(): void
+    {
+        $this->assertGroup('archived', [Work::STATUS_ARCHIVED], Work::STATUS_HIDDEN);
     }
 
     public function test_summary_counts_only_owned_works(): void
     {
         $this->work($this->designer, Work::STATUS_DRAFT);
         $this->work($this->designer, Work::STATUS_PUBLISHED);
+        $this->work($this->designer, Work::STATUS_ARCHIVED);
         $this->work($this->userWithRole('designer'), Work::STATUS_DRAFT);
         Sanctum::actingAs($this->designer);
         $this->getJson('/api/designer/works')->assertJson([
-            'summary' => ['total' => 2, 'draft' => 1, 'published' => 1],
+            'summary' => ['total' => 3, 'draft' => 1, 'published' => 1, 'archived' => 1],
         ]);
     }
 
@@ -169,6 +175,61 @@ class DesignerWorksIndexTest extends TestCase
             ->assertJsonMissingPath('data.0.internal_notes')
             ->assertJsonMissingPath('data.0.price_amount')
             ->assertJsonMissingPath('data.0.delivery_days');
+    }
+
+    public function test_archive_state_exposes_capabilities_and_safe_restore_target_only(): void
+    {
+        $draft = $this->work($this->designer, Work::STATUS_DRAFT);
+        $archived = $this->work($this->designer, Work::STATUS_ARCHIVED, [
+            'archived_at' => now(),
+            'archived_from_status' => Work::STATUS_PUBLISHED,
+            'archived_from_visibility_status' => Work::VISIBILITY_PUBLIC,
+        ]);
+        Sanctum::actingAs($this->designer);
+
+        $items = $this->getJson('/api/designer/works?sort=created_at&direction=asc')
+            ->assertOk()
+            ->json('data');
+        $items = collect($items)->keyBy('id');
+
+        $this->assertSame([
+            'is_archived' => false,
+            'can_archive' => true,
+            'can_restore' => false,
+            'archived_at' => null,
+            'restore_target_status' => null,
+            'restore_target_visibility' => null,
+        ], $items[$draft->id]['archive_state']);
+        $this->assertTrue($items[$archived->id]['archive_state']['is_archived']);
+        $this->assertFalse($items[$archived->id]['archive_state']['can_archive']);
+        $this->assertTrue($items[$archived->id]['archive_state']['can_restore']);
+        $this->assertSame(Work::STATUS_PUBLISHED, $items[$archived->id]['archive_state']['restore_target_status']);
+        $this->assertSame(Work::VISIBILITY_PUBLIC, $items[$archived->id]['archive_state']['restore_target_visibility']);
+        $this->assertArrayNotHasKey('archived_from_status', $items[$archived->id]);
+        $this->assertArrayNotHasKey('archived_from_visibility_status', $items[$archived->id]);
+    }
+
+    public function test_archive_state_does_not_add_n_plus_one_queries(): void
+    {
+        $this->work($this->designer, Work::STATUS_ARCHIVED, [
+            'archived_from_status' => Work::STATUS_DRAFT,
+            'archived_from_visibility_status' => Work::VISIBILITY_HIDDEN,
+        ]);
+        Sanctum::actingAs($this->designer);
+        $this->getJson('/api/designer/works')->assertOk();
+
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        $this->getJson('/api/designer/works')->assertOk();
+        $singleCount = count(DB::getQueryLog());
+
+        Work::factory()->count(5)->create(['designer_id' => $this->designer->id]);
+        DB::flushQueryLog();
+        $this->getJson('/api/designer/works')->assertOk();
+        $manyCount = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        $this->assertSame($singleCount, $manyCount);
     }
 
     public function test_cover_metadata_uses_explicit_cover_media_id_only(): void

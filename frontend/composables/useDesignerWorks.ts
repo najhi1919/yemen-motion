@@ -2,6 +2,7 @@ import type {
   DesignerWork,
   DesignerWorkDirection,
   DesignerWorkGroup,
+  DesignerWorkLifecycleResponse,
   DesignerWorksMeta,
   DesignerWorksResponse,
   DesignerWorksSummary,
@@ -15,6 +16,7 @@ const emptySummary = (): DesignerWorksSummary => ({
   changes: 0,
   published: 0,
   closed: 0,
+  archived: 0,
 })
 
 export const useDesignerWorks = () => {
@@ -48,6 +50,8 @@ export const useDesignerWorks = () => {
   const updating = ref(false)
   const error = ref(false)
   const coverUrls = ref<Record<number, string>>({})
+  const lifecycleActionBusyId = ref<number | null>(null)
+  const lifecycleActionError = ref<string | null>(null)
 
   const revokeCoverUrls = () => {
     if (import.meta.client) {
@@ -117,6 +121,73 @@ export const useDesignerWorks = () => {
     filters.page = 1
   }
 
+  const clearLifecycleActionError = () => {
+    lifecycleActionError.value = null
+  }
+
+  const lifecycleErrorMessage = (requestError: unknown): string => {
+    if (!requestError || typeof requestError !== 'object') {
+      return 'تعذر تنفيذ الإجراء. حاول مرة أخرى.'
+    }
+
+    const candidate = requestError as {
+      statusCode?: number
+      status?: number
+      data?: { message?: unknown, errors?: Record<string, unknown> }
+      response?: { status?: number, _data?: { message?: unknown, errors?: Record<string, unknown> } }
+    }
+    const status = candidate.statusCode ?? candidate.status ?? candidate.response?.status
+    const data = candidate.data ?? candidate.response?._data
+
+    if (status === 409 && typeof data?.message === 'string') return data.message
+
+    if (status === 422) {
+      const firstValidationMessage = Object.values(data?.errors ?? {})
+        .flatMap(value => Array.isArray(value) ? value : [])
+        .find(value => typeof value === 'string')
+
+      return typeof firstValidationMessage === 'string'
+        ? firstValidationMessage
+        : typeof data?.message === 'string'
+          ? data.message
+          : 'تحقق من بيانات الطلب ثم حاول مرة أخرى.'
+    }
+
+    return typeof data?.message === 'string'
+      ? data.message
+      : 'تعذر تنفيذ الإجراء. حاول مرة أخرى.'
+  }
+
+  const runLifecycleAction = async (work: DesignerWork, action: 'archive' | 'restore'): Promise<boolean> => {
+    if (lifecycleActionBusyId.value !== null) return false
+
+    lifecycleActionBusyId.value = work.id
+    lifecycleActionError.value = null
+
+    try {
+      await apiFetch<DesignerWorkLifecycleResponse>(`/designer/works/${work.id}/${action}`, {
+        method: 'PATCH',
+        body: { expected_updated_at: work.updated_at },
+      })
+      await fetchWorks()
+
+      if (works.value.length === 0 && filters.page > 1) {
+        filters.page -= 1
+        await fetchWorks()
+      }
+
+      return true
+    } catch (requestError) {
+      lifecycleActionError.value = lifecycleErrorMessage(requestError)
+      return false
+    } finally {
+      lifecycleActionBusyId.value = null
+    }
+  }
+
+  const archiveWork = (work: DesignerWork) => runLifecycleAction(work, 'archive')
+  const restoreWork = (work: DesignerWork) => runLifecycleAction(work, 'restore')
+
   onBeforeUnmount(revokeCoverUrls)
 
   return {
@@ -128,7 +199,12 @@ export const useDesignerWorks = () => {
     updating: readonly(updating),
     error: readonly(error),
     coverUrls: readonly(coverUrls),
+    lifecycleActionBusyId: readonly(lifecycleActionBusyId),
+    lifecycleActionError: readonly(lifecycleActionError),
     fetchWorks,
     resetFilters,
+    archiveWork,
+    restoreWork,
+    clearLifecycleActionError,
   }
 }

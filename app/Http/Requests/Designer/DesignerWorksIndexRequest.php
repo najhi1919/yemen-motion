@@ -23,7 +23,15 @@ class DesignerWorksIndexRequest extends FormRequest
     {
         return [
             'q' => ['nullable', 'string', 'max:80'],
-            'group' => ['nullable', Rule::in(['all', 'draft', 'review', 'changes', 'published', 'closed'])],
+            'group' => ['nullable', Rule::in([
+                'all',
+                'draft',
+                'review',
+                'changes',
+                'published',
+                'closed',
+                'archived',
+            ])],
             'sort' => ['nullable', Rule::in(['updated_at', 'created_at', 'title'])],
             'direction' => ['nullable', Rule::in(['asc', 'desc'])],
             'page' => ['nullable', 'integer', 'min:1'],

@@ -1,4 +1,4 @@
-export type DesignerWorkGroup = 'all' | 'draft' | 'review' | 'changes' | 'published' | 'closed'
+export type DesignerWorkGroup = 'all' | 'draft' | 'review' | 'changes' | 'published' | 'closed' | 'archived'
 export type DesignerWorkSort = 'updated_at' | 'created_at' | 'title'
 export type DesignerWorkDirection = 'asc' | 'desc'
 export type DesignerWorkCoverDisplayMode = 'fill' | 'fit'
@@ -18,6 +18,15 @@ export interface DesignerWorkTaxonomySummary {
   slug: string
 }
 
+export interface DesignerWorkArchiveState {
+  is_archived: boolean
+  can_archive: boolean
+  can_restore: boolean
+  archived_at: string | null
+  restore_target_status: string | null
+  restore_target_visibility: 'public' | 'hidden' | null
+}
+
 export interface DesignerWork {
   id: number
   public_code: string
@@ -28,6 +37,7 @@ export interface DesignerWork {
   media_type: string
   created_at: string
   updated_at: string
+  archive_state: DesignerWorkArchiveState
   category: DesignerWorkTaxonomySummary | null
   tags: DesignerWorkTaxonomySummary[]
   cover_presentation: {
@@ -47,6 +57,18 @@ export interface DesignerWorksSummary {
   changes: number
   published: number
   closed: number
+  archived: number
+}
+
+export type DesignerWorkLifecycleAction = 'archive' | 'restore'
+
+export interface DesignerWorkLifecycleResponse {
+  data: {
+    changed: boolean
+    action: DesignerWorkLifecycleAction
+    previous_status: string
+    work: DesignerWork
+  }
 }
 
 export interface DesignerWorksMeta {

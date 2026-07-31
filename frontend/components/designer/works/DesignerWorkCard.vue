@@ -7,9 +7,14 @@ const props = withDefaults(defineProps<{
   work: DesignerWork
   coverUrl?: string
   variant?: 'grid' | 'list'
+  lifecycleActionBusyId: number | null
 }>(), {
   variant: 'grid',
 })
+const emit = defineEmits<{
+  archive: [work: DesignerWork]
+  restore: [work: DesignerWork]
+}>()
 const coverFailed = ref(false)
 const isList = computed(() => props.variant === 'list')
 const coverStyle = computed(() => getDesignerWorkCoverStyle(
@@ -183,17 +188,46 @@ const mediaLabels: Record<string, string> = {
       <time :datetime="work.updated_at" class="min-w-0 text-xs text-[var(--ym-d-muted)]">
         آخر تحديث {{ formatYmDate(work.updated_at, 'ar') }}
       </time>
-      <NuxtLink
-        v-if="work.status === 'draft' || work.status === 'changes_requested'"
-        :to="`/designer/works/${work.id}/edit`"
-        class="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-[var(--ym-d-red-border)] bg-white px-4 text-sm font-extrabold text-[var(--ym-d-red-strong)] transition duration-200 hover:bg-[var(--ym-d-red-soft)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[var(--ym-d-focus)] motion-reduce:transition-none"
-      >
-        تعديل العمل
-        <svg viewBox="0 0 20 20" fill="none" class="h-4 w-4" aria-hidden="true">
-          <path d="M13.8 3.7a1.8 1.8 0 0 1 2.5 0 1.8 1.8 0 0 1 0 2.5L7.2 15.3 3.5 16.5l1.2-3.7 9.1-9.1Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
-          <path d="m12.3 5.2 2.5 2.5M3.5 16.5h13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
-      </NuxtLink>
+      <div class="flex min-w-0 flex-wrap items-center gap-2">
+        <NuxtLink
+          v-if="work.status === 'draft' || work.status === 'changes_requested' || work.archive_state.is_archived"
+          :to="`/designer/works/${work.id}/edit`"
+          class="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-[var(--ym-d-red-border)] bg-white px-4 text-sm font-extrabold text-[var(--ym-d-red-strong)] transition duration-200 hover:bg-[var(--ym-d-red-soft)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[var(--ym-d-focus)] motion-reduce:transition-none"
+        >
+          {{ work.archive_state.is_archived ? 'عرض العمل' : 'تعديل العمل' }}
+          <svg viewBox="0 0 20 20" fill="none" class="h-4 w-4" aria-hidden="true">
+            <path v-if="work.archive_state.is_archived" d="M2.5 10s2.7-4.5 7.5-4.5 7.5 4.5 7.5 4.5-2.7 4.5-7.5 4.5S2.5 10 2.5 10Z" stroke="currentColor" stroke-width="1.7" />
+            <circle v-if="work.archive_state.is_archived" cx="10" cy="10" r="2" stroke="currentColor" stroke-width="1.7" />
+            <path v-if="!work.archive_state.is_archived" d="M13.8 3.7a1.8 1.8 0 0 1 2.5 0 1.8 1.8 0 0 1 0 2.5L7.2 15.3 3.5 16.5l1.2-3.7 9.1-9.1Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </NuxtLink>
+        <button
+          v-if="work.archive_state.can_archive"
+          type="button"
+          :disabled="lifecycleActionBusyId !== null"
+          :aria-label="`أرشفة العمل ${work.title}`"
+          class="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 text-sm font-extrabold text-amber-900 transition duration-200 hover:bg-amber-100 disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-200 motion-reduce:transition-none"
+          @click="emit('archive', work)"
+        >
+          <svg viewBox="0 0 20 20" fill="none" class="h-4 w-4" aria-hidden="true">
+            <path d="M4 6.5h12v9H4v-9Zm-1-3h14v3H3v-3Zm5 6h4" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+          </svg>
+          {{ lifecycleActionBusyId === work.id ? 'جارٍ الأرشفة…' : 'أرشفة' }}
+        </button>
+        <button
+          v-if="work.archive_state.can_restore"
+          type="button"
+          :disabled="lifecycleActionBusyId !== null"
+          :aria-label="`استعادة العمل ${work.title}`"
+          class="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-4 text-sm font-extrabold text-emerald-900 transition duration-200 hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-200 motion-reduce:transition-none"
+          @click="emit('restore', work)"
+        >
+          <svg viewBox="0 0 20 20" fill="none" class="h-4 w-4" aria-hidden="true">
+            <path d="M5 6V3L2.5 5.5 5 8V6a6 6 0 1 1-1 7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          {{ lifecycleActionBusyId === work.id ? 'جارٍ الاستعادة…' : 'استعادة' }}
+        </button>
+      </div>
     </footer>
   </article>
 </template>

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import DesignerWorkArchiveDialog from '~/components/designer/works/archive/DesignerWorkArchiveDialog.vue'
+
 const worksViewRoute = useRoute()
 const worksViewRouter = useRouter()
 const routeView = worksViewRoute.query.view
@@ -63,7 +65,7 @@ async function changeWorksView(value: 'grid' | 'list'): Promise<void> {
   })
 }
 
-import type { DesignerWorkGroup } from '~/types/designer-work'
+import type { DesignerWork, DesignerWorkGroup, DesignerWorkLifecycleAction } from '~/types/designer-work'
 
 definePageMeta({
   layout: 'designer',
@@ -80,9 +82,41 @@ const {
   updating,
   error,
   coverUrls,
+  lifecycleActionBusyId,
+  lifecycleActionError,
   fetchWorks,
   resetFilters,
+  archiveWork,
+  restoreWork,
+  clearLifecycleActionError,
 } = useDesignerWorks()
+
+const pendingLifecycleWork = ref<DesignerWork | null>(null)
+const pendingLifecycleAction = ref<DesignerWorkLifecycleAction>('archive')
+
+const openLifecycleDialog = (work: DesignerWork, action: DesignerWorkLifecycleAction) => {
+  if (lifecycleActionBusyId.value !== null) return
+  clearLifecycleActionError()
+  pendingLifecycleWork.value = work
+  pendingLifecycleAction.value = action
+}
+
+const closeLifecycleDialog = () => {
+  if (lifecycleActionBusyId.value !== null) return
+  clearLifecycleActionError()
+  pendingLifecycleWork.value = null
+}
+
+const confirmLifecycleAction = async () => {
+  const work = pendingLifecycleWork.value
+  if (!work || lifecycleActionBusyId.value !== null) return
+
+  const succeeded = pendingLifecycleAction.value === 'archive'
+    ? await archiveWork(work)
+    : await restoreWork(work)
+
+  if (succeeded) pendingLifecycleWork.value = null
+}
 
 const applySearch = async (value: string) => {
   if (filters.q === value) return
@@ -132,9 +166,21 @@ await useAsyncData('designer-owned-works', () => fetchWorks())
       :updating="updating"
       :error="error"
       :filtered="Boolean(filters.q) || filters.group !== 'all'"
+      :lifecycle-action-busy-id="lifecycleActionBusyId"
       @retry="fetchWorks"
       @reset="resetAndFetch"
       @page="applyPage"
+      @archive="openLifecycleDialog($event, 'archive')"
+      @restore="openLifecycleDialog($event, 'restore')"
+    />
+    <DesignerWorkArchiveDialog
+      :open="pendingLifecycleWork !== null"
+      :work="pendingLifecycleWork"
+      :action="pendingLifecycleAction"
+      :busy="lifecycleActionBusyId !== null"
+      :error="lifecycleActionError"
+      @confirm="confirmLifecycleAction"
+      @close="closeLifecycleDialog"
     />
   </div>
 </template>

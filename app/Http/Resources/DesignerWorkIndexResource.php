@@ -15,6 +15,9 @@ class DesignerWorkIndexResource extends JsonResource
         $cover = $cover instanceof WorkMedia ? $cover : null;
         $category = $this->relationLoaded('category') ? $this->category : null;
         $tags = $this->relationLoaded('tags') ? $this->tags : collect();
+        $restoreTarget = $this->canBeRestoredByDesigner()
+            ? $this->designerRestoreTarget()
+            : null;
 
         return [
             'id' => $this->id,
@@ -26,6 +29,14 @@ class DesignerWorkIndexResource extends JsonResource
             'media_type' => $this->media_type,
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
+            'archive_state' => [
+                'is_archived' => $this->status === Work::STATUS_ARCHIVED,
+                'can_archive' => $this->canBeArchivedByDesigner(),
+                'can_restore' => $this->canBeRestoredByDesigner(),
+                'archived_at' => $this->archived_at?->toISOString(),
+                'restore_target_status' => $restoreTarget['status'] ?? null,
+                'restore_target_visibility' => $restoreTarget['visibility_status'] ?? null,
+            ],
             'category' => $category ? [
                 'id' => (int) $category->id,
                 'name_ar' => $category->name_ar,
