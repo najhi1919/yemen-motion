@@ -55,7 +55,7 @@ class UpsertDesignerProfileRequest extends FormRequest
             'professional_title' => ['nullable', 'string', 'max:160'],
             'primary_specialty' => ['nullable', 'string', 'max:120'],
             'bio' => ['nullable', 'string', 'max:800'],
-            'availability' => ['required', 'string', Rule::in(DesignerProfile::AVAILABILITIES)],
+            'availability' => ['sometimes', 'required', 'string', Rule::in(DesignerProfile::AVAILABILITIES)],
         ];
     }
 }

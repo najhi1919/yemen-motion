@@ -141,6 +141,49 @@ class DesignerProfileBootstrapTest extends TestCase
             ->assertJsonPath('data.username', 'existing-name');
     }
 
+    public function test_creation_without_availability_uses_unavailable(): void
+    {
+        $designer = $this->userWithRole('designer');
+        Sanctum::actingAs($designer);
+        $payload = $this->payload(['username' => 'without-availability']);
+        unset($payload['availability']);
+
+        $this->putJson('/api/designer/profile', $payload)
+            ->assertOk()
+            ->assertJsonPath('data.profile.availability', DesignerProfile::AVAILABILITY_UNAVAILABLE)
+            ->assertJsonPath('data.profile.publication_status', 'draft')
+            ->assertJsonPath('data.basic_completion.total', 5);
+    }
+
+    public function test_update_without_availability_preserves_current_value(): void
+    {
+        $designer = $this->userWithRole('designer', ['username' => 'preserved-availability']);
+        $designer->designerProfile()->create($this->profileAttributes(['availability' => 'partially_available']));
+        Sanctum::actingAs($designer);
+        $payload = $this->payload(['display_name' => 'اسم محدث']);
+        unset($payload['username']);
+        unset($payload['availability']);
+
+        $this->putJson('/api/designer/profile', $payload)
+            ->assertOk()
+            ->assertJsonPath('data.profile.availability', 'partially_available')
+            ->assertJsonPath('data.profile.display_name', 'اسم محدث');
+    }
+
+    public function test_legacy_payload_with_availability_remains_supported(): void
+    {
+        $designer = $this->userWithRole('designer');
+        Sanctum::actingAs($designer);
+        $this->putJson('/api/designer/profile', $this->payload([
+            'username' => 'legacy-availability',
+            'availability' => 'available',
+        ]))
+            ->assertOk()
+            ->assertJsonPath('data.profile.availability', 'available')
+            ->assertJsonPath('data.basic_completion.total', 5)
+            ->assertJsonPath('data.profile.publication_status', 'draft');
+    }
+
     public function test_changing_existing_username_is_rejected(): void
     {
         $designer = $this->userWithRole('designer', ['username' => 'original-name']);

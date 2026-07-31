@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type {
-  DesignerAvailability,
   DesignerProfile,
   DesignerProfilePayload,
   UsernameAvailability
@@ -35,8 +34,7 @@ const form = reactive<DesignerProfilePayload>({
   display_name: '',
   professional_title: null,
   primary_specialty: null,
-  bio: null,
-  availability: 'unavailable'
+  bio: null
 })
 
 const initialSnapshot = ref('')
@@ -63,7 +61,6 @@ function fillForm(): void {
   form.professional_title = props.profile?.professional_title || null
   form.primary_specialty = props.profile?.primary_specialty || null
   form.bio = props.profile?.bio || null
-  form.availability = props.profile?.availability || 'unavailable'
   availability.value = props.username
     ? { available: true, normalized: props.username, reason: null }
     : null
@@ -114,8 +111,7 @@ function submit(): void {
     display_name: form.display_name.trim(),
     professional_title: form.professional_title?.trim() || null,
     primary_specialty: form.primary_specialty?.trim() || null,
-    bio: form.bio?.trim() || null,
-    availability: form.availability as DesignerAvailability
+    bio: form.bio?.trim() || null
   })
 }
 
@@ -429,23 +425,6 @@ onBeforeUnmount(() => {
               </p>
             </div>
 
-            <div>
-              <label for="designer-availability" class="mb-2 block text-sm font-bold text-neutral-800">
-                حالة التوفر
-              </label>
-              <select
-                id="designer-availability"
-                v-model="form.availability"
-                class="min-h-12 w-full rounded-xl border border-[var(--ym-d-border-strong)] bg-[var(--ym-d-surface-warm)] px-4 text-base text-[var(--ym-d-text)] outline-none transition focus:border-[var(--ym-d-red)] focus:ring-4 focus:ring-[var(--ym-d-focus)]"
-              >
-                <option value="available">متاح للعمل</option>
-                <option value="partially_available">متاح جزئيًا</option>
-                <option value="unavailable">غير متاح حاليًا</option>
-              </select>
-              <p v-if="fieldError('availability')" class="mt-2 text-sm font-semibold text-[#B42318]">
-                {{ fieldError('availability') }}
-              </p>
-            </div>
           </form>
         </div>
 

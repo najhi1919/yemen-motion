@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import DesignerProfileOverview from '~/components/designer/profile/DesignerProfileOverview.vue'
+import DesignerProfileProfessionalDrawer from '~/components/designer/profile/DesignerProfileProfessionalDrawer.vue'
+import DesignerProfileProfessionalOverview from '~/components/designer/profile/DesignerProfileProfessionalOverview.vue'
 import DesignerProfileSetupDrawer from '~/components/designer/profile/DesignerProfileSetupDrawer.vue'
 import type { DesignerProfilePayload } from '~/types/designer-profile'
+import type { DesignerProfileProfessionalPayload } from '~/types/designer-profile-professional'
 
 definePageMeta({
   layout: 'designer'
@@ -18,9 +21,21 @@ const {
   checkUsernameAvailability
 } = useDesignerProfile()
 
+const {
+  professionalState,
+  loading: professionalLoading,
+  saving: professionalSaving,
+  error: professionalError,
+  validationErrors: professionalValidationErrors,
+  fetchProfessional,
+  saveProfessional,
+  clearError: clearProfessionalError,
+} = useDesignerProfileProfessional()
+
 const drawerOpen = ref(false)
 const drawerSession = ref(0)
 const successMessage = ref<string | null>(null)
+const professionalDrawerOpen = ref(false)
 const authStore = useAuthStore()
 
 function openProfileEditor(): void {
@@ -30,7 +45,10 @@ function openProfileEditor(): void {
 
 async function loadProfile(): Promise<void> {
   try {
-    await fetchProfile()
+    const loaded = await fetchProfile()
+    if (loaded.profile) {
+      try { await fetchProfessional() } catch { /* Professional failure remains isolated. */ }
+    }
   } catch {
     // The composable exposes the reader-facing error state.
   }
@@ -38,7 +56,10 @@ async function loadProfile(): Promise<void> {
 
 async function handleSave(payload: DesignerProfilePayload): Promise<void> {
   try {
-    await saveProfile(payload)
+    const saved = await saveProfile(payload)
+    if (saved.profile) {
+      try { await fetchProfessional() } catch { /* Basic profile remains usable. */ }
+    }
     drawerOpen.value = false
     successMessage.value = 'تم حفظ بيانات ملفك بنجاح.'
     window.setTimeout(() => {
@@ -46,6 +67,23 @@ async function handleSave(payload: DesignerProfilePayload): Promise<void> {
     }, 3200)
   } catch {
     // Keep the drawer and form values open for correction.
+  }
+}
+
+function openProfessionalEditor(): void {
+  clearProfessionalError()
+  professionalDrawerOpen.value = true
+}
+
+async function handleProfessionalSave(payload: DesignerProfileProfessionalPayload): Promise<void> {
+  try {
+    await saveProfessional(payload)
+    await fetchProfile()
+    professionalDrawerOpen.value = false
+    successMessage.value = 'تم حفظ بياناتك المهنية بنجاح.'
+    window.setTimeout(() => { successMessage.value = null }, 3200)
+  } catch {
+    // Keep the professional drawer open with the safe API error.
   }
 }
 
@@ -108,6 +146,15 @@ onMounted(async () => {
         :username="profileState.username"
         :completion="profileState.basic_completion"
         @edit="openProfileEditor"
+      />
+
+      <DesignerProfileProfessionalOverview
+        v-if="profileState?.profile"
+        :state="professionalState"
+        :loading="professionalLoading"
+        :error="professionalError"
+        @edit="openProfessionalEditor"
+        @retry="fetchProfessional"
       />
 
       <section
@@ -175,6 +222,16 @@ onMounted(async () => {
       :check-username="checkUsernameAvailability"
       @close="drawerOpen = false"
       @save="handleSave"
+    />
+    <DesignerProfileProfessionalDrawer
+      :open="professionalDrawerOpen"
+      :professional="professionalState?.professional || null"
+      :primary-specialty="profileState?.profile?.primary_specialty || null"
+      :saving="professionalSaving"
+      :error="professionalError"
+      :validation-errors="professionalValidationErrors"
+      @close="professionalDrawerOpen = false"
+      @save="handleProfessionalSave"
     />
   </main>
 </template>

@@ -75,12 +75,15 @@ class DesignerProfileController extends Controller
                     ]);
                 }
 
+                $existingProfile = $user->designerProfile()->first();
                 $profileData = [
                     'display_name' => $validated['display_name'],
                     'professional_title' => $validated['professional_title'] ?? null,
                     'primary_specialty' => $validated['primary_specialty'] ?? null,
                     'bio' => $validated['bio'] ?? null,
-                    'availability' => $validated['availability'],
+                    'availability' => $validated['availability']
+                        ?? $existingProfile?->availability
+                        ?? DesignerProfile::AVAILABILITY_UNAVAILABLE,
                 ];
 
                 $profile = $user->designerProfile()->updateOrCreate([], $profileData);

@@ -93,14 +93,14 @@ const availabilityClass = computed(() => {
           </p>
         </div>
 
-        <div class="mt-5 rounded-2xl bg-[var(--ym-d-surface-warm)] p-4">
+        <div v-if="completion.percentage < 100" class="mt-5 rounded-2xl bg-[var(--ym-d-surface-warm)] p-4">
           <div class="flex items-center justify-between gap-3">
             <p class="text-[15px] font-semibold text-[#666666]">
               اكتمال البيانات الأساسية
             </p>
-            <span class="text-sm font-extrabold text-[var(--ym-d-red-strong)]">
+            <bdi dir="ltr" class="text-sm font-extrabold text-[var(--ym-d-red-strong)]">
               {{ completion.percentage }}%
-            </span>
+            </bdi>
           </div>
           <div
             class="mt-3 h-1.5 overflow-hidden rounded-full bg-neutral-200"
@@ -116,8 +116,20 @@ const availabilityClass = computed(() => {
             />
           </div>
           <p class="mt-2 text-[15px] text-[#666666]">
-            {{ completion.completed }} من {{ completion.total }} عناصر مكتملة
+            <bdi dir="ltr">{{ completion.completed }}</bdi> من <bdi dir="ltr">{{ completion.total }}</bdi> عناصر مكتملة
           </p>
+        </div>
+        <div v-else class="mt-5 flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 sm:flex-row sm:items-center" role="status">
+          <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white" aria-hidden="true">
+            <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m5 12 4 4L19 6" />
+            </svg>
+          </span>
+          <div class="min-w-0 flex-1">
+            <p class="font-extrabold text-emerald-950">البيانات الأساسية مكتملة</p>
+            <p class="mt-0.5 text-sm leading-6 text-emerald-800">جميع بيانات هذا القسم محفوظة ومكتملة.</p>
+          </div>
+          <bdi dir="ltr" class="w-fit rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs font-extrabold text-emerald-800">100%</bdi>
         </div>
 
         <div class="mt-5 border-t border-[var(--ym-d-border)] pt-5">

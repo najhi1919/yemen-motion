@@ -43,7 +43,7 @@ export interface DesignerProfilePayload {
   professional_title: string | null
   primary_specialty: string | null
   bio: string | null
-  availability: DesignerAvailability
+  availability?: DesignerAvailability
 }
 
 export interface UsernameAvailability {
