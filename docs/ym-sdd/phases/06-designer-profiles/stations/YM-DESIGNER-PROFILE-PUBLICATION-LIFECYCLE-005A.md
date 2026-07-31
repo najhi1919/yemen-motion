@@ -3,12 +3,12 @@
 | الحقل | القيمة |
 |---|---|
 | Station ID | `YM-DESIGNER-PROFILE-PUBLICATION-LIFECYCLE-005A` |
-| الحالة | `visually-approved` |
+| الحالة | `closed` |
 | المرحلة التابعة | Phase 6 — Designer Profiles |
 | الاعتماديات | إغلاق `004A` والهوية الأساسية ووسائطها |
 | نقطة الأساس | `c0f30279a71df7d16b15a217be9f571c5ea4aeac` |
 | تاريخ الفتح | `2026-08-01` |
-| تاريخ الإغلاق | — |
+| تاريخ الإغلاق | `2026-08-01` |
 
 ## الهدف
 
@@ -70,8 +70,9 @@
 
 - `DesignerProfilePublicationLifecycleTest`: نجح `18 tests` و`215 assertions`.
 - الحزمة المرتبطة Publication + Professional + Bootstrap + Media: نجحت `82 tests` و`579 assertions`.
+- لم تُعد اختبارات Backend بعد التصحيحات اللاحقة لأن ملفات Backend لم تتغير بعدها.
 - شُغّل Pint على ملفات PHP المعدلة في النطاق ونجح بعد تنسيق `routes/api.php`.
-- نجح Production Build سابق أثناء تنفيذ الواجهة، بينما Final production build بعد آخر التصحيحات البصرية ما يزال `pending`.
+- نجح Final Nuxt Production Build بعد آخر التصحيحات البصرية.
 
 ## المراجعة البصرية
 
@@ -88,17 +89,29 @@
 
 لا يعني هذا اعتمادًا شاملًا لـLTR أوWCAG أوإغلاق المرحلة كاملة.
 
+## أدلة الإغلاق
+
+- طُبقت Migration الخاصة بـ`hidden_at` محليًا بنجاح لأغراض التحقق اليدوي.
+- اختُبرت عمليات النشر والإخفاء وإعادة النشر يدويًا ونجحت.
+- نجحت مزامنة الحالة بين بطاقة بيانات الملف وقسم نشر الملف.
+- صُححت استعادة Focus بعد Dialog واعتمدت بصريًا.
+- اعتُمدت واجهات Desktop وMobile وRTL بصريًا.
+- طبقت Owner Preview إعدادات الخصوصية ولم تعرض الأقسام المخفية.
+- نجح Final Nuxt Production Build بعد آخر التصحيحات البصرية.
+
 ## Commit
 
-—
+- Closure Commit: `d7a954d2ee0a3c964de3395b50a398b33bb5954a`.
+- الرسالة: `feat(designer): add profile publication lifecycle`.
+- الإحصاءات: `24 files changed`, و`2383 insertions`، و`81 deletions`.
 
 ## Push
 
-—
+نجح Push إلى `origin/main`، وكان remote مطابقًا للـClosure Commit.
 
 ## CI
 
-—
+لم يُظهر الاستعلام الفوري الوحيد تشغيلًا، ولم يُنفذ Polling. لا توجد نتيجة نجاح أوفشل مرصودة.
 
 ## المشاكل المكتشفة والتصحيحات
 
@@ -109,7 +122,7 @@
 
 ## الحدود المتبقية
 
-Final production build بعد آخر التصحيحات البصرية وGit closure ما يزالان `pending`. الصفحة العامة النهائية خارج النطاق، ولا Closure Commit للمحطة بعد.
+أُغلقت المحطة تقنيًا وبصريًا ووُثق Closure Commit. الصفحة العامة النهائية والأعمال المميزة خارج نطاقها، وتبقى Phase 6 بحالة `in-progress`.
 
 ## المحطة التالية
 
@@ -127,3 +140,5 @@ Final production build بعد آخر التصحيحات البصرية وGit clo
 | `2026-08-01` | تطبيق Migration محليًا بنجاح لأغراض التحقق اليدوي بعد ظهور غياب `hidden_at` في المحاولة الأولى. | التحقق اليدوي المحلي | `in-progress` |
 | `2026-08-01` | إصلاح مزامنة حالة بطاقة بيانات الملف واستعادة Focus ووضوح مستويات القوائم. | التصحيحات البصرية والتفاعلية | `in-progress` |
 | `2026-08-01` | اعتماد المستخدم بصريًا حالات المسودة والمعاينة والنشر والإخفاء وإعادة النشر على Desktop وMobile وRTL، مع بقاء Final build وGit closure معلقين. | المراجعة البصرية النهائية | `visually-approved` |
+| `2026-08-01` | نجاح Final Nuxt Production Build بعد آخر التصحيحات، وإنشاء Closure Commit بالرسالة المعتمدة وPush مطابق إلى `origin/main`. | `d7a954d2ee0a3c964de3395b50a398b33bb5954a`; `24 files changed`, `2383 insertions`, `81 deletions` | `closed` |
+| `2026-08-01` | الاستعلام الفوري الوحيد عن CI لم يُظهر تشغيلًا، ولم يُنفذ Polling. | لا توجد نتيجة CI مرصودة | `closed` |

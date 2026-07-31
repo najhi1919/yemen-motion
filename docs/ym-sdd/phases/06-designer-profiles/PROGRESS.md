@@ -6,8 +6,9 @@
 |---|---|
 | Phase status | `in-progress` |
 | Documentation baseline | `382d2c3256f0a1eeb32787d475d097f07e035d9d` |
-| Current station | `YM-DESIGNER-PROFILE-PUBLICATION-LIFECYCLE-005A` |
-| Station status | `visually-approved` |
+| Current completed station | `YM-DESIGNER-PROFILE-PUBLICATION-LIFECYCLE-005A` |
+| Station status | `closed` |
+| Next planned station | `YM-DESIGNER-PUBLIC-PROFILE-006A` |
 
 ## لوحة التقدم
 
@@ -16,7 +17,7 @@
 | completed | Historical basic profile workspace and identity media | `implemented / verified by commits; original Station ID unknown` |
 | completed | `YM-DESIGNER-PROFILE-PROFESSIONAL-DATA-004A` | `closed` |
 | in progress | Phase 6 overall | `in-progress` |
-| visually approved | `YM-DESIGNER-PROFILE-PUBLICATION-LIFECYCLE-005A` | `visually-approved`; Final build and Git closure pending |
+| completed | `YM-DESIGNER-PROFILE-PUBLICATION-LIFECYCLE-005A` | `closed`; Closure Commit `d7a954d2ee0a3c964de3395b50a398b33bb5954a` |
 | planned | `YM-DESIGNER-PUBLIC-PROFILE-006A` | `planned` |
 | planned | `YM-DESIGNER-PROFILE-FEATURED-WORKS-007A` | `planned` |
 | unassigned future scope | Organization/Brand Data، Admin Oversight، Final Accessibility Closure | `not implemented / ID unassigned` |
@@ -34,14 +35,22 @@
 - CI: لم تظهر نتيجة في الاستعلام الفوري الوحيد؛ لم ينفذ polling، ولذلك لا تسجل حالة نجاح أوفشل.
 - `PROJECT_MAP.md` و`reports/`: بقيا خارج نطاق المحطة.
 
-## جاهزية إغلاق محطة 005A
+## إغلاق محطة 005A
 
-- الاعتماد البصري: `visually-approved` بتاريخ `2026-08-01`.
+- الحالة النهائية: `closed` بتاريخ `2026-08-01`.
+- Closure Commit: `d7a954d2ee0a3c964de3395b50a398b33bb5954a`.
+- رسالة Commit: `feat(designer): add profile publication lifecycle`.
+- إحصاءات Commit: `24 files changed`, و`2383 insertions`، و`81 deletions`.
+- Push: نجح إلى `origin/main`، وكان remote مطابقًا للـCommit.
+- الاعتماد البصري النهائي: نجح بتاريخ `2026-08-01`.
 - شمل الاعتماد حالات المسودة غير الجاهزة والجاهزة، والمعاينة، والنشر، والإخفاء، وإعادة النشر، ومزامنة الحالة.
 - شمل العرض Desktop وMobile وRTL، وإغلاق Drawer وDialog، واستعادة Focus، والخصوصية، وعدم ظهور رابط التخطي أوتمرير أفقي بصورة غير مقصودة.
-- الأدلة التقنية السابقة: نجح اختبار Publication Lifecycle، ونجحت اختبارات Designer المرتبطة، ونجح Production Build السابق.
-- Final production build بعد آخر التصحيحات البصرية: `pending`.
-- Git closure وClosure Commit: `pending`.
+- نجح اختبار Publication Lifecycle واختبارات Designer المرتبطة أثناء التنفيذ. لم تُعد اختبارات Backend بعد التصحيحات اللاحقة لأن ملفات Backend لم تتغير بعدها.
+- نجح Final Nuxt Production Build بعد آخر التصحيحات البصرية.
+- طُبقت Migration الخاصة بـ`hidden_at` محليًا بنجاح للتحقق اليدوي.
+- اختُبرت عمليات النشر والإخفاء وإعادة النشر يدويًا، ونجحت مزامنة الحالة بين بطاقة بيانات الملف وقسم النشر.
+- صُححت استعادة Focus بعد Dialog واعتمدت، وطبقت Owner Preview إعدادات الخصوصية.
+- CI: لم يُظهر الاستعلام الفوري الوحيد تشغيلًا، ولم يُنفذ Polling؛ لا تسجل نتيجة نجاح أوفشل.
 
 ## سجل زمني Append-only
 
@@ -58,3 +67,5 @@
 | `2026-08-01` | تنفيذ واجهة Workspace للنشر والمعاينة في `005A-2` دون إنشاء Public Route، مع بقاء المراجعة البصرية معلقة. | Publication Panel، blocker actions، Owner Preview Drawer، Publish/Hide confirmation | `005A in-progress` |
 | `2026-08-01` | تطبيق Migration دورة النشر محليًا بنجاح لأغراض التحقق اليدوي بعد اكتشاف غياب `hidden_at` في محاولة النشر الأولى. | تحقق يدوي محلي؛ لا تغيير في عقد المحطة | `005A in-progress` |
 | `2026-08-01` | اعتماد المستخدم بصريًا حالات Workspace ودورة النشر والمعاينة بعد التصحيحات، مع بقاء Final build وGit closure معلقين. | Desktop، Mobile، RTL، Focus، الخصوصية، مستويات القوائم، مزامنة الحالة | `005A visually-approved` |
+| `2026-08-01` | نجاح Final Nuxt Production Build وإغلاق محطة `005A` بالـCommit الفعلي وPush مطابق إلى `origin/main`. | Commit `d7a954d2ee0a3c964de3395b50a398b33bb5954a`; `24 files changed`, `2383 insertions`, `81 deletions` | `005A closed` |
+| `2026-08-01` | الاستعلام الفوري الوحيد عن CI لم يُظهر تشغيلًا ولم يُنفذ Polling. | لا توجد نتيجة CI مرصودة | Phase `in-progress`; next `006A planned` |

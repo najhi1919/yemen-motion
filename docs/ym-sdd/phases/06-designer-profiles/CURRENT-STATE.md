@@ -15,11 +15,11 @@
 | اكتمال البيانات المهنية | `completed` | عقد completion في محطة `004A` |
 | الحفظ والاسترجاع وoptimistic concurrency وno-op وtransactions وaudit | `completed` | Service واختبارات `004A` |
 | واجهة Desktop وMobile للبيانات المنفذة | `completed / visually verified` | إغلاق `004A` |
-| Publish Readiness | `completed / visually verified` | محطة `005A` بحالة `visually-approved` |
-| Owner-only visitor preview | `completed / visually verified` | معاينة خاصة داخل Workspace؛ ليست الصفحة العامة النهائية |
-| Publish وHide وRepublish | `completed / visually verified` | انتقالات دورة النشر وواجهة `005A` |
-| تطبيق الخصوصية داخل معاينة المالك | `completed / visually verified` | لا تعرض المعاينة الأقسام المخفية |
-| حالات `draft` و`published` و`hidden` داخل Workspace | `completed / visually verified` | مزامنة قسم النشر مع بطاقة بيانات الملف |
+| Publish Readiness | `completed / closed` | محطة `005A` وClosure Commit `d7a954d2ee0a3c964de3395b50a398b33bb5954a` |
+| Owner-only visitor preview | `completed / closed` | معاينة خاصة داخل Workspace؛ ليست الصفحة العامة النهائية |
+| Publish وHide وRepublish | `completed / closed` | انتقالات دورة النشر وواجهة `005A` |
+| تطبيق الخصوصية داخل معاينة المالك | `completed / closed` | لا تعرض المعاينة الأقسام المخفية |
+| حالات `draft` و`published` و`hidden` داخل Workspace | `completed / closed` | مزامنة قسم النشر مع بطاقة بيانات الملف |
 | تطبيق الخصوصية أمام الجمهور | `not implemented` | الصفحة العامة غير مبنية |
 | الصفحة العامة `/designers/{username}` | `not implemented` | مخطط في `006A` |
 | الأعمال المميزة وترتيبها | `not implemented` | مخطط في `007A` |
