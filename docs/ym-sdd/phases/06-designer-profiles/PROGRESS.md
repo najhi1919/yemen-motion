@@ -7,8 +7,9 @@
 | Phase status | `in-progress` |
 | Documentation baseline | `382d2c3256f0a1eeb32787d475d097f07e035d9d` |
 | Current completed station | `YM-DESIGNER-PROFILE-PUBLICATION-LIFECYCLE-005A` |
-| Station status | `closed` |
-| Next planned station | `YM-DESIGNER-PUBLIC-PROFILE-006A` |
+| Current station | `YM-DESIGNER-PUBLIC-PROFILE-006A` |
+| Station status | `in-progress` |
+| Current step | `006A-3 — Final Verification and Git Closure` |
 
 ## لوحة التقدم
 
@@ -18,7 +19,7 @@
 | completed | `YM-DESIGNER-PROFILE-PROFESSIONAL-DATA-004A` | `closed` |
 | in progress | Phase 6 overall | `in-progress` |
 | completed | `YM-DESIGNER-PROFILE-PUBLICATION-LIFECYCLE-005A` | `closed`; Closure Commit `d7a954d2ee0a3c964de3395b50a398b33bb5954a` |
-| planned | `YM-DESIGNER-PUBLIC-PROFILE-006A` | `planned` |
+| in progress | `YM-DESIGNER-PUBLIC-PROFILE-006A` | `technically-verified / visually-approved`; Production Build ناجح، وGit Closure Commit معلق |
 | planned | `YM-DESIGNER-PROFILE-FEATURED-WORKS-007A` | `planned` |
 | unassigned future scope | Organization/Brand Data، Admin Oversight، Final Accessibility Closure | `not implemented / ID unassigned` |
 | separate stations | `YM-DESIGNER-ACCOUNT-SETTINGS-001A`، `YM-ADMIN-MEDIATED-REQUESTS-001A` | `separate scope` |
@@ -69,3 +70,9 @@
 | `2026-08-01` | اعتماد المستخدم بصريًا حالات Workspace ودورة النشر والمعاينة بعد التصحيحات، مع بقاء Final build وGit closure معلقين. | Desktop، Mobile، RTL، Focus، الخصوصية، مستويات القوائم، مزامنة الحالة | `005A visually-approved` |
 | `2026-08-01` | نجاح Final Nuxt Production Build وإغلاق محطة `005A` بالـCommit الفعلي وPush مطابق إلى `origin/main`. | Commit `d7a954d2ee0a3c964de3395b50a398b33bb5954a`; `24 files changed`, `2383 insertions`, `81 deletions` | `005A closed` |
 | `2026-08-01` | الاستعلام الفوري الوحيد عن CI لم يُظهر تشغيلًا ولم يُنفذ Polling. | لا توجد نتيجة CI مرصودة | Phase `in-progress`; next `006A planned` |
+| `2026-08-01` | فتح `006A` من baseline المحدد وبدء `006A-1` لبناء Public Profile Read Contract فقط. | Baseline `890d7a468ba875856050e84b9da5ed24697a0bcc` | `006A in-progress` |
+| `2026-08-01` | تنفيذ API القراءة العام ووسائط الملف وغلاف العمل والخصوصية وجميع الأعمال العامة، وكتابة اختبارات Feature دون تشغيلها. | ملفات `006A-1`; Frontend وvisual review pending؛ Build لم يشغل | `006A in-progress` |
+| `2026-08-01` | نجاح عقد القراءة العام بعد التصحيحات المركزة. | `PublicDesignerProfileTest`: `12 passed`, `93 assertions` | `006A in-progress` |
+| `2026-08-01` | تنفيذ `006A-2` لصفحة Nuxt العامة عبر SSR، مع Hero والأقسام العامة وشبكة الأعمال وSEO وحالات Loading/Error/Empty/404. | Frontend `implemented-pending-visual-review`; Final Build وGit closure pending | `006A in-progress` |
+| `2026-08-03` | اعتماد المراجعة التشغيلية والبصرية للملف العام، بما يشمل Desktop وTablet وMobile وRTL وLTR وKeyboard و`200%` Zoom والحالة الفارغة وخصوصية الأقسام وإخفاء الملف وحجب وسائطه وإعادة النشر. | التحقق اليدوي على `/designers/khal` وعقد API والوسائط | `006A visually-approved` |
+| `2026-08-03` | نجاح TypeScript ضمن نطاق `006A` ونجاح Nuxt Production Build للعميل وSSR وNitro. بقي Typecheck العام بـ`232` خطأ خارج نطاق المحطة. | task-scope errors `0`; Nuxt/Nitro Build complete | `006A technically-verified; Git closure pending` |

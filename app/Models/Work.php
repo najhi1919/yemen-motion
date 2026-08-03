@@ -224,6 +224,13 @@ class Work extends Model
         return $query->where('status', self::STATUS_PUBLISHED);
     }
 
+    public function scopePubliclyVisible(Builder $query): Builder
+    {
+        return $query
+            ->where('status', self::STATUS_PUBLISHED)
+            ->where('visibility_status', self::VISIBILITY_PUBLIC);
+    }
+
     public function scopeHidden(Builder $query): Builder
     {
         return $query->where('status', self::STATUS_HIDDEN);

@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\AdminAttentionStreamController;
+use App\Http\Controllers\Api\Admin\AdminNavigationAttentionController;
 use App\Http\Controllers\Api\Admin\Analytics\UserAnalyticsController as AdminUserAnalyticsController;
 use App\Http\Controllers\Api\Admin\AuditEventController as AdminAuditEventController;
 use App\Http\Controllers\Api\Admin\PermissionController as AdminPermissionController;
@@ -39,10 +41,14 @@ use App\Http\Controllers\Api\DesignerProfileProfessionalController;
 use App\Http\Controllers\Api\DesignerProfilePublicationController;
 use App\Http\Controllers\Api\DesignerWorksArchiveController;
 use App\Http\Controllers\Api\DesignerWorksAuthoringController;
+use App\Http\Controllers\Api\DesignerWorksReviewSubmissionController;
 use App\Http\Controllers\Api\DesignerWorksIndexController;
 use App\Http\Controllers\Api\DesignerWorksMediaController;
 use App\Http\Controllers\Api\DesignerWorksMetadataController;
 use App\Http\Controllers\Api\DesignerWorksPresentationController;
+use App\Http\Controllers\Api\PublicDesignerProfileController;
+use App\Http\Controllers\Api\PublicDesignerProfileMediaController;
+use App\Http\Controllers\Api\PublicDesignerWorkMediaController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
@@ -55,6 +61,21 @@ Route::prefix('auth')->group(function () {
 
 Route::middleware(['auth:sanctum', 'account.active'])->get('/user', [AuthApiController::class, 'user']);
 
+Route::prefix('designers/{username}')->group(function () {
+    Route::get('/', PublicDesignerProfileController::class)
+        ->name('public.designers.show');
+    Route::get('/avatar', [PublicDesignerProfileMediaController::class, 'avatar'])
+        ->name('public.designers.avatar');
+    Route::get('/cover', [PublicDesignerProfileMediaController::class, 'cover'])
+        ->name('public.designers.cover');
+    Route::get('/works/{workCode}/media/{media}/content', [PublicDesignerWorkMediaController::class, 'content'])
+        ->whereNumber('media')
+        ->name('public.designers.works.media.content');
+    Route::get('/works/{workCode}/media/{media}/poster', [PublicDesignerWorkMediaController::class, 'poster'])
+        ->whereNumber('media')
+        ->name('public.designers.works.media.poster');
+});
+
 Route::middleware(['auth:sanctum', 'account.active'])->prefix('designer')->group(function () {
     Route::post('/works', [DesignerWorksAuthoringController::class, 'store'])
         ->name('designer.works.store');
@@ -64,6 +85,12 @@ Route::middleware(['auth:sanctum', 'account.active'])->prefix('designer')->group
     Route::patch('/works/{work}', [DesignerWorksAuthoringController::class, 'update'])
         ->whereNumber('work')
         ->name('designer.works.update');
+    Route::get('/works/{work}/review-readiness', [DesignerWorksReviewSubmissionController::class, 'readiness'])
+        ->whereNumber('work')
+        ->name('designer.works.review-readiness');
+    Route::patch('/works/{work}/submit-review', [DesignerWorksReviewSubmissionController::class, 'submit'])
+        ->whereNumber('work')
+        ->name('designer.works.submit-review');
     Route::get('/works', [DesignerWorksIndexController::class, 'index'])
         ->name('designer.works.index');
     Route::patch('/works/{work}/archive', [DesignerWorksArchiveController::class, 'archive'])
@@ -144,6 +171,8 @@ Route::middleware(['auth:sanctum', 'account.active'])->prefix('dashboard')->grou
 });
 
 Route::middleware(['auth:sanctum', 'account.active'])->prefix('admin')->group(function () {
+    Route::get('/navigation-attention', AdminNavigationAttentionController::class);
+    Route::get('/navigation-attention/stream', AdminAttentionStreamController::class);
     Route::get('/audit-events', [AdminAuditEventController::class, 'index']);
     Route::get('/analytics/users', AdminUserAnalyticsController::class);
     Route::get('/reports/users', AdminUserReportController::class);

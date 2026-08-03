@@ -11,17 +11,17 @@
 | 3. Publication Readiness | شروط كاملة ورسائل وإجراءات إصلاح | `met` | Service واختبار Publication Lifecycle وواجهة blockers في `005A` |
 | 3. Publication Readiness | Owner-only visitor preview | `met` | معاينة المالك معتمدة بصريًا وتطبق خصوصية الأقسام |
 | 4. Publication Lifecycle | نشر وإخفاء وإعادة نشر مع Audit | `met` | Backend وواجهة `005A` والاعتماد البصري بتاريخ `2026-08-01` |
-| 5. Public Profile | route `/designers/{username}` وحالات العرض العامة | `not-met` | مطلوب `006A` |
+| 5. Public Profile | route `/designers/{username}` وحالات العرض العامة | `met` | عقد `006A` وصفحة Nuxt وSSR وحالات Loading/Error/Empty/404 معتمدة |
 | 6. Privacy Enforcement | احترام flags في Owner Preview | `met` | تحقق العرض الشرطي للأقسام في معاينة `005A` |
-| 6. Privacy Enforcement | احترام flags في المستهلك العام | `not-met` | لا مستهلك عام حتى تنفيذ `006A` |
+| 6. Privacy Enforcement | احترام flags في المستهلك العام | `met` | الأقسام الخاصة لا تعيد محتواها، واعتمد الإخفاء والاستعادة يدويًا |
 | 7. Featured Works | اختيار وترتيب وحدود وصلاحية الأعمال العامة | `not-met` | مطلوب `007A` |
 | 8. Organization Data | بيانات المنشأة أوالعلامة عند انطباقها | `not-met` | Station ID غير معتمد |
 | 9. Admin Oversight | إدارة Admin لملفات المصممين | `not-met` | Station ID غير معتمد |
 | 10. Security and Authorization | ملكية وعزل أدوار endpoints الداخلية | `met` | اختبارات Bootstrap/Media/Professional |
-| 10. Security and Authorization | حماية routes والحالات العامة | `not-met` | routes العامة غير منفذة |
+| 10. Security and Authorization | حماية routes والحالات العامة | `met` | الملفات غير المنشورة والوسائط القديمة تعيد `404`، مع عزل العمل والمصمم |
 | 11. Auditability | Audit ذري وآمن لتحديث البيانات المهنية | `met` | اختبارات `004A` |
 | 11. Auditability | Audit لدورة النشر | `met` | اختبار Publication Lifecycle أثناء تنفيذ `005A` |
 | 11. Auditability | Audit للإشراف الإداري | `not-met` | Admin oversight غير منفذ |
-| 12. Responsive and Accessibility | RTL وDesktop/Mobile وReduced Motion للنطاق المنفذ | `partially-met` | تحقق جزئي؛ Tablet/LTR/Keyboard/`200%` Zoom وكل الحالات تحتاج إغلاقًا شاملًا |
-| 13. SEO and Public Metadata | SEO وOpen Graph للملف العام | `not-met` | مطلوب `006A` |
-| 14. Phase Closure Evidence | كل المحطات والمعايير وCommit إغلاق واعتماد المستخدم | `not-ready` | أُغلقت `005A`، لكن Public Profile وFeatured Works وAdmin Oversight غير مكتملة؛ المرحلة غير قابلة للإغلاق |
+| 12. Responsive and Accessibility | RTL وDesktop/Mobile وReduced Motion للنطاق المنفذ | `partially-met` | `006A` معتمدة على Desktop وTablet وMobile وRTL وLTR وKeyboard و`200%` Zoom؛ يبقى إغلاق Phase 6 الوصولي الشامل لمحطة لاحقة |
+| 13. SEO and Public Metadata | SEO وOpen Graph للملف العام | `met` | title وdescription وcanonical وOpen Graph/Twitter من عقد `006A` |
+| 14. Phase Closure Evidence | كل المحطات والمعايير وCommit إغلاق واعتماد المستخدم | `not-ready` | `006A` تقنيًا وبصريًا جاهزة لـGit closure؛ تبقى `007A` وOrganization Data وAdmin Oversight والإغلاق الشامل للمرحلة |

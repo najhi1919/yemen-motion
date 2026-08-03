@@ -11,7 +11,7 @@
 | بطاقة معاينة الهوية الداخلية واكتمال البيانات الأساسية | `completed` | Commits التاريخية و`382d2c3...` |
 | حالة التوفر وسنوات الخبرة والمعلومات المهنية الإضافية | `completed` | محطة `004A` |
 | الخدمات والأساليب والمهارات والبرامج والأدوات واللغات | `completed` | محطة `004A` |
-| إعدادات خصوصية الأقسام المهنية | `completed as configuration and owner preview enforcement` | مخزنة وتطبق داخل معاينة المالك؛ لا يوجد مستهلك عام بعد |
+| إعدادات خصوصية الأقسام المهنية | `completed / verified` | عقد API العام يعيد `visible=false` فقط للقسم الخاص دون محتواه، واعتمد الاختبار اليدوي للإخفاء والاستعادة |
 | اكتمال البيانات المهنية | `completed` | عقد completion في محطة `004A` |
 | الحفظ والاسترجاع وoptimistic concurrency وno-op وtransactions وaudit | `completed` | Service واختبارات `004A` |
 | واجهة Desktop وMobile للبيانات المنفذة | `completed / visually verified` | إغلاق `004A` |
@@ -20,13 +20,18 @@
 | Publish وHide وRepublish | `completed / closed` | انتقالات دورة النشر وواجهة `005A` |
 | تطبيق الخصوصية داخل معاينة المالك | `completed / closed` | لا تعرض المعاينة الأقسام المخفية |
 | حالات `draft` و`published` و`hidden` داخل Workspace | `completed / closed` | مزامنة قسم النشر مع بطاقة بيانات الملف |
-| تطبيق الخصوصية أمام الجمهور | `not implemented` | الصفحة العامة غير مبنية |
-| الصفحة العامة `/designers/{username}` | `not implemented` | مخطط في `006A` |
+| Public Profile read API | `implemented / technically verified` | `PublicDesignerProfileTest`: `12 passed`, `93 assertions` |
+| وسائط الملف وغلاف العمل العامة المحكومة | `implemented / technically verified` | Controllers عامة تتحقق من أهلية الملف والعمل والغلاف قبل بث `works_private` |
+| تطبيق الخصوصية في عقد القراءة العام | `implemented / technically verified` | الأقسام الخاصة تعيد `visible=false` بلا محتوى |
+| جميع الأعمال المنشورة والعامة في عقد القراءة | `implemented / technically verified` | status published وvisibility public بترتيب النشر ثم id |
+| الصفحة العامة `/designers/{username}` في Nuxt | `completed / technically and visually verified` | SSR وLoading وError و404 والهوية والأقسام العامة، مع اعتماد Desktop وTablet وMobile وRTL وLTR وKeyboard وZoom |
+| Public works grid | `completed / technically and visually verified` | شبكة Responsive، حالة Empty مستقرة، وعرض العمل الحقيقي وغلافه دون إجراءات إدارة أوFeatured Works |
+| SEO وOpen Graph للملف العام | `completed / technically verified` | العنوان والوصف والمسار canonical وصورة Open Graph مشتقة من العقد العام |
 | الأعمال المميزة وترتيبها | `not implemented` | مخطط في `007A` |
-| الأعمال العامة داخل صفحة المصمم | `not implemented` | يعتمد على `006A` وقدرة الأعمال المجاورة |
+| الأعمال العامة داخل صفحة المصمم | `completed / verified` | تعرض الأعمال المنشورة والعامة من عقد `006A`؛ اختيار وترتيب Featured Works يبقى ضمن `007A` |
 | بيانات المنشأة أوالعلامة التجارية | `not implemented` | نطاق مستقبلي بلا ID |
 | إدارة Admin لملفات المصممين | `not implemented` | نطاق مستقبلي بلا ID |
-| تدقيق WCAG/Responsive/LTR شامل | `partially-met` | تمت مراجعات Desktop وMobile وRTL للمنفذ؛ الإغلاق الشامل لم يحدث |
+| تدقيق WCAG/Responsive/LTR شامل | `met for 006A / partially-met for Phase 6` | أُغلقت تغطية `006A` على Desktop وTablet وMobile وRTL وLTR وKeyboard و`200%` Zoom وReduced Motion؛ يبقى الإغلاق الشامل للمرحلة في محطة لاحقة |
 
 ## نطاقات مستقلة
 
@@ -38,5 +43,5 @@
 ## حدود التفسير
 
 - Owner-only visitor preview داخل Workspace تحاكي محتوى الزائر وتطبق الخصوصية، لكنها ليست Public Profile Route كاملة.
-- تطبيق إعدادات الخصوصية في معاينة المالك لا يعني تطبيقها للعامة؛ المستهلك العام غير مبني.
+- عقد API وصفحة Nuxt يطبقان إعدادات الخصوصية، واعتمدت الصفحة العامة بصريًا وتشغيليًا؛ يبقى Git Closure Commit فقط لإغلاق `006A`.
 - وجود إدارة أعمال المصمم لا يثبت إغلاق مرحلة Designer Profiles ولا يثبت انتسابها إلى محطة ملف شخصي.
