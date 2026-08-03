@@ -4,18 +4,16 @@
 
 ## لماذا لا يمكن الإغلاق
 
-اكتمل Workspace الداخلي والبيانات المهنية بدرجة كبيرة، لكن النشر والجاهزية والصفحة العامة والخصوصية العامة والأعمال المميزة وبيانات المنشأة والإشراف الإداري والإغلاق الوصولي الشامل لم تكتمل. لا تمثل القدرة المجاورة لإدارة الأعمال إغلاقًا لمرحلة الملف.
+اكتمل Workspace الداخلي والبيانات المهنية ودورة النشر والصفحة العامة، وأُغلقت `006A` بالـCommit `3e1553c136d6d396055296a4b00aeb0ef771643d`. تبقى الأعمال المميزة وبيانات المنشأة والإشراف الإداري والإغلاق الوصولي الشامل؛ لذلك لا تزال Phase 6 بحالة `in-progress`.
 
 ## المحطات الإلزامية المتبقية
 
-- `YM-DESIGNER-PROFILE-PUBLICATION-LIFECYCLE-005A`.
-- `YM-DESIGNER-PUBLIC-PROFILE-006A`.
 - `YM-DESIGNER-PROFILE-FEATURED-WORKS-007A`.
 - محطات مستقبلية لم تعتمد IDs بعد: Organization/Brand Data، Admin Oversight، Final Accessibility and Responsive Closure.
 
 ## المعايير غير المتحققة
 
-Publication Readiness، Publication Lifecycle، Public Profile، Privacy Enforcement، Featured Works، Organization Data، Admin Oversight، SEO/Public Metadata، والإغلاق الوصولي الشامل.
+Featured Works، Organization Data، Admin Oversight، والإغلاق الوصولي الشامل ما تزال غير مكتملة على مستوى Phase 6.
 
 ## الأدلة المطلوبة مستقبلًا
 
@@ -27,8 +25,8 @@ Publication Readiness، Publication Lifecycle، Public Profile، Privacy Enforce
 
 ## Closure Gate
 
-- [ ] إغلاق `005A` بأدلة كاملة.
-- [ ] إغلاق `006A` بأدلة كاملة.
+- [x] إغلاق `005A` بأدلة كاملة.
+- [x] إغلاق `006A` بأدلة كاملة — `3e1553c136d6d396055296a4b00aeb0ef771643d`.
 - [ ] إغلاق `007A` بأدلة كاملة.
 - [ ] تعيين وتنفيذ النطاقات الإلزامية غير المسماة.
 - [ ] تحول جميع المعايير الإلزامية إلى `met`.

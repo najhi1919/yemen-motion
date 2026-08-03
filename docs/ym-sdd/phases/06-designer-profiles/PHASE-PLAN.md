@@ -16,7 +16,7 @@
 |---|---|---|
 | A. Internal Workspace | الهوية الأساسية، الاسم المهني واسم المستخدم، الصورة والغلاف ونقطة التركيز، النبذة، البيانات المهنية، التوفر، الخصوصية المخزنة، الاكتمال والحفظ الآمن | `implemented / largely verified` |
 | B. Publication Lifecycle | شروط الجاهزية، معاينة الزائر، النشر، الإخفاء أوإلغاء النشر، الرسائل والتدقيق | `closed`؛ محطة `005A`، Closure Commit `d7a954d2ee0a3c964de3395b50a398b33bb5954a` |
-| C. Public Profile | الصفحة العامة `/designers/{username}`، البيانات العامة، الحالات العامة، SEO | `implemented / technically verified / visually approved; Git closure pending` |
+| C. Public Profile | الصفحة العامة `/designers/{username}`، البيانات العامة، الحالات العامة، SEO | `closed`؛ Closure Commit `3e1553c136d6d396055296a4b00aeb0ef771643d` |
 | D. Featured Works | اختيار الأعمال العامة، الحد والترتيب والصلاحية | `planned` |
 | E. Organization/Brand Data | بيانات المنشأة أوالعلامة عند انطباقها | `not implemented / ID unassigned` |
 | F. Admin Oversight | إدارة ومراجعة ملفات المصممين إداريًا | `not implemented / ID unassigned` |
@@ -27,7 +27,7 @@
 | الترتيب | Station ID | الحالة | الاعتمادية |
 |---|---|---|---|
 | 1 | `YM-DESIGNER-PROFILE-PUBLICATION-LIFECYCLE-005A` | `planned` | Workspace والبيانات المهنية |
-| 2 | `YM-DESIGNER-PUBLIC-PROFILE-006A` | `in-progress — Git closure pending` | إغلاق `005A` |
+| 2 | `YM-DESIGNER-PUBLIC-PROFILE-006A` | `closed`؛ `3e1553c136d6d396055296a4b00aeb0ef771643d` | إغلاق `005A` |
 | 3 | `YM-DESIGNER-PROFILE-FEATURED-WORKS-007A` | `planned` | العقود النهائية في `005A` و`006A` |
 
 ## نطاقات مستقبلية بلا Station ID معتمد

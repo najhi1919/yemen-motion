@@ -3,14 +3,14 @@
 | الحقل | القيمة |
 |---|---|
 | Station ID | `YM-DESIGNER-PUBLIC-PROFILE-006A` |
-| الحالة | `in-progress` |
+| الحالة | `closed` |
 | المرحلة التابعة | Phase 6 — Designer Profiles |
 | الاعتماديات | إغلاق `YM-DESIGNER-PROFILE-PUBLICATION-LIFECYCLE-005A` |
 | نقطة الأساس | `890d7a468ba875856050e84b9da5ed24697a0bcc` |
 | تاريخ الفتح | `2026-08-01` |
-| تاريخ الإغلاق | — |
+| تاريخ الإغلاق | `2026-08-03` |
+| Closure Commit | `3e1553c136d6d396055296a4b00aeb0ef771643d` |
 | المسار المعتمد | `/designers/{username}` |
-| Current step | `006A-3 — Final Verification and Git Closure` |
 
 ## الهدف
 
@@ -82,7 +82,7 @@
 
 ## Commit
 
-—
+`3e1553c136d6d396055296a4b00aeb0ef771643d` — `feat(designer): add public profile experience`.
 
 ## Push
 
@@ -100,7 +100,7 @@
 
 ## الحدود المتبقية
 
-اكتملت المراجعة البصرية ونجح Production Build وأصبحت أخطاء TypeScript داخل نطاق `006A` صفرًا. يبقى Git Closure Commit فقط. Typecheck العام ما زال يسجل `232` خطأ خارج نطاق المحطة، ويسجل ذلك كدين تقني مستقل. Featured Works تبقى ضمن `007A`.
+أُغلقت المحطة بالـCommit `3e1553c136d6d396055296a4b00aeb0ef771643d` بعد نجاح التحقق التقني والبصري وProduction Build. يبقى Typecheck العام بـ`232` خطأ مسجلًا كدين تقني خارج نطاق المحطة، وتبقى Featured Works ضمن `007A`.
 
 ## المحطة التالية
 
@@ -117,3 +117,4 @@
 | `2026-08-01` | تنفيذ `006A-2 — Public Profile Frontend` عبر SSR مع SEO وشبكة الأعمال والحالات العامة، دون Featured Works أوصفحة تفاصيل. | Frontend `implemented-pending-visual-review`; Final Build pending | `in-progress` |
 | `2026-08-03` | اعتماد Desktop وTablet وMobile وRTL وLTR وKeyboard و`200%` Zoom والحالة الفارغة والخصوصية وإخفاء الملف وحجب وسائطه وإعادة النشر. | التحقق اليدوي والوظيفي على ملف `khal` | `visually-approved` |
 | `2026-08-03` | تثبيت TypeScript Toolchain محليًا، وإزالة أخطاء النوع داخل نطاق `006A`، ونجاح Client وSSR وNitro Production Build. | task-scope errors `0`; global errors `232` خارج النطاق؛ Build complete | `technically-verified / Git closure pending` |
+| `2026-08-03` | إنشاء Commit التنفيذ والإغلاق بعد التحقق من قائمة الـ29 ملفًا وحماية المسارات المستثناة. | `3e1553c136d6d396055296a4b00aeb0ef771643d`؛ `29 files changed`, `3756 insertions`, `40 deletions` | `closed` |
