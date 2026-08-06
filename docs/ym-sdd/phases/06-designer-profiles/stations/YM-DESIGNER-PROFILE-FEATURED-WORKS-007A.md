@@ -3,13 +3,13 @@
 | الحقل | القيمة |
 |---|---|
 | Station ID | `YM-DESIGNER-PROFILE-FEATURED-WORKS-007A` |
-| الحالة | `technically-verified / visually-approved; Git closure pending` |
+| الحالة | `closed` |
 | المرحلة التابعة | Phase 6 — Designer Profiles |
 | الاعتماديات | العقود النهائية لـ`005A` و`006A` |
 | نقطة الأساس | `82f21d47f3effc7d6196c5e2b9c120db407e0eb6` |
 | تاريخ الفتح | `2026-08-05` |
-| تاريخ الإغلاق | — |
-| Current step | `007A-3 — Final Verification and Git Closure` |
+| تاريخ الإغلاق | `2026-08-07` |
+| Current step | `closed — Git closure complete` |
 
 ## الهدف
 
@@ -52,11 +52,11 @@
 
 ## Commit
 
-—
+`ff6c862fd215e7b1703ae68e4490337b13b21b55` — `feat(designer): add profile featured works`.
 
 ## Push
 
-—
+تم الدفع إلى `origin/main`، وتم التحقق من أن `origin/main` يشير إلى `ff6c862fd215e7b1703ae68e4490337b13b21b55`.
 
 ## CI
 
@@ -68,11 +68,11 @@
 
 ## الحدود المتبقية
 
-لا يوجد نطاق Runtime متبقٍ داخل `007A`. المتبقي هو Final Git Scope Gate ثم Commit وPush المنضبطان. النطاقات المستقبلية في Phase 6 تبقى منفصلة.
+أُغلقت المحطة بالـClosure Commit `ff6c862fd215e7b1703ae68e4490337b13b21b55` بعد نجاح التحقق التقني والبصري وRuntime QA وFinal Git Scope Gate، ثم دفع الـCommit والتحقق من تطابق `origin/main`. لا يوجد نطاق Runtime متبقٍ داخل `007A`، وتبقى النطاقات المستقبلية في Phase 6 منفصلة.
 
 ## المحطة التالية
 
-لا تحدد قبل إغلاق `007A` واعتماد النطاق التالي في Phase 6.
+غير معيّنة حتى الآن. تبقى Organization/Brand Data وAdmin Oversight وFinal Accessibility and Responsive Closure نطاقات مستقبلية بلا Station ID معتمد، ولا يُخترع معرف قبل اعتماد محطة مستقلة.
 
 ## سجل زمني Append-only
 
@@ -82,3 +82,4 @@
 | `2026-08-05` | فتح `007A-1` واعتماد العقد المستقل للأعمال المميزة بحد 6 وترتيب يدوي، مع استبعاد علامات Admin. | Baseline `82f21d47f3effc7d6196c5e2b9c120db407e0eb6`؛ `DP-DEC-014` | `in-progress` |
 | `2026-08-06` | اكتمال Backend وFrontend والتحقق البرمجي التفاضلي. | Backend/Public/Regression tests؛ Frontend Source Test؛ TypeScript introduced errors `0`؛ CSS scope وProduction Build ناجحان | `technically-verified` |
 | `2026-08-07` | اكتمال Migration التطويرية وRuntime/Visual QA. | PostgreSQL schema؛ Owner/Public API؛ media؛ save؛ no-op؛ `409` conflict؛ deduplication؛ Desktop/Keyboard/200%/Mobile/Public Profile | `technically-verified / visually-approved; Git closure pending` |
+| `2026-08-07` | إنشاء Commit التنفيذ والإغلاق ودفعه إلى `origin/main` بعد Final Git Scope Gate. | `ff6c862fd215e7b1703ae68e4490337b13b21b55`؛ `29 files changed`؛ staged scope مطابق؛ forbidden/review scope خارج الـCommit؛ remote verification ناجح | `closed` |
