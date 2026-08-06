@@ -95,6 +95,10 @@ export interface PublicDesignerProfile {
   identity: PublicDesignerIdentity
   professional: PublicDesignerProfessional
   published_at: string | null
+  featured_works: {
+    items: PublicDesignerWork[]
+    total: number
+  }
   works: {
     items: PublicDesignerWork[]
     total: number

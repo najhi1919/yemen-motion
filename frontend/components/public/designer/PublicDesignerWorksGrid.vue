@@ -4,15 +4,65 @@ import type {
   PublicDesignerWork,
 } from '~/types/public-designer-profile'
 
-defineProps<{
+const props = withDefaults(defineProps<{
   identity: PublicDesignerIdentity
   works: PublicDesignerWork[]
   total: number
-}>()
+  featured?: boolean
+}>(), {
+  featured: false,
+})
+
+const sectionId = computed(
+  () => props.featured ? 'featured-works' : 'works',
+)
+
+const headingId = computed(
+  () => `public-designer-${sectionId.value}-title`,
+)
+
+const heading = computed(
+  () => props.featured
+    ? 'الأعمال المميزة'
+    : 'الأعمال المنشورة',
+)
+
+const description = computed(
+  () => props.featured
+    ? 'اختيارات مرتبة بعناية لتقديم أبرز أعمال المصمم أولًا.'
+    : 'أعمال متاحة للعامة تعكس خبرة المصمم ومجالاته الإبداعية.',
+)
+
+const countLabel = computed(() => {
+  if (props.featured) {
+    return props.total === 1 ? 'عمل مميز' : 'أعمال مميزة'
+  }
+
+  return props.total === 1 ? 'عمل منشور' : 'أعمال منشورة'
+})
+
+const emptyTitle = computed(
+  () => props.featured
+    ? 'لا توجد أعمال مميزة'
+    : 'لا توجد أعمال منشورة بعد',
+)
+
+const emptyDescription = computed(
+  () => props.featured
+    ? 'لم يحدد المصمم أعمالًا مميزة في هذه النسخة من ملفه.'
+    : 'ستظهر هنا الأعمال العامة عندما يضيفها المصمم إلى ملفه.',
+)
 </script>
 
 <template>
-  <section id="works" class="public-works-feed" aria-labelledby="public-designer-works-title">
+  <section
+    :id="sectionId"
+    :class="[
+      'public-works-feed',
+      { 'public-works-feed--featured': props.featured },
+    ]"
+    :aria-labelledby="headingId"
+  >
     <header class="public-works-header">
       <div class="public-works-heading-group">
         <span class="public-works-icon" aria-hidden="true">
@@ -23,31 +73,48 @@ defineProps<{
           </svg>
         </span>
         <div class="min-w-0">
-          <h2 id="public-designer-works-title" class="public-works-heading">الأعمال المنشورة</h2>
+          <h2
+            :id="headingId"
+            class="public-works-heading"
+          >
+            {{ heading }}
+          </h2>
           <p class="public-works-description">
-            أعمال متاحة للعامة تعكس خبرة المصمم ومجالاته الإبداعية.
+            {{ description }}
           </p>
         </div>
       </div>
-      <div class="public-works-count" aria-label="عدد الأعمال المنشورة">
-        <bdi dir="ltr">{{ total }}</bdi>
-        <span>{{ total === 1 ? 'عمل منشور' : 'أعمال منشورة' }}</span>
+      <div
+        class="public-works-count"
+        :aria-label="props.featured
+          ? 'عدد الأعمال المميزة'
+          : 'عدد الأعمال المنشورة'"
+      >
+        <bdi dir="ltr">{{ props.total }}</bdi>
+        <span>{{ countLabel }}</span>
       </div>
     </header>
 
-    <div v-if="works.length" class="public-works-list">
+    <div
+      v-if="props.works.length"
+      class="public-works-list"
+    >
       <PublicDesignerWorkCard
-        v-for="work in works"
+        v-for="work in props.works"
         :key="work.public_code"
         :work="work"
-        :identity="identity"
+        :identity="props.identity"
       />
     </div>
 
     <div v-else class="public-works-empty">
       <div class="public-empty-artboard" aria-hidden="true" />
-      <h3 class="public-empty-title">لا توجد أعمال منشورة بعد</h3>
-      <p class="public-empty-description">ستظهر هنا الأعمال العامة عندما يضيفها المصمم إلى ملفه.</p>
+      <h3 class="public-empty-title">
+        {{ emptyTitle }}
+      </h3>
+      <p class="public-empty-description">
+        {{ emptyDescription }}
+      </p>
     </div>
   </section>
 </template>
@@ -67,6 +134,35 @@ defineProps<{
   );
   box-sizing: border-box;
   scroll-margin-top: 76px;
+}
+
+.public-works-feed--featured {
+  border: 1px solid rgba(196, 141, 84, 0.18);
+  background:
+    radial-gradient(
+      circle at 12% 8%,
+      rgba(196, 141, 84, 0.09),
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 88% 18%,
+      rgba(226, 29, 29, 0.055),
+      transparent 30%
+    );
+}
+
+.public-works-feed--featured .public-works-header {
+  border-color: rgba(207, 151, 92, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(224, 185, 143, 0.14),
+    0 16px 34px rgba(17, 17, 17, 0.18),
+    0 0 26px rgba(196, 141, 84, 0.08);
+}
+
+.public-works-feed--featured .public-works-icon {
+  border-color: rgba(207, 151, 92, 0.42);
+  background: rgba(196, 141, 84, 0.14);
+  color: #d59a5c;
 }
 
 .public-works-feed::before {

@@ -7,8 +7,9 @@
 | Phase status | `in-progress` |
 | Documentation baseline | `382d2c3256f0a1eeb32787d475d097f07e035d9d` |
 | Current completed station | `YM-DESIGNER-PUBLIC-PROFILE-006A` |
-| Station status | `closed` |
-| Next planned station | `YM-DESIGNER-PROFILE-FEATURED-WORKS-007A` |
+| Current station | `YM-DESIGNER-PROFILE-FEATURED-WORKS-007A` |
+| Station status | `technically-verified / visually-approved; Git closure pending` |
+| Current step | `007A-3 — Final Verification and Git Closure` |
 
 ## لوحة التقدم
 
@@ -19,7 +20,7 @@
 | in progress | Phase 6 overall | `in-progress` |
 | completed | `YM-DESIGNER-PROFILE-PUBLICATION-LIFECYCLE-005A` | `closed`; Closure Commit `d7a954d2ee0a3c964de3395b50a398b33bb5954a` |
 | completed | `YM-DESIGNER-PUBLIC-PROFILE-006A` | `closed`; Closure Commit `3e1553c136d6d396055296a4b00aeb0ef771643d` |
-| planned | `YM-DESIGNER-PROFILE-FEATURED-WORKS-007A` | `planned` |
+| in progress | `YM-DESIGNER-PROFILE-FEATURED-WORKS-007A` | `technically-verified / visually-approved`; Git Closure Commit pending |
 | unassigned future scope | Organization/Brand Data، Admin Oversight، Final Accessibility Closure | `not implemented / ID unassigned` |
 | separate stations | `YM-DESIGNER-ACCOUNT-SETTINGS-001A`، `YM-ADMIN-MEDIATED-REQUESTS-001A` | `separate scope` |
 | adjacent completed capability / dependency | إدارة أعمال المصمم الداخلية | `completed elsewhere; not attributed to a profile station` |
@@ -76,3 +77,6 @@
 | `2026-08-03` | اعتماد المراجعة التشغيلية والبصرية للملف العام، بما يشمل Desktop وTablet وMobile وRTL وLTR وKeyboard و`200%` Zoom والحالة الفارغة وخصوصية الأقسام وإخفاء الملف وحجب وسائطه وإعادة النشر. | التحقق اليدوي على `/designers/khal` وعقد API والوسائط | `006A visually-approved` |
 | `2026-08-03` | نجاح TypeScript ضمن نطاق `006A` ونجاح Nuxt Production Build للعميل وSSR وNitro. بقي Typecheck العام بـ`232` خطأ خارج نطاق المحطة. | task-scope errors `0`; Nuxt/Nitro Build complete | `006A technically-verified; Git closure pending` |
 | `2026-08-03` | إنشاء Commit التنفيذ والإغلاق لمحطة `006A`. | `3e1553c136d6d396055296a4b00aeb0ef771643d`؛ `29 files changed`, `3756 insertions`, `40 deletions` | `006A closed` |
+| `2026-08-05` | فتح محطة `007A` من Baseline إغلاق `006A` واعتماد فصل اختيارات المصمم عن علامات الترويج الإداري، مع بدء عقد Backend المستقل. | Baseline `82f21d47f3effc7d6196c5e2b9c120db407e0eb6`؛ `DP-DEC-014` | `007A in-progress` |
+| `2026-08-06` | اكتمال Backend وFrontend لمحطة `007A` واجتياز التحقق البرمجي. | Backend/Public/Regression tests؛ Frontend Source Test؛ TypeScript differential `0` introduced errors؛ CSS scope؛ Production Build | `007A technically-verified` |
+| `2026-08-07` | نجاح Migration التطويرية وRuntime/Visual QA للأعمال المميزة. | Owner/Public API؛ save؛ no-op؛ conflict `409`؛ deduplication؛ Desktop؛ Keyboard؛ `200%` Zoom؛ Mobile `390×844` | `007A technically-verified / visually-approved; Git closure pending` |

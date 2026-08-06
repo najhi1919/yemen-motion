@@ -60,6 +60,16 @@ class DesignerProfile extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function featuredWorkSelections(): HasMany
+    {
+        return $this->hasMany(
+            DesignerProfileFeaturedWork::class,
+            'designer_profile_id',
+        )
+            ->orderBy('position')
+            ->orderBy('id');
+    }
+
     public function specialties(): HasMany
     {
         return $this->hasMany(DesignerProfileSpecialty::class)->orderBy('sort_order')->orderBy('id');

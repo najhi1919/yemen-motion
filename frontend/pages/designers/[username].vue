@@ -121,11 +121,25 @@ useHead(() => ({
               { 'profile-mobile-panel-active': activeMobileSection === 'works' },
             ]"
           >
-            <PublicDesignerWorksGrid
-              :identity="profile.identity"
-              :works="profile.works.items"
-              :total="profile.works.total"
-            />
+            <div class="profile-works-stack">
+              <PublicDesignerWorksGrid
+                v-if="profile.featured_works.total > 0"
+                featured
+                :identity="profile.identity"
+                :works="profile.featured_works.items"
+                :total="profile.featured_works.total"
+              />
+
+              <PublicDesignerWorksGrid
+                v-if="
+                  profile.works.total > 0
+                    || profile.featured_works.total === 0
+                "
+                :identity="profile.identity"
+                :works="profile.works.items"
+                :total="profile.works.total"
+              />
+            </div>
           </div>
         </div>
       </template>
@@ -161,6 +175,12 @@ useHead(() => ({
   gap: 24px;
   align-items: start;
   margin-top: 20px;
+}
+
+.profile-works-stack {
+  display: grid;
+  min-width: 0;
+  gap: 20px;
 }
 
 .profile-error {

@@ -93,6 +93,36 @@ class Work extends Model
                 $work->setAttribute('public_code', $work->getOriginal('public_code'));
             }
         });
+
+        static::updated(function (Work $work): void {
+            $ownershipChanged = $work->wasChanged('designer_id');
+            $lostPublicEligibility = $work->wasChanged([
+                'status',
+                'visibility_status',
+            ]) && (
+                $work->status !== self::STATUS_PUBLISHED
+                || $work->visibility_status !== self::VISIBILITY_PUBLIC
+            );
+
+            if (! $ownershipChanged && ! $lostPublicEligibility) {
+                return;
+            }
+
+            $profileIds = $work->featuredProfileSelections()
+                ->pluck('designer_profile_id')
+                ->map(static fn (mixed $id): int => (int) $id)
+                ->all();
+
+            if ($profileIds === []) {
+                return;
+            }
+
+            $work->featuredProfileSelections()->delete();
+
+            DesignerProfile::query()
+                ->whereKey($profileIds)
+                ->update(['updated_at' => now()]);
+        });
     }
 
     private static function generateUniquePublicCode(): string
@@ -180,6 +210,17 @@ class Work extends Model
             'work_tag_assignments',
             'work_id',
             'work_tag_id',
+        );
+    }
+
+    /**
+     * @return HasMany<DesignerProfileFeaturedWork, $this>
+     */
+    public function featuredProfileSelections(): HasMany
+    {
+        return $this->hasMany(
+            DesignerProfileFeaturedWork::class,
+            'work_id',
         );
     }
 

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { ComponentPublicInstance } from 'vue'
+import DesignerProfileFeaturedWorksDrawer from '~/components/designer/profile/DesignerProfileFeaturedWorksDrawer.vue'
+import DesignerProfileFeaturedWorksPanel from '~/components/designer/profile/DesignerProfileFeaturedWorksPanel.vue'
 import DesignerProfileOverview from '~/components/designer/profile/DesignerProfileOverview.vue'
 import DesignerProfilePreviewDrawer from '~/components/designer/profile/DesignerProfilePreviewDrawer.vue'
 import DesignerProfileProfessionalDrawer from '~/components/designer/profile/DesignerProfileProfessionalDrawer.vue'
@@ -52,10 +54,24 @@ const {
   clearErrors: clearPublicationErrors,
 } = useDesignerProfilePublication()
 
+const {
+  featuredWorksState,
+  loading: featuredWorksLoading,
+  saving: featuredWorksSaving,
+  error: featuredWorksError,
+  validationErrors: featuredWorksValidationErrors,
+  coverUrls: featuredWorksCoverUrls,
+  fetchFeaturedWorks,
+  saveFeaturedWorks,
+  clearError: clearFeaturedWorksError,
+  disposeCoverUrls: disposeFeaturedWorksCoverUrls,
+} = useDesignerProfileFeaturedWorks()
+
 const drawerOpen = ref(false)
 const drawerSession = ref(0)
 const successMessage = ref<string | null>(null)
 const professionalDrawerOpen = ref(false)
+const featuredWorksDrawerOpen = ref(false)
 const previewDrawerOpen = ref(false)
 const confirmationOpen = ref(false)
 const confirmationAction = ref<'publish' | 'hide'>('publish')
@@ -63,8 +79,8 @@ const confirmationRepublish = ref(false)
 const publicationSuccessMessage = ref<string | null>(null)
 const profileOverview = ref<ComponentPublicInstance | null>(null)
 const authStore = useAuthStore()
-let successTimer: ReturnType<typeof window.setTimeout> | null = null
-let publicationSuccessTimer: ReturnType<typeof window.setTimeout> | null = null
+let successTimer: number | null = null
+let publicationSuccessTimer: number | null = null
 let mediaObserver: MutationObserver | null = null
 
 const synchronizedProfile = computed<DesignerProfile | null>(() => {
@@ -89,8 +105,13 @@ function openProfileEditor(): void {
 async function loadProfile(): Promise<void> {
   try {
     const loaded = await fetchProfile()
+
     if (loaded.profile) {
-      await Promise.allSettled([fetchProfessional(), fetchPublication()])
+      await Promise.allSettled([
+        fetchProfessional(),
+        fetchPublication(),
+        fetchFeaturedWorks(),
+      ])
       await nextTick()
       observeMediaSuccess()
     }
@@ -102,12 +123,20 @@ async function loadProfile(): Promise<void> {
 async function handleSave(payload: DesignerProfilePayload): Promise<void> {
   try {
     const saved = await saveProfile(payload)
+
     if (saved.profile) {
-      await Promise.allSettled([fetchProfessional(), fetchPublication()])
+      await Promise.allSettled([
+        fetchProfessional(),
+        fetchPublication(),
+        fetchFeaturedWorks(),
+      ])
     }
+
     drawerOpen.value = false
     successMessage.value = 'تم حفظ بيانات ملفك بنجاح.'
+
     if (successTimer) window.clearTimeout(successTimer)
+
     successTimer = window.setTimeout(() => {
       successMessage.value = null
     }, 3200)
@@ -125,14 +154,59 @@ async function handleProfessionalSave(payload: DesignerProfileProfessionalPayloa
   try {
     await saveProfessional(payload)
     await fetchProfile()
-    try { await fetchPublication() } catch { /* Professional save remains successful. */ }
+    await Promise.allSettled([
+      fetchPublication(),
+      fetchFeaturedWorks(),
+    ])
+
     professionalDrawerOpen.value = false
     successMessage.value = 'تم حفظ بياناتك المهنية بنجاح.'
+
     if (successTimer) window.clearTimeout(successTimer)
-    successTimer = window.setTimeout(() => { successMessage.value = null }, 3200)
+
+    successTimer = window.setTimeout(() => {
+      successMessage.value = null
+    }, 3200)
   } catch {
     // Keep the professional drawer open with the safe API error.
   }
+}
+
+async function retryFeaturedWorks(): Promise<void> {
+  try {
+    await fetchFeaturedWorks()
+  } catch {
+    // The panel exposes the safe API error.
+  }
+}
+
+function openFeaturedWorksEditor(): void {
+  clearFeaturedWorksError()
+  featuredWorksDrawerOpen.value = true
+}
+
+async function handleFeaturedWorksSave(
+  workIds: number[],
+): Promise<void> {
+  const saved = await saveFeaturedWorks(workIds)
+
+  if (!saved) return
+
+  await Promise.allSettled([
+    fetchProfile(),
+    fetchProfessional(),
+    fetchPublication(),
+  ])
+
+  featuredWorksDrawerOpen.value = false
+  successMessage.value =
+    'تم حفظ الأعمال المميزة وترتيبها بنجاح.'
+
+  if (successTimer) window.clearTimeout(successTimer)
+
+  successTimer = window.setTimeout(() => {
+    successMessage.value = null
+  }, 3200)
 }
 
 function showPublicationSuccess(message: string): void {
@@ -168,7 +242,12 @@ function observeMediaSuccess(): void {
       ),
     )
 
-    if (hasNewFeedback) void retryPublication()
+    if (hasNewFeedback) {
+      void Promise.allSettled([
+        retryPublication(),
+        retryFeaturedWorks(),
+      ])
+    }
   })
   mediaObserver.observe(identityBand, { childList: true, subtree: true })
 }
@@ -207,6 +286,11 @@ async function confirmPublicationAction(): Promise<void> {
     : await hideProfile(expectedUpdatedAt)
 
   if (!succeeded) return
+
+  await Promise.allSettled([
+    fetchFeaturedWorks(),
+  ])
+
   confirmationOpen.value = false
 
   if (confirmationAction.value === 'hide') {
@@ -220,6 +304,7 @@ async function confirmPublicationAction(): Promise<void> {
 
 onBeforeUnmount(() => {
   mediaObserver?.disconnect()
+  disposeFeaturedWorksCoverUrls()
   if (successTimer) window.clearTimeout(successTimer)
   if (publicationSuccessTimer) window.clearTimeout(publicationSuccessTimer)
 })
@@ -362,6 +447,16 @@ onMounted(async () => {
           </div>
         </div>
       </section>
+
+      <DesignerProfileFeaturedWorksPanel
+        v-if="profileState?.profile"
+        :state="featuredWorksState"
+        :loading="featuredWorksLoading"
+        :error="featuredWorksError"
+        :cover-urls="featuredWorksCoverUrls"
+        @edit="openFeaturedWorksEditor"
+        @retry="retryFeaturedWorks"
+      />
     </div>
 
     <DesignerProfileSetupDrawer
@@ -385,6 +480,16 @@ onMounted(async () => {
       :validation-errors="professionalValidationErrors"
       @close="professionalDrawerOpen = false"
       @save="handleProfessionalSave"
+    />
+    <DesignerProfileFeaturedWorksDrawer
+      :open="featuredWorksDrawerOpen"
+      :state="featuredWorksState"
+      :saving="featuredWorksSaving"
+      :error="featuredWorksError"
+      :validation-errors="featuredWorksValidationErrors"
+      :cover-urls="featuredWorksCoverUrls"
+      @close="featuredWorksDrawerOpen = false"
+      @save="handleFeaturedWorksSave"
     />
     <DesignerProfilePreviewDrawer
       :open="previewDrawerOpen"

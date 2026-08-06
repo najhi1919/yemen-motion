@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\Work;
 use App\Models\WorkMedia;
 use App\Support\UsernamePolicy;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Exceptions\HttpResponseException;
 
 class PublicDesignerProfileService
@@ -19,17 +20,24 @@ class PublicDesignerProfileService
         'skills',
         'tools',
         'languages',
+        'featuredWorkSelections',
     ];
 
     public function __construct(
         private readonly DesignerProfilePublicationService $publicationService,
     ) {}
 
-    /** @return array{profile: DesignerProfile, works: \Illuminate\Database\Eloquent\Collection<int, Work>} */
+    /**
+     * @return array{
+     *     profile: DesignerProfile,
+     *     featuredWorks: Collection<int, Work>,
+     *     works: Collection<int, Work>
+     * }
+     */
     public function show(string $username): array
     {
         $profile = $this->publicProfile($username);
-        $works = Work::query()
+        $allWorks = Work::query()
             ->where('designer_id', $profile->user_id)
             ->publiclyVisible()
             ->with(['category', 'tags', 'coverMedia'])
@@ -37,7 +45,37 @@ class PublicDesignerProfileService
             ->orderByDesc('id')
             ->get();
 
-        return compact('profile', 'works');
+        $worksById = $allWorks->keyBy(
+            static fn (Work $work): int => (int) $work->getKey(),
+        );
+
+        /** @var Collection<int, Work> $featuredWorks */
+        $featuredWorks = new Collection;
+
+        foreach ($profile->featuredWorkSelections->pluck('work_id') as $workId) {
+            $work = $worksById->get((int) $workId);
+
+            if ($work instanceof Work) {
+                $featuredWorks->push($work);
+            }
+
+            if (
+                $featuredWorks->count()
+                >= DesignerProfileFeaturedWorksService::LIMIT
+            ) {
+                break;
+            }
+        }
+
+        $featuredIds = $featuredWorks->modelKeys();
+
+        $works = $allWorks
+            ->reject(
+                static fn (Work $work): bool => in_array((int) $work->getKey(), $featuredIds, true),
+            )
+            ->values();
+
+        return compact('profile', 'featuredWorks', 'works');
     }
 
     public function publicProfile(string $username): DesignerProfile

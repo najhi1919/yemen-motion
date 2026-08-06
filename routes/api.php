@@ -36,6 +36,7 @@ use App\Http\Controllers\Api\AuthApiController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DashboardSearchController;
 use App\Http\Controllers\Api\DesignerProfileController;
+use App\Http\Controllers\Api\DesignerProfileFeaturedWorksController;
 use App\Http\Controllers\Api\DesignerProfileMediaController;
 use App\Http\Controllers\Api\DesignerProfileProfessionalController;
 use App\Http\Controllers\Api\DesignerProfilePublicationController;
@@ -143,6 +144,10 @@ Route::middleware(['auth:sanctum', 'account.active'])->prefix('designer')->group
         ->name('designer.profile.professional.show');
     Route::put('/profile/professional', [DesignerProfileProfessionalController::class, 'update'])
         ->name('designer.profile.professional.update');
+    Route::get('/profile/featured-works', [DesignerProfileFeaturedWorksController::class, 'show'])
+        ->name('designer.profile.featured-works.show');
+    Route::put('/profile/featured-works', [DesignerProfileFeaturedWorksController::class, 'update'])
+        ->name('designer.profile.featured-works.update');
     Route::get('/profile/publication', [DesignerProfilePublicationController::class, 'show'])
         ->name('designer.profile.publication.show');
     Route::get('/profile/publication/preview', [DesignerProfilePublicationController::class, 'preview'])

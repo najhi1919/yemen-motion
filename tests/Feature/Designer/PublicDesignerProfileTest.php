@@ -6,6 +6,7 @@ namespace Tests\Feature\Designer;
 
 use App\Http\Controllers\Api\PublicDesignerProfileController;
 use App\Models\DesignerProfile;
+use App\Models\DesignerProfileFeaturedWork;
 use App\Models\User;
 use App\Models\Work;
 use App\Models\WorkCategory;
@@ -194,6 +195,52 @@ class PublicDesignerProfileTest extends TestCase
             $tieFirst->public_code,
             $older->public_code,
         ], collect($response->json('data.profile.works.items'))->pluck('public_code')->all());
+    }
+
+    public function test_featured_works_use_manual_order_and_are_excluded_from_regular_works(): void
+    {
+        [$designer, $profile] = $this->publishedDesigner();
+        $older = $this->publicWork($designer, [
+            'published_at' => now()->subDays(2),
+        ]);
+        $middle = $this->publicWork($designer, [
+            'published_at' => now()->subDay(),
+        ]);
+        $newest = $this->publicWork($designer, [
+            'published_at' => now(),
+        ]);
+
+        DesignerProfileFeaturedWork::query()->create([
+            'designer_profile_id' => $profile->id,
+            'work_id' => $older->id,
+            'position' => 0,
+        ]);
+        DesignerProfileFeaturedWork::query()->create([
+            'designer_profile_id' => $profile->id,
+            'work_id' => $middle->id,
+            'position' => 1,
+        ]);
+
+        $response = $this->getJson(
+            $this->profileEndpoint($designer),
+        )->assertOk();
+
+        $response
+            ->assertJsonPath('data.profile.featured_works.total', 2)
+            ->assertJsonPath('data.profile.works.total', 1);
+
+        $this->assertSame(
+            [$older->public_code, $middle->public_code],
+            collect(
+                $response->json('data.profile.featured_works.items'),
+            )->pluck('public_code')->all(),
+        );
+        $this->assertSame(
+            [$newest->public_code],
+            collect(
+                $response->json('data.profile.works.items'),
+            )->pluck('public_code')->all(),
+        );
     }
 
     public function test_public_work_contract_contains_only_safe_grid_fields(): void

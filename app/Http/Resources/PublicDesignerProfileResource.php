@@ -16,9 +16,16 @@ class PublicDesignerProfileResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        /** @var array{profile: DesignerProfile, works: Collection<int, Work>} $payload */
+        /**
+         * @var array{
+         *     profile: DesignerProfile,
+         *     featuredWorks: Collection<int, Work>,
+         *     works: Collection<int, Work>
+         * } $payload
+         */
         $payload = $this->resource;
         $profile = $payload['profile'];
+        $featuredWorks = $payload['featuredWorks'];
         $works = $payload['works'];
         $username = (string) $profile->user->username;
         $avatarUrl = $profile->avatar_path
@@ -44,8 +51,16 @@ class PublicDesignerProfileResource extends JsonResource
             ],
             'professional' => $this->professional($profile),
             'published_at' => $profile->published_at?->toISOString(),
+            'featured_works' => [
+                'items' => PublicDesignerWorkResource::collection(
+                    $featuredWorks,
+                )->resolve($request),
+                'total' => $featuredWorks->count(),
+            ],
             'works' => [
-                'items' => PublicDesignerWorkResource::collection($works)->resolve($request),
+                'items' => PublicDesignerWorkResource::collection(
+                    $works,
+                )->resolve($request),
                 'total' => $works->count(),
             ],
             'seo' => [
