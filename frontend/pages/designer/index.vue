@@ -5,12 +5,16 @@ import DesignerProfileFeaturedWorksPanel from '~/components/designer/profile/Des
 import DesignerProfileOverview from '~/components/designer/profile/DesignerProfileOverview.vue'
 import DesignerProfilePreviewDrawer from '~/components/designer/profile/DesignerProfilePreviewDrawer.vue'
 import DesignerProfileProfessionalDrawer from '~/components/designer/profile/DesignerProfileProfessionalDrawer.vue'
+import DesignerProfileOrganizationDeleteDialog from '~/components/designer/profile/DesignerProfileOrganizationDeleteDialog.vue'
+import DesignerProfileOrganizationDrawer from '~/components/designer/profile/DesignerProfileOrganizationDrawer.vue'
+import DesignerProfileOrganizationPanel from '~/components/designer/profile/DesignerProfileOrganizationPanel.vue'
 import DesignerProfileProfessionalOverview from '~/components/designer/profile/DesignerProfileProfessionalOverview.vue'
 import DesignerProfilePublicationConfirmDialog from '~/components/designer/profile/DesignerProfilePublicationConfirmDialog.vue'
 import DesignerProfilePublicationPanel from '~/components/designer/profile/DesignerProfilePublicationPanel.vue'
 import DesignerProfileSetupDrawer from '~/components/designer/profile/DesignerProfileSetupDrawer.vue'
 import type { DesignerProfile, DesignerProfilePayload } from '~/types/designer-profile'
 import type { DesignerProfileProfessionalPayload } from '~/types/designer-profile-professional'
+import type { DesignerProfileOrganizationInput } from '~/types/designer-profile-organization'
 
 definePageMeta({
   layout: 'designer'
@@ -37,6 +41,22 @@ const {
   saveProfessional,
   clearError: clearProfessionalError,
 } = useDesignerProfileProfessional()
+
+const {
+  organizationState,
+  logoUrl: organizationLogoUrl,
+  loading: organizationLoading,
+  saving: organizationSaving,
+  error: organizationError,
+  validationErrors: organizationValidationErrors,
+  fetchOrganization,
+  saveOrganization,
+  deleteOrganization,
+  uploadLogo: uploadOrganizationLogo,
+  deleteLogo: deleteOrganizationLogo,
+  clearError: clearOrganizationError,
+  disposeLogoUrl: disposeOrganizationLogoUrl
+} = useDesignerProfileOrganization()
 
 const {
   publicationState,
@@ -70,7 +90,11 @@ const {
 const drawerOpen = ref(false)
 const drawerSession = ref(0)
 const successMessage = ref<string | null>(null)
+/** رسالة النجاح الجزئي تظهر داخل Drawer (PUT نجح + Logo فشل) */
+const organizationNotice = ref<string | null>(null)
 const professionalDrawerOpen = ref(false)
+const organizationDrawerOpen = ref(false)
+const organizationDeleteDialogOpen = ref(false)
 const featuredWorksDrawerOpen = ref(false)
 const previewDrawerOpen = ref(false)
 const confirmationOpen = ref(false)
@@ -109,6 +133,7 @@ async function loadProfile(): Promise<void> {
     if (loaded.profile) {
       await Promise.allSettled([
         fetchProfessional(),
+        fetchOrganization(),
         fetchPublication(),
         fetchFeaturedWorks(),
       ])
@@ -127,6 +152,7 @@ async function handleSave(payload: DesignerProfilePayload): Promise<void> {
     if (saved.profile) {
       await Promise.allSettled([
         fetchProfessional(),
+        fetchOrganization(),
         fetchPublication(),
         fetchFeaturedWorks(),
       ])
@@ -169,6 +195,105 @@ async function handleProfessionalSave(payload: DesignerProfileProfessionalPayloa
     }, 3200)
   } catch {
     // Keep the professional drawer open with the safe API error.
+  }
+}
+
+function openOrganizationEditor(): void {
+  clearOrganizationError()
+  organizationNotice.value = null
+  organizationDrawerOpen.value = true
+}
+
+async function handleOrganizationSave(
+  input: DesignerProfileOrganizationInput,
+  logoAction: { type: 'upload' | 'delete' | 'none', file?: File }
+): Promise<void> {
+  // مسح notice السابقة
+  organizationNotice.value = null
+
+  // Version token من State الحالية — Drawer لا يملكه
+  const currentToken = organizationState.value?.updated_at ?? null
+
+  let updatedToken: string
+  try {
+    updatedToken = await saveOrganization({
+      ...input,
+      expected_updated_at: currentToken,
+    })
+  } catch {
+    // PUT فشل — error مكشوف عبر composable، Drawer يبقى مفتوحاً
+    return
+  }
+
+  // PUT نجح — الآن نحاول Logo
+  let logoSuccess = true
+  try {
+    if (logoAction.type === 'upload' && logoAction.file) {
+      // token من نتيجة PUT مباشرة — ليس من State القديمة
+      await uploadOrganizationLogo(logoAction.file, updatedToken)
+    } else if (logoAction.type === 'delete') {
+      await deleteOrganizationLogo(updatedToken)
+    }
+  } catch {
+    logoSuccess = false
+  }
+
+  if (!logoSuccess) {
+    // Partial success: Drawer يبقى مفتوحاً، File/intent تبقى كما هي
+    organizationNotice.value = 'تم حفظ بيانات المنشأة، لكن تعذر تحديث الشعار. حاول مرة أخرى.'
+    // تحديث publication في الخلفية دون إغلاق الـDrawer
+    void Promise.allSettled([fetchPublication(), fetchFeaturedWorks()])
+    return
+  }
+
+  // نجاح كامل
+  organizationNotice.value = null
+  await fetchOrganization()
+  organizationDrawerOpen.value = false
+
+  void Promise.allSettled([fetchPublication(), fetchFeaturedWorks()])
+
+  successMessage.value = 'تم حفظ بيانات المنشأة بنجاح.'
+  if (successTimer) window.clearTimeout(successTimer)
+  successTimer = window.setTimeout(() => {
+    successMessage.value = null
+  }, 4200)
+}
+
+function openOrganizationDeleteDialog(): void {
+  organizationDeleteDialogOpen.value = true
+}
+
+async function handleOrganizationDelete(): Promise<void> {
+  const currentOrg = organizationState.value?.organization
+  const currentToken = organizationState.value?.updated_at
+
+  if (!currentOrg || !currentToken) {
+    organizationDeleteDialogOpen.value = false
+    if (!currentOrg) {
+      organizationDrawerOpen.value = false
+    }
+    organizationNotice.value = null
+    return
+  }
+
+  try {
+    await deleteOrganization(currentToken)
+    // نجاح: نغلق الاثنين
+    organizationDeleteDialogOpen.value = false
+    organizationDrawerOpen.value = false
+    organizationNotice.value = null
+
+    void Promise.allSettled([fetchPublication(), fetchFeaturedWorks()])
+
+    successMessage.value = 'تم حذف المنشأة بنجاح.'
+    if (successTimer) window.clearTimeout(successTimer)
+    successTimer = window.setTimeout(() => {
+      successMessage.value = null
+    }, 3200)
+  } catch {
+    // فشل: Dialog يبقى مفتوحاً مع error مكشوف عبر organizationError
+    // 409: composable عمل resync وحدّث updated_at للمحاولة التالية
   }
 }
 
@@ -305,6 +430,7 @@ async function confirmPublicationAction(): Promise<void> {
 onBeforeUnmount(() => {
   mediaObserver?.disconnect()
   disposeFeaturedWorksCoverUrls()
+  disposeOrganizationLogoUrl()
   if (successTimer) window.clearTimeout(successTimer)
   if (publicationSuccessTimer) window.clearTimeout(publicationSuccessTimer)
 })
@@ -448,6 +574,16 @@ onMounted(async () => {
         </div>
       </section>
 
+      <DesignerProfileOrganizationPanel
+        v-if="profileState?.profile"
+        :state="organizationState"
+        :logo-url="organizationLogoUrl"
+        :loading="organizationLoading"
+        :error="organizationError"
+        @edit="openOrganizationEditor"
+        @retry="fetchOrganization"
+      />
+
       <DesignerProfileFeaturedWorksPanel
         v-if="profileState?.profile"
         :state="featuredWorksState"
@@ -480,6 +616,25 @@ onMounted(async () => {
       :validation-errors="professionalValidationErrors"
       @close="professionalDrawerOpen = false"
       @save="handleProfessionalSave"
+    />
+    <DesignerProfileOrganizationDrawer
+      :open="organizationDrawerOpen"
+      :organization="organizationState?.organization || null"
+      :saving="organizationSaving"
+      :error="organizationError"
+      :validation-errors="organizationValidationErrors"
+      :logo-url="organizationLogoUrl"
+      :notice="organizationNotice"
+      @close="organizationDrawerOpen = false"
+      @save="handleOrganizationSave"
+      @request-delete="openOrganizationDeleteDialog"
+    />
+    <DesignerProfileOrganizationDeleteDialog
+      :open="organizationDeleteDialogOpen"
+      :saving="organizationSaving"
+      :error="organizationError"
+      @close="organizationDeleteDialogOpen = false"
+      @confirm="handleOrganizationDelete"
     />
     <DesignerProfileFeaturedWorksDrawer
       :open="featuredWorksDrawerOpen"

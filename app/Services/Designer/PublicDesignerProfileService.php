@@ -21,6 +21,7 @@ class PublicDesignerProfileService
         'tools',
         'languages',
         'featuredWorkSelections',
+        'organization',
     ];
 
     public function __construct(

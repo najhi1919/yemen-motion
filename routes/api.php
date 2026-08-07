@@ -38,6 +38,7 @@ use App\Http\Controllers\Api\DashboardSearchController;
 use App\Http\Controllers\Api\DesignerProfileController;
 use App\Http\Controllers\Api\DesignerProfileFeaturedWorksController;
 use App\Http\Controllers\Api\DesignerProfileMediaController;
+use App\Http\Controllers\Api\DesignerProfileOrganizationController;
 use App\Http\Controllers\Api\DesignerProfileProfessionalController;
 use App\Http\Controllers\Api\DesignerProfilePublicationController;
 use App\Http\Controllers\Api\DesignerWorksArchiveController;
@@ -69,6 +70,8 @@ Route::prefix('designers/{username}')->group(function () {
         ->name('public.designers.avatar');
     Route::get('/cover', [PublicDesignerProfileMediaController::class, 'cover'])
         ->name('public.designers.cover');
+    Route::get('/organization/logo', [PublicDesignerProfileMediaController::class, 'organizationLogo'])
+        ->name('public.designers.organization.logo');
     Route::get('/works/{workCode}/media/{media}/content', [PublicDesignerWorkMediaController::class, 'content'])
         ->whereNumber('media')
         ->name('public.designers.works.media.content');
@@ -163,6 +166,12 @@ Route::middleware(['auth:sanctum', 'account.active'])->prefix('designer')->group
     Route::post('/profile/cover', [DesignerProfileMediaController::class, 'storeCover']);
     Route::patch('/profile/cover/focal-point', [DesignerProfileMediaController::class, 'updateCoverFocalPoint']);
     Route::delete('/profile/cover', [DesignerProfileMediaController::class, 'destroyCover']);
+    Route::get('/profile/organization', [DesignerProfileOrganizationController::class, 'show']);
+    Route::put('/profile/organization', [DesignerProfileOrganizationController::class, 'upsert']);
+    Route::delete('/profile/organization', [DesignerProfileOrganizationController::class, 'destroy']);
+    Route::get('/profile/organization/logo/content', [DesignerProfileOrganizationController::class, 'logoContent']);
+    Route::post('/profile/organization/logo', [DesignerProfileOrganizationController::class, 'storeLogo']);
+    Route::delete('/profile/organization/logo', [DesignerProfileOrganizationController::class, 'destroyLogo']);
 });
 
 Route::middleware(['auth:sanctum', 'account.active'])->post('/audit/page-view', PageViewAuditController::class);

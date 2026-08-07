@@ -2,6 +2,7 @@
 import type {
   PublicDesignerIdentity,
   PublicDesignerProfessional,
+  PublicDesignerOrganization,
 } from '~/types/public-designer-profile'
 
 type PublicProfileSection = 'works' | 'intro' | 'expertise' | 'tools-languages'
@@ -9,6 +10,7 @@ type PublicProfileSection = 'works' | 'intro' | 'expertise' | 'tools-languages'
 const props = defineProps<{
   identity: PublicDesignerIdentity
   professional: PublicDesignerProfessional
+  organization: PublicDesignerOrganization
   activeMobileSection: PublicProfileSection
 }>()
 
@@ -137,6 +139,51 @@ const hasToolsLanguages = computed(() => tools.value.length > 0 || languages.val
           </div>
         </div>
       </dl>
+    </section>
+
+    <section
+      v-if="organization.visible"
+      class="profile-sidebar-card profile-organization-card"
+      aria-labelledby="organization-title"
+    >
+      <div class="profile-sidebar-heading">
+        <span class="profile-sidebar-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <path d="M4 19h16v2H4zM5 19V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v14M11 10h8a1 1 0 0 1 1 1v8M14 13h2M14 16h2M7 8h2M7 11h2M7 14h2" />
+          </svg>
+        </span>
+        <h2 id="organization-title" class="profile-sidebar-title">
+          {{ organization.type === 'studio' ? 'استوديو' : organization.type === 'agency' ? 'وكالة' : organization.type === 'company' ? 'شركة' : organization.type === 'brand' ? 'علامة تجارية' : 'أخرى' }}
+        </h2>
+      </div>
+
+      <div class="mt-4 flex items-center gap-4">
+        <img
+          v-if="organization.logo_url"
+          :src="organization.logo_url"
+          alt=""
+          class="h-14 w-14 rounded-lg object-contain bg-white border border-neutral-100"
+          loading="lazy"
+        />
+        <div class="min-w-0 flex-1">
+          <h3 class="text-[17px] font-bold text-neutral-900 truncate">{{ organization.name }}</h3>
+          <a
+            v-if="organization.website_url"
+            :href="organization.website_url"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="mt-1 inline-flex items-center text-sm font-semibold text-[#E21D1D] hover:underline"
+          >
+            الموقع الإلكتروني
+            <svg class="mr-1 h-3.5 w-3.5 rtl:ml-1 rtl:mr-0 rtl:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </a>
+        </div>
+      </div>
+      <p v-if="organization.description" dir="auto" class="mt-4 text-[15px] leading-relaxed text-neutral-600 overflow-wrap-anywhere">
+        {{ organization.description }}
+      </p>
     </section>
 
     <section v-if="hasServicesStyles" class="profile-sidebar-card profile-services-card" aria-labelledby="services-styles-title">
@@ -530,10 +577,11 @@ const hasToolsLanguages = computed(() => tools.value.length > 0 || languages.val
   }
 
   .profile-intro-card { order: 1; }
-  .profile-services-card { order: 2; }
-  .profile-expertise-card { order: 3; }
-  .profile-tools-card { order: 4; }
-  .profile-note-card { order: 5; }
+  .profile-organization-card { order: 2; }
+  .profile-services-card { order: 3; }
+  .profile-expertise-card { order: 4; }
+  .profile-tools-card { order: 5; }
+  .profile-note-card { order: 6; }
 }
 
 @media (max-width: 899px) {

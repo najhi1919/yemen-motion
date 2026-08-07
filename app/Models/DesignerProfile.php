@@ -55,6 +55,11 @@ class DesignerProfile extends Model
         self::AVAILABILITY_UNAVAILABLE,
     ];
 
+    public function organization(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(DesignerProfileOrganization::class);
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

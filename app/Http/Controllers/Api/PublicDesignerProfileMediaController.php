@@ -23,6 +23,16 @@ class PublicDesignerProfileMediaController extends Controller
         return $this->content($service->publicProfile($username)->cover_path);
     }
 
+    public function organizationLogo(string $username, PublicDesignerProfileService $service): StreamedResponse
+    {
+        $profile = $service->publicProfile($username);
+        $org = $profile->organization;
+
+        abort_if($org === null || ! $org->show_publicly || $org->logo_path === null, 404, 'الوسيط العام غير متاح.');
+
+        return $this->content($org->logo_path);
+    }
+
     private function content(?string $path): StreamedResponse
     {
         $disk = Storage::disk(self::DISK);

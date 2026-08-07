@@ -50,6 +50,7 @@ class PublicDesignerProfileResource extends JsonResource
                 ],
             ],
             'professional' => $this->professional($profile),
+            'organization' => $this->organization($profile, $username),
             'published_at' => $profile->published_at?->toISOString(),
             'featured_works' => [
                 'items' => PublicDesignerWorkResource::collection(
@@ -123,6 +124,31 @@ class PublicDesignerProfileResource extends JsonResource
         }
 
         return $professional;
+    }
+
+    /** @return array<string, mixed> */
+    private function organization(DesignerProfile $profile, string $username): array
+    {
+        $org = $profile->organization;
+
+        if ($org === null || ! $org->show_publicly) {
+            return [
+                'visible' => false,
+            ];
+        }
+
+        $logoUrl = $org->logo_path
+            ? route('public.designers.organization.logo', ['username' => $username]) . '?v=' . ($org->updated_at?->timestamp ?? 0)
+            : null;
+
+        return [
+            'visible' => true,
+            'name' => $org->organization_name,
+            'type' => $org->organization_type,
+            'description' => $org->description,
+            'logo_url' => $logoUrl,
+            'website_url' => $org->website_url,
+        ];
     }
 
     /** @param array<string, mixed> $content @return array<string, mixed> */

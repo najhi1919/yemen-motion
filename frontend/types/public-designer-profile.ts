@@ -60,6 +60,17 @@ export interface PublicDesignerProfessional {
   additional_information?: { professional_note: string }
 }
 
+export type PublicDesignerOrganization =
+  | { visible: false }
+  | {
+      visible: true
+      name: string
+      type: 'studio' | 'agency' | 'company' | 'brand' | 'other'
+      description: string | null
+      logo_url: string | null
+      website_url: string | null
+    }
+
 export interface PublicDesignerWork {
   public_code: string
   slug: string
@@ -94,6 +105,7 @@ export interface PublicDesignerWork {
 export interface PublicDesignerProfile {
   identity: PublicDesignerIdentity
   professional: PublicDesignerProfessional
+  organization: PublicDesignerOrganization
   published_at: string | null
   featured_works: {
     items: PublicDesignerWork[]

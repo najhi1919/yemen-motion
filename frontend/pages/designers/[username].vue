@@ -110,6 +110,7 @@ useHead(() => ({
             ]"
             :identity="profile.identity"
             :professional="profile.professional"
+            :organization="profile.organization"
             :active-mobile-section="activeMobileSection"
           />
           <div
