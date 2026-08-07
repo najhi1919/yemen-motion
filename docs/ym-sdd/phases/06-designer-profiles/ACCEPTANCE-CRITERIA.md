@@ -14,7 +14,7 @@
 | 5. Public Profile | route `/designers/{username}` وحالات العرض العامة | `met` | عقد `006A` وصفحة Nuxt وSSR وحالات Loading/Error/Empty/404 معتمدة |
 | 6. Privacy Enforcement | احترام flags في Owner Preview | `met` | تحقق العرض الشرطي للأقسام في معاينة `005A` |
 | 6. Privacy Enforcement | احترام flags في المستهلك العام | `met` | الأقسام الخاصة لا تعيد محتواها، واعتمد الإخفاء والاستعادة يدويًا |
-| 7. Featured Works | اختيار وترتيب وحدود وصلاحية الأعمال العامة | `not-met` | مطلوب `007A` |
+| 7. Featured Works | اختيار وترتيب وحدود وصلاحية الأعمال العامة | `met` | أُغلقت محطة `007A` بالـCommit `ff6c862fd215e7b1703ae68e4490337b13b21b55`؛ تشمل اختيار حتى 6 أعمال، الترتيب اليدوي، اشتراط كون الأعمال owned/published/public، فصل featured_works عن works، ومنع التكرار في العقد العام |
 | 8. Organization Data | بيانات المنشأة أوالعلامة عند انطباقها | `not-met` | Station ID غير معتمد |
 | 9. Admin Oversight | إدارة Admin لملفات المصممين | `not-met` | Station ID غير معتمد |
 | 10. Security and Authorization | ملكية وعزل أدوار endpoints الداخلية | `met` | اختبارات Bootstrap/Media/Professional |
@@ -24,4 +24,4 @@
 | 11. Auditability | Audit للإشراف الإداري | `not-met` | Admin oversight غير منفذ |
 | 12. Responsive and Accessibility | RTL وDesktop/Mobile وReduced Motion للنطاق المنفذ | `partially-met` | `006A` معتمدة على Desktop وTablet وMobile وRTL وLTR وKeyboard و`200%` Zoom؛ يبقى إغلاق Phase 6 الوصولي الشامل لمحطة لاحقة |
 | 13. SEO and Public Metadata | SEO وOpen Graph للملف العام | `met` | title وdescription وcanonical وOpen Graph/Twitter من عقد `006A` |
-| 14. Phase Closure Evidence | كل المحطات والمعايير وCommit إغلاق واعتماد المستخدم | `not-ready` | أُغلقت `006A` بالـCommit `3e1553c136d6d396055296a4b00aeb0ef771643d`؛ تبقى `007A` وOrganization Data وAdmin Oversight والإغلاق الشامل للمرحلة |
+| 14. Phase Closure Evidence | كل المحطات والمعايير وCommit إغلاق واعتماد المستخدم | `not-ready` | أُغلقت `007A` تنفيذيًا بالـCommit `ff6c862fd215e7b1703ae68e4490337b13b21b55` وثُبّت إغلاقها بالـCommit `7d1c8305f56cbedc8d6550c1e4d066303b8e0602`؛ المتبقي على مستوى Phase 6 هو Organization Data، Admin Oversight، Final Accessibility and Responsive Closure، وFinal Phase Closure |

@@ -25,10 +25,10 @@
 | تطبيق الخصوصية في عقد القراءة العام | `implemented / technically verified` | الأقسام الخاصة تعيد `visible=false` بلا محتوى |
 | جميع الأعمال المنشورة والعامة في عقد القراءة | `implemented / technically verified` | status published وvisibility public بترتيب النشر ثم id |
 | الصفحة العامة `/designers/{username}` في Nuxt | `completed / technically and visually verified` | SSR وLoading وError و404 والهوية والأقسام العامة، مع اعتماد Desktop وTablet وMobile وRTL وLTR وKeyboard وZoom |
-| Public works grid | `completed / technically and visually verified` | شبكة Responsive، حالة Empty مستقرة، وعرض العمل الحقيقي وغلافه دون إجراءات إدارة أوFeatured Works |
+| Public works grid | `completed / technically and visually verified` | شبكة Responsive، حالة Empty مستقرة، وعرض العمل الحقيقي وغلافه مع دعم Featured Works واستبعاد تكرارها من القائمة العادية |
 | SEO وOpen Graph للملف العام | `completed / technically verified` | العنوان والوصف والمسار canonical وصورة Open Graph مشتقة من العقد العام |
-| الأعمال المميزة وترتيبها | `not implemented` | مخطط في `007A` |
-| الأعمال العامة داخل صفحة المصمم | `completed / verified` | تعرض الأعمال المنشورة والعامة من عقد `006A`؛ اختيار وترتيب Featured Works يبقى ضمن `007A` |
+| الأعمال المميزة وترتيبها | `completed / closed` | أُغلقت في محطة `007A` بالـCommit `ff6c862fd215e7b1703ae68e4490337b13b21b55`؛ تشمل اختيار حتى 6 أعمال، ترتيب يدوي، Optimistic Concurrency، No-op، وPublic deduplication |
+| الأعمال العامة داخل صفحة المصمم | `completed / verified` | Featured Works تظهر أولاً عند وجودها، تليها بقية الأعمال العامة، مع عدم تكرار العمل المميز في القائمة العادية وفق عقد 007A |
 | بيانات المنشأة أوالعلامة التجارية | `not implemented` | نطاق مستقبلي بلا ID |
 | إدارة Admin لملفات المصممين | `not implemented` | نطاق مستقبلي بلا ID |
 | تدقيق WCAG/Responsive/LTR شامل | `met for 006A / partially-met for Phase 6` | أُغلقت تغطية `006A` على Desktop وTablet وMobile وRTL وLTR وKeyboard و`200%` Zoom وReduced Motion؛ يبقى الإغلاق الشامل للمرحلة في محطة لاحقة |
