@@ -7,5 +7,6 @@
 | [`YM-DESIGNER-PROFILE-PUBLICATION-LIFECYCLE-005A`](YM-DESIGNER-PROFILE-PUBLICATION-LIFECYCLE-005A.md) | `closed` | `d7a954d2ee0a3c964de3395b50a398b33bb5954a` | الجاهزية ومعاينة المالك والنشر والإخفاء وإعادة النشر. |
 | [`YM-DESIGNER-PUBLIC-PROFILE-006A`](YM-DESIGNER-PUBLIC-PROFILE-006A.md) | `closed` | `3e1553c136d6d396055296a4b00aeb0ef771643d` | الصفحة العامة والخصوصية وSEO والأعمال العامة والوسائط المحكومة. |
 | [`YM-DESIGNER-PROFILE-FEATURED-WORKS-007A`](YM-DESIGNER-PROFILE-FEATURED-WORKS-007A.md) | `closed` | `ff6c862fd215e7b1703ae68e4490337b13b21b55` | اختيار مستقل للمصمم بحد 6 وترتيب يدوي، مع Owner/Public integration وNo-op وConflict وdeduplication متحقق منها. |
+| [`YM-DESIGNER-PROFILE-ORGANIZATION-BRAND-008A`](YM-DESIGNER-PROFILE-ORGANIZATION-BRAND-008A.md) | `planned / contract approved` | — | العقد المعماري المعتمد لبيانات المنشأة أوالعلامة التجارية. |
 
 لا يدل وجود الملف على التنفيذ. المرجع هو حالة المحطة وأدلتها وسجلها الزمني.
