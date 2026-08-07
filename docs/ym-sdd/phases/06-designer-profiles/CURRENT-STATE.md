@@ -29,7 +29,7 @@
 | SEO وOpen Graph للملف العام | `completed / technically verified` | العنوان والوصف والمسار canonical وصورة Open Graph مشتقة من العقد العام |
 | الأعمال المميزة وترتيبها | `completed / closed` | أُغلقت في محطة `007A` بالـCommit `ff6c862fd215e7b1703ae68e4490337b13b21b55`؛ تشمل اختيار حتى 6 أعمال، ترتيب يدوي، Optimistic Concurrency، No-op، وPublic deduplication |
 | الأعمال العامة داخل صفحة المصمم | `completed / verified` | Featured Works تظهر أولاً عند وجودها، تليها بقية الأعمال العامة، مع عدم تكرار العمل المميز في القائمة العادية وفق عقد 007A |
-| بيانات المنشأة أوالعلامة التجارية | `not implemented / station assigned` | المرجع: 008A |
+| بيانات المنشأة أوالعلامة التجارية | `completed / closed` | أُغلقت في محطة `008A` بالـCommit `1ec3a88`؛ تشمل كيان `designer_profile_organizations` مستقل، 6 Owner endpoints، Public API top-level sibling، Optimistic Concurrency بدقة المايكروثانية، Logo lifecycle آمن، وPrivacy محتواة داخل الكيان |
 | إدارة Admin لملفات المصممين | `not implemented` | نطاق مستقبلي بلا ID |
 | تدقيق WCAG/Responsive/LTR شامل | `met for 006A / partially-met for Phase 6` | أُغلقت تغطية `006A` على Desktop وTablet وMobile وRTL وLTR وKeyboard و`200%` Zoom وReduced Motion؛ يبقى الإغلاق الشامل للمرحلة في محطة لاحقة |
 

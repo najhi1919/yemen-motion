@@ -6,7 +6,7 @@
 |---|---|
 | Phase status | `in-progress` |
 | Documentation baseline | `382d2c3256f0a1eeb32787d475d097f07e035d9d` |
-| Current completed station | `YM-DESIGNER-PROFILE-FEATURED-WORKS-007A` |
+| Current completed station | `YM-DESIGNER-PROFILE-ORGANIZATION-BRAND-008A` |
 | Current station | — |
 | Station status | `closed` |
 | Current step | `Awaiting assignment of the next Phase 6 station` |
@@ -21,7 +21,8 @@
 | completed | `YM-DESIGNER-PROFILE-PUBLICATION-LIFECYCLE-005A` | `closed`; Closure Commit `d7a954d2ee0a3c964de3395b50a398b33bb5954a` |
 | completed | `YM-DESIGNER-PUBLIC-PROFILE-006A` | `closed`; Closure Commit `3e1553c136d6d396055296a4b00aeb0ef771643d` |
 | completed | `YM-DESIGNER-PROFILE-FEATURED-WORKS-007A` | `closed`; Closure Commit `ff6c862fd215e7b1703ae68e4490337b13b21b55` |
-| unassigned future scope | Organization/Brand Data، Admin Oversight، Final Accessibility Closure | `not implemented / ID unassigned` |
+| completed | `YM-DESIGNER-PROFILE-ORGANIZATION-BRAND-008A` | `closed`; Closure Commit `1ec3a88` |
+| unassigned future scope | Admin Oversight، Final Accessibility Closure | `not implemented / ID unassigned` |
 | separate stations | `YM-DESIGNER-ACCOUNT-SETTINGS-001A`، `YM-ADMIN-MEDIATED-REQUESTS-001A` | `separate scope` |
 | adjacent completed capability / dependency | إدارة أعمال المصمم الداخلية | `completed elsewhere; not attributed to a profile station` |
 
@@ -53,6 +54,24 @@
 - صُححت استعادة Focus بعد Dialog واعتمدت، وطبقت Owner Preview إعدادات الخصوصية.
 - CI: لم يُظهر الاستعلام الفوري الوحيد تشغيلًا، ولم يُنفذ Polling؛ لا تسجل نتيجة نجاح أوفشل.
 
+## إغلاق محطة 008A
+
+- الحالة النهائية: `closed` بتاريخ `2026-08-08`.
+- Closure Commit: `1ec3a88`.
+- رسالة Commit: `feat(designer): add profile organization brand`.
+- إحصاءات Commit: `21 files changed`, و`2378 insertions`, و`4 deletions`.
+- Push: نجح إلى `origin/main`، وكان remote مطابقًا للـCommit.
+- شمل التنفيذ: جدول `designer_profile_organizations` مستقل، Model، 3 Form Requests، Controller بـ6 endpoints (GET/PUT/DELETE للمنشأة + GET/POST/DELETE للشعار)، Public API integration، 5 ملفات Frontend جديدة + 4 معدّلة.
+- الـBackend tests: `23 passed / 95 assertions`.
+- 008A Task-Specific TypeScript: `PASS`.
+- Global TypeScript Debt: `229` خطأ مستقل عن المحطة.
+- Final Production Build: `exit 0`.
+- Browser UX Journey: `PASS` على `http://127.0.0.1:3000/designer`.
+- مشاكل اكتُشفت وأصلحت: Drawer/Teleport Design Tokens inheritance، Trailing whitespace في 3 ملفات.
+- `PROJECT_MAP.md` و`reports/`: بقيا خارج نطاق المحطة.
+- نقل `DesignerWorksReviewSubmissionController` import في `routes/api.php`: بقي unstaged عمدًا (غير متعلق بـ008A).
+- 26 ملفًا معدّلاً + 17 ملفًا untracked غير متعلقين بـ008A: محفوظة كما هي.
+
 ## سجل زمني Append-only
 
 | التاريخ | الحدث | الدليل | الحالة بعد الحدث |
@@ -81,3 +100,9 @@
 | `2026-08-06` | اكتمال Backend وFrontend لمحطة `007A` واجتياز التحقق البرمجي. | Backend/Public/Regression tests؛ Frontend Source Test؛ TypeScript differential `0` introduced errors؛ CSS scope؛ Production Build | `007A technically-verified` |
 | `2026-08-07` | نجاح Migration التطويرية وRuntime/Visual QA للأعمال المميزة. | Owner/Public API؛ save؛ no-op؛ conflict `409`؛ deduplication؛ Desktop؛ Keyboard؛ `200%` Zoom؛ Mobile `390×844` | `007A technically-verified / visually-approved; Git closure pending` |
 | `2026-08-07` | إغلاق محطة `007A` بعد Final Git Scope Gate ودفع Commit التنفيذ إلى `origin/main`. | `ff6c862fd215e7b1703ae68e4490337b13b21b55`؛ `29 files changed`؛ HEAD/origin تطابقا بعد Push | `007A closed` |
+| `2026-08-07` | فتح محطة `008A` من baseline إغلاق `007A` واعتماد فصل Organization/Brand Data في كيان مستقل. | Baseline `8759b6ed8b1cbbd4d83334f8ff6659cce498d3f5`؛ `DP-DEC-015` | `008A in-progress` |
+| `2026-08-07` | اكتمال Backend وFrontend لمحطة `008A` واجتياز التحقق البرمجي التفاضلي. | Backend `23/95`؛ 008A TypeScript `PASS`؛ Production Build `exit 0` | `008A technically-verified` |
+| `2026-08-07` | اكتشاف وإصلاح مشكلة Drawer/Teleport Design Tokens. | Browser Console diagnosis؛ Design Tokens على Root `<aside>` | `008A visually-approved` |
+| `2026-08-08` | نجاح Runtime/Visual QA لمحطة `008A` على `http://127.0.0.1:3000/designer`. | Empty؛ Drawer؛ dirty-close؛ create؛ logo upload؛ hidden default؛ make public؛ public rendering؛ logo delete؛ re-upload؛ whole delete | `008A visually-approved; Git closure pending` |
+| `2026-08-08` | Final Staged Audit: 21 ملفًا، `git diff --cached --check` clean بعد إصلاح trailing whitespace. | 6 فحوصات Git read-only؛ `sed -i` على 3 ملفات محددة | `008A Git closure pending` |
+| `2026-08-08` | إنشاء Commit التنفيذ والإغلاق ودفعه إلى `origin/main`. | `1ec3a88`؛ `21 files changed`، `2378 insertions`، `4 deletions`؛ staged scope مطابق؛ HEAD/origin تطابقا بعد Push | `008A closed` |
